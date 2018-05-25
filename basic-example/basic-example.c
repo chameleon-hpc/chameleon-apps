@@ -1,4 +1,6 @@
+#ifdef USE_MPI
 #include <mpi.h>
+#endif
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
@@ -8,19 +10,21 @@
 int main(int argc, char **argv)
 {
     int n = 150000;
-    int iMyRank, iNumProcs;
     const double fPi25DT = 3.141592653589793238462643;
     double fTimeStart, fTimeEnd;
-	  int i;
-	  double a[n], b[n], c[n];
+	int i;
+	double a[n], b[n], c[n];
 
+#ifdef USE_MPI
+	int iMyRank, iNumProcs;
     /* MPI Initialization */
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &iNumProcs);
     MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank);
-    
+   
 	if (iMyRank == 0)
   	{
+#endif
 		// data initialization
 		for(i = 0; i < n; i++)
 		{
@@ -46,6 +50,7 @@ int main(int argc, char **argv)
     	//usleep(2000);
 		fTimeEnd = omp_get_wtime() - fTimeStart;
     	//printf("Measured: %f\n", fTimeEnd);
+#ifdef USE_MPI
 	}
 	else 
 	{
@@ -57,12 +62,12 @@ int main(int argc, char **argv)
 #else
 		// don't do anything: reference version single threaded
 #endif
-	}
-	
+	}	
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (iMyRank == 0)
 	{
+#endif
 		printf("Elapsed computation time: %.3f\n", fTimeEnd);
 			printf("Results:\n");
 			for(i = 0; i < 5; i++)
@@ -70,7 +75,9 @@ int main(int argc, char **argv)
 				printf("c[%d] = %f\n", i, c[i]);
 			}
 			printf("...\n");
+#ifdef USE_MPI
 	}
 	MPI_Finalize();
+#endif
 	return 0;
 }
