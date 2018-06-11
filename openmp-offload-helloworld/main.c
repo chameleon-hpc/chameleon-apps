@@ -30,15 +30,17 @@ int main (){
   }
 
   printf("Host: a = %d at %p\n", a, &a);
-  print_array(b, "b", N);
+  print_array(b, "b", N, 1);
 
-  init_dev = omp_get_initial_device();
-  //init_dev = 0;
+  //init_dev = omp_get_initial_device();
+  init_dev = 0;
 
   printf("omp_get_num_devices: %d\n", omp_get_num_devices());
   printf("omp_get_default_device: %d\n", omp_get_default_device());
   printf("omp_get_initial_device: %d\n", omp_get_initial_device());
   printf("omp_is_initial_device: %d\n", omp_is_initial_device());
+
+  printf("Finally using device : %d\n", init_dev);
 
   //#pragma omp target map(tofrom:b[0:N], a)
   #pragma omp target map(tofrom:b[0:N], a) device(init_dev)
@@ -50,13 +52,13 @@ int main (){
     }
    
     printf("Device: a = %d at %p\n", a, &a);
-    print_array(b, "b", 10);
+    print_array(b, "b", 10, 0);
   
     char hostname[100];
     gethostname(hostname, 100);
   
-    printf("Device: hostname = %s, a = %d (%p).\n", hostname, a, &a);
     a = 23;
+    printf("Device: hostname = %s, Setting a = %d (%p).\n", hostname, a, &a);
 
     #pragma omp parallel num_threads(4)
     {
@@ -65,7 +67,7 @@ int main (){
   }
 
   printf("Host: a = %d at %p\n", a, &a);
-  print_array(b, "b", N);
+  print_array(b, "b", N, 1);
 
   //#pragma omp target map(to:a) map(tofrom:c)
   #pragma omp target map(to:a) map(tofrom:c) device(init_dev)
