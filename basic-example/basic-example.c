@@ -1,11 +1,14 @@
-#ifdef USE_MPI
-#include <mpi.h>
-#endif
+#define USE_MPI 1
+
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
 #include <omp.h>
 #include <unistd.h>
+#ifdef USE_MPI
+#include <mpi.h>
+#endif
+#include "chameleon.h"
 
 int main(int argc, char **argv)
 {
@@ -21,6 +24,8 @@ int main(int argc, char **argv)
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &iNumProcs);
     MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank);
+
+	chameleon_init();
    
 	if (iMyRank == 0)
   	{
