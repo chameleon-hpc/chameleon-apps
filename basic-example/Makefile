@@ -1,6 +1,7 @@
 .PHONY: clean default run run_debug plain offload mpi
 
 #ADD_ARGS=-DCOMPLEX=1
+#ADD_ARGS=-g -O0
 ADD_ARGS=
 
 default:
