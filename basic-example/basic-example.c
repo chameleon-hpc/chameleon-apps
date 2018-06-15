@@ -1,65 +1,93 @@
-#define USE_MPI 1
+#ifndef USE_MPI
+#define USE_MPI 0
+#endif
+#ifndef USE_OFFLOADING
+#define USE_OFFLOADING 0
+#endif
+#ifndef COMPLEX
+#define COMPLEX 0
+#endif
 
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
 #include <omp.h>
 #include <unistd.h>
-#ifdef USE_MPI
+#if USE_MPI
 #include <mpi.h>
-#endif
 #include "chameleon.h"
+#endif
+
+#define N 15
 
 int main(int argc, char **argv)
 {
-    int n = 150000;
+    int n = N;
     const double fPi25DT = 3.141592653589793238462643;
     double fTimeStart, fTimeEnd;
 	int i;
+  int scalar;
 	double a[n], b[n], c[n];
+  //double *a = (double*) malloc(sizeof(double)*n);
+  //double *b = (double*) malloc(sizeof(double)*n);
+  //double *c = (double*) malloc(sizeof(double)*n);
 
-#ifdef USE_MPI
-	int iMyRank, iNumProcs;
-    /* MPI Initialization */
-    MPI_Init(&argc, &argv);
-    MPI_Comm_size(MPI_COMM_WORLD, &iNumProcs);
-    MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank);
+#if USE_MPI
+  int iMyRank, iNumProcs;
+  /* MPI Initialization */
+  MPI_Init(&argc, &argv);
+  MPI_Comm_size(MPI_COMM_WORLD, &iNumProcs);
+  MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank);
 
 	chameleon_init();
    
 	if (iMyRank == 0)
-  	{
+  {
 #endif
 		// data initialization
+    scalar = 1;
 		for(i = 0; i < n; i++)
 		{
 			a[i] = 1.0 / sin(i);
 			b[i] = 1.0 / cos(i);
 		}
 		
+    printf("Host: n = %d at (%p)\n", n, &n);
+    printf("Host: scalar = %d at (%p)\n", scalar, &scalar);
 		fTimeStart = omp_get_wtime();
-
-#ifdef USE_OFFLOADING
+#if USE_OFFLOADING
 		// first test: calculate complete block in target region
-		#pragma omp target map(to: a, b) map(from: c) //device(chameleon)
-		{
+#if COMPLEX
+    #pragma omp target map(tofrom:b[0:N], a[0:N], c[0:N]) device(0)
 #else
-		for(i = 0; i < n; i++)
-		{
-			c[i] = (4.0*fPi25DT / (1.0 + a[i]*b[i]));
-		}
+    #pragma omp target map(tofrom:scalar) device(0)
 #endif
-#ifdef USE_OFFLOADING
+		{
+#endif
+#if COMPLEX
+      int ii;
+		  for(ii = 0; ii < n; ii++)
+		  {
+			  c[ii] = ((4.0*fPi25DT / (1.0 + a[ii]*b[ii])) + b[ii]);
+		  }
+#else
+      printf("Implict mapped n = %d at (%p)\n", n, &n);
+      printf("Device: scalar = %d at (%p)\n", scalar, &scalar);
+      printf("Device: Setting scalar = 3\n");
+      scalar = 3;      
+#endif
+#if USE_OFFLOADING
 		}
 #endif
     	//usleep(2000);
 		fTimeEnd = omp_get_wtime() - fTimeStart;
-    	//printf("Measured: %f\n", fTimeEnd);
-#ifdef USE_MPI
+    printf("Host: scalar = %d at (%p)\n", scalar, &scalar);
+    //printf("Measured: %f\n", fTimeEnd);
+#if USE_MPI
 	}
 	else 
 	{
-#ifdef USE_OFFLOADING
+#if USE_OFFLOADING
 		// TODO:
 		// 1. receive MPI requests + hand shake
 		// 2. work on item
@@ -67,20 +95,22 @@ int main(int argc, char **argv)
 #else
 		// don't do anything: reference version single threaded
 #endif
-	}	
+	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (iMyRank == 0)
 	{
 #endif
 		printf("Elapsed computation time: %.3f\n", fTimeEnd);
+#if COMPLEX
 			printf("Results:\n");
 			for(i = 0; i < 5; i++)
 			{
 				printf("c[%d] = %f\n", i, c[i]);
 			}
 			printf("...\n");
-#ifdef USE_MPI
+#endif
+#if USE_MPI
 	}
 	MPI_Finalize();
 #endif
