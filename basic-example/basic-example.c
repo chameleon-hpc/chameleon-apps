@@ -51,6 +51,9 @@ int main(int argc, char **argv)
 			a[i] = 1.0 / sin(i);
 			b[i] = 1.0 / cos(i);
 		}
+
+    int dev = 1001; // CHAMELEON_HOST
+    //int dev = 1002; // CHAMELEON_MPI
 		
     printf("Host: n = %d at (%p)\n", n, &n);
     printf("Host: scalar = %d at (%p)\n", scalar, &scalar);
@@ -58,9 +61,9 @@ int main(int argc, char **argv)
 #if USE_OFFLOADING
 		// first test: calculate complete block in target region
 #if COMPLEX
-    #pragma omp target map(tofrom:b[0:N], a[0:N], c[0:N]) device(0)
+    #pragma omp target map(tofrom:b[0:N], a[0:N], c[0:N]) device(dev)
 #else
-    #pragma omp target map(tofrom:scalar) device(0)
+    #pragma omp target map(tofrom:scalar) device(dev)
 #endif
 		{
 #endif
