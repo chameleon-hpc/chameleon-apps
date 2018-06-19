@@ -7,6 +7,10 @@
 #ifndef COMPLEX
 #define COMPLEX 0
 #endif
+#ifndef SECOND_TARGET_REGION
+#define SECOND_TARGET_REGION 1
+#endif
+
 
 #include <stdio.h>
 #include <math.h>
@@ -26,7 +30,7 @@ int main(int argc, char **argv)
     const double fPi25DT = 3.141592653589793238462643;
     double fTimeStart, fTimeEnd;
 	int i;
-  int scalar;
+  int scalar, scalar2;
 	double a[n], b[n], c[n];
   //double *a = (double*) malloc(sizeof(double)*n);
   //double *b = (double*) malloc(sizeof(double)*n);
@@ -46,6 +50,7 @@ int main(int argc, char **argv)
 #endif
 		// data initialization
     scalar = 1;
+		scalar2 = 2;
 		for(i = 0; i < n; i++)
 		{
 			a[i] = 1.0 / sin(i);
@@ -86,6 +91,13 @@ int main(int argc, char **argv)
 		fTimeEnd = omp_get_wtime() - fTimeStart;
     printf("Host: scalar = %d at (%p)\n", scalar, &scalar);
     //printf("Measured: %f\n", fTimeEnd);
+
+#if USE_OFFLOADING && SECOND_TARGET_REGION
+	#pragma omp target map(tofrom:scalar2) device(dev)
+	{
+		printf("Device: scalar2 = %d at (%p)\n", scalar2, &scalar2);
+	}
+#endif
 #if USE_MPI
 	}
 	else 
