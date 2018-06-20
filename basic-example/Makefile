@@ -6,10 +6,10 @@ ADD_ARGS=-g -O0
 
 default:
 	@#$(MPICC) -I../../src -L../../src -fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu -DUSE_MPI=1 -DUSE_OFFLOADING=1 $(ADD_ARGS) -o basic-example.exe basic-example.c -lm -lchameleon
-	$(MPICC) -I../../src -L../../src -fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu -DUSE_MPI=1 -DUSE_OFFLOADING=1 $(ADD_ARGS) -o basic-example.exe ../../src/chameleon.c basic-example.c -lm
+	$(MPICXX) -I../../src -L../../src -fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu -DUSE_MPI=1 -DUSE_OFFLOADING=1 $(ADD_ARGS) -o basic-example.exe ../../src/chameleon.cpp basic-example.cpp -lm
 
 mpi:
-	$(MPICC) -I../../src -L../../src -fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu -DUSE_MPI=1 $(ADD_ARGS) -o basic-example.exe basic-example.c -lm -lchameleon
+	$(MPICXX) -I../../src -L../../src -fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu -DUSE_MPI=1 $(ADD_ARGS) -o basic-example.exe ../../src/chameleon.cpp basic-example.cpp -lm
 
 offload:
 	clang -fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu -DUSE_OFFLOADING=1 $(ADD_ARGS) -o basic-example.exe basic-example.c -lm
