@@ -60,8 +60,10 @@ int main(int argc, char **argv)
     int dev = 1001; // CHAMELEON_HOST
     //int dev = 1002; // CHAMELEON_MPI
 		
-    printf("Host: n = %d at (%p)\n", n, &n);
-    printf("Host: scalar = %d at (%p)\n", scalar, &scalar);
+    printf("Master: n = %d at (%p)\n", n, &n);
+    printf("Master: scalar = %d at (%p)\n", scalar, &scalar);
+    printf("Master: scalar2 = %d at (%p)\n", scalar2, &scalar2);
+
 		fTimeStart = omp_get_wtime();
 #if USE_OFFLOADING
 		// first test: calculate complete block in target region
@@ -89,7 +91,7 @@ int main(int argc, char **argv)
 #endif
     	//usleep(2000);
 		fTimeEnd = omp_get_wtime() - fTimeStart;
-    printf("Host: scalar = %d at (%p)\n", scalar, &scalar);
+    printf("Master: scalar = %d at (%p)\n", scalar, &scalar);
     //printf("Measured: %f\n", fTimeEnd);
 
 #if USE_OFFLOADING && SECOND_TARGET_REGION
@@ -103,6 +105,17 @@ int main(int argc, char **argv)
 	else 
 	{
 #if USE_OFFLOADING
+    /*
+    // necessary to load image also at responder side?
+    int tmp1 = 1;
+    printf("Rank2: tmp1 = %d at (%p)\n", tmp1, &tmp1);
+	  #pragma omp target map(tofrom:tmp1) device(1001)
+    {
+        //tmp1 = 2;
+        printf("Device2: tmp1 = %d at (%p)\n", tmp1, &tmp1);
+    }
+    */
+
 		// TODO:
 		// 1. receive MPI requests + hand shake
 		// 2. work on item

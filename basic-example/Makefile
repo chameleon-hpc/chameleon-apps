@@ -1,11 +1,12 @@
 .PHONY: clean default run run_debug plain offload mpi
 
 #ADD_ARGS=-DCOMPLEX=1
-#ADD_ARGS=-g -O0
-ADD_ARGS=
+ADD_ARGS=-g -O0
+#ADD_ARGS=
 
 default:
-	$(MPICC) -I../../src -L../../src -fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu -DUSE_MPI=1 -DUSE_OFFLOADING=1 $(ADD_ARGS) -o basic-example.exe basic-example.c -lm -lchameleon
+	@#$(MPICC) -I../../src -L../../src -fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu -DUSE_MPI=1 -DUSE_OFFLOADING=1 $(ADD_ARGS) -o basic-example.exe basic-example.c -lm -lchameleon
+	$(MPICC) -I../../src -L../../src -fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu -DUSE_MPI=1 -DUSE_OFFLOADING=1 $(ADD_ARGS) -o basic-example.exe ../../src/chameleon.c basic-example.c -lm
 
 mpi:
 	$(MPICC) -I../../src -L../../src -fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu -DUSE_MPI=1 $(ADD_ARGS) -o basic-example.exe basic-example.c -lm -lchameleon
