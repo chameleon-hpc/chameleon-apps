@@ -23,9 +23,6 @@
 #include "chameleon.h"
 #endif
 
-#define DPxMOD "0x%0*" PRIxPTR
-#define DPxPTR(ptr) ((int)(2*sizeof(uintptr_t))), ((uintptr_t) (ptr))
-
 #define N 15
 
 #ifndef DEV_NR
@@ -71,6 +68,7 @@ int main(int argc, char **argv)
 		
     printf("Master: scalar_A_int = %d at (" DPxMOD ")\n", scalar_A, DPxPTR(&scalar_A));
     printf("Master: scalar_B_dbl = %f at (" DPxMOD ")\n", scalar_B, DPxPTR(&scalar_B));
+	printf("Master: scalar_c_int = %d at (" DPxMOD ")\n", scalar_C, DPxPTR(&scalar_C));
 
 		fTimeStart = omp_get_wtime();
 #if USE_OFFLOADING
@@ -100,15 +98,18 @@ int main(int argc, char **argv)
 #endif
     	//usleep(2000);
 		fTimeEnd = omp_get_wtime() - fTimeStart;
+#if USE_MPI
+		int res = chameleon_distributed_taskwait();
+#endif
     printf("Master: scalar_A_int = %d at (" DPxMOD ")\n", scalar_A, DPxPTR(&scalar_A));
     printf("Master: scalar_B_dbl = %f at (" DPxMOD ")\n", scalar_B, DPxPTR(&scalar_B));
 
 #if USE_OFFLOADING && SECOND_TARGET_REGION
-	#pragma omp target map(tofrom:scalar_A) device(DEV_NR)
-	{
-		printf("Device: scalar_A_int = %d at (" DPxMOD ")\n", scalar_A, DPxPTR(&scalar_A));
-		printf("Device: scalar_B_dbl = %f at (" DPxMOD ")\n", scalar_B, DPxPTR(&scalar_B));
-	}
+		#pragma omp target map(tofrom:scalar_A) device(DEV_NR)
+		{
+			printf("Device: scalar_A_int = %d at (" DPxMOD ")\n", scalar_A, DPxPTR(&scalar_A));
+			printf("Device: scalar_B_dbl = %f at (" DPxMOD ")\n", scalar_B, DPxPTR(&scalar_B));
+		}
 #endif
 #if USE_MPI
 	}
