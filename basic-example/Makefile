@@ -1,12 +1,13 @@
 .PHONY: clean default run run_debug plain offload mpi
 
 #ADD_ARGS=-DCOMPLEX=1
-ADD_ARGS=-g -O0 -rdynamic
+#ADD_ARGS=-g -O0 -rdynamic
+ADD_ARGS=-g -O0
 #ADD_ARGS=
 
 default:
-	@#$(MPICXX) -I../../src -L../../src -fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu -DUSE_MPI=1 -DUSE_OFFLOADING=1 $(ADD_ARGS) -o basic-example.exe basic-example.cpp -lm -lchameleon -lffi
-	$(MPICXX) -I../../src -L../../src -fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu -DUSE_MPI=1 -DUSE_OFFLOADING=1 $(ADD_ARGS) -o basic-example.exe ../../src/chameleon.cpp basic-example.cpp -lm -lffi
+	$(MPICXX) -I../../src -L../../src -fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu -DUSE_MPI=1 -DUSE_OFFLOADING=1 $(ADD_ARGS) -o basic-example.exe basic-example.cpp -lm -lchameleon
+	@#$(MPICXX) -I../../src -L../../src -fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu -DUSE_MPI=1 -DUSE_OFFLOADING=1 $(ADD_ARGS) -o basic-example.exe ../../src/chameleon.cpp basic-example.cpp -lm -lffi
 
 mpi:
 	$(MPICXX) -I../../src -L../../src -fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu -DUSE_MPI=1 $(ADD_ARGS) -o basic-example.exe ../../src/chameleon.cpp basic-example.cpp -lm
