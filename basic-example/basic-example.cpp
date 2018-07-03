@@ -109,8 +109,6 @@ int main(int argc, char **argv)
         }
 #endif
 #if USE_MPI
-        // work on the  tasks as long as there are tasks
-        int res = chameleon_distributed_taskwait();
     }
     else 
     {
@@ -124,6 +122,8 @@ int main(int argc, char **argv)
 #endif
     }
     
+    // work on tasks as long as there are tasks
+    int res = chameleon_distributed_taskwait();
     MPI_Barrier(MPI_COMM_WORLD);
 
     if (iMyRank == 0)
