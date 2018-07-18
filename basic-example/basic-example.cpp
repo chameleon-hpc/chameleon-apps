@@ -52,6 +52,11 @@ int main(int argc, char **argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank);
 
     chameleon_init();
+
+    #pragma omp target device(1001) // 1001 = CHAMELEON_HOST
+    {
+       DBP("chameleon_init - dummy region\n");
+    }
    
     if (iMyRank == 0)
     {
@@ -96,11 +101,6 @@ int main(int argc, char **argv)
 #if USE_OFFLOADING
         }
 #endif
-        //usleep(2000);
-        fTimeEnd = omp_get_wtime() - fTimeStart;
-        printf("Master: scalar_A_int = %d at (" DPxMOD ")\n", scalar_A, DPxPTR(&scalar_A));
-        printf("Master: scalar_B_dbl = %f at (" DPxMOD ")\n", scalar_B, DPxPTR(&scalar_B));
-
 #if USE_OFFLOADING && SECOND_TARGET_REGION
         #pragma omp target map(tofrom:scalar_A) device(DEV_NR)
         {
@@ -110,17 +110,6 @@ int main(int argc, char **argv)
 #endif
 #if USE_MPI
     }
-    else 
-    {
-#if USE_OFFLOADING
-        // TODO:
-        // 1. receive MPI requests + hand shake
-        // 2. work on item
-        // 3. send back results
-#else
-        // don't do anything: reference version single threaded
-#endif
-    }
     
     // work on tasks as long as there are tasks
     int res = chameleon_distributed_taskwait();
@@ -129,7 +118,10 @@ int main(int argc, char **argv)
     if (iMyRank == 0)
     {
 #endif
-        printf("Elapsed computation time: %.3f\n", fTimeEnd);
+        fTimeEnd = omp_get_wtime() - fTimeStart;
+        printf("Master: scalar_A_int = %d at (" DPxMOD ")\n", scalar_A, DPxPTR(&scalar_A));
+        printf("Master: scalar_B_dbl = %f at (" DPxMOD ")\n", scalar_B, DPxPTR(&scalar_B));
+        printf("Elapsed computation time: %.3f\n", fTimeEnd);        
 #if USE_COMPLEX
         printf("Results:\n");
         for(i = 0; i < 5; i++)
