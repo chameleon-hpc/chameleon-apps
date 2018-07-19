@@ -47,7 +47,11 @@ int main(int argc, char **argv)
 #if USE_MPI
     int iMyRank, iNumProcs;
     /* MPI Initialization */
-    MPI_Init(&argc, &argv);
+    // MPI_Init(&argc, &argv);
+    int provided;
+    int reqeuested = MPI_THREAD_FUNNELED;
+    // int reqeuested = MPI_THREAD_MULTIPLE;
+    MPI_Init_thread(&argc, &argv, reqeuested, &provided);
     MPI_Comm_size(MPI_COMM_WORLD, &iNumProcs);
     MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank);
 
