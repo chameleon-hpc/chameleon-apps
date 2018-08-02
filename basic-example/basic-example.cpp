@@ -11,11 +11,11 @@
 #endif
 // size of the double arrays for complex scenario
 #ifndef ARR_SIZE
-#define ARR_SIZE 12
+#define ARR_SIZE 20
 #endif
 // number of tasks for complex scenario
 #ifndef NR_TASKS
-#define NR_TASKS 3
+#define NR_TASKS 4
 #endif
 #ifndef DEV_NR
 #if USE_MPI
@@ -111,33 +111,40 @@ int main(int argc, char **argv)
         fTimeStart = omp_get_wtime();
 #if USE_COMPLEX
         // run multiple threads where each is creating target tasks
-        #pragma omp parallel for
-        for(i = 0; i < NR_TASKS; i++) {
-            int idx_start = i * step;
-            int cur_len = step;
-            int idx_end = i*(step+1)-1;
-            if(idx_end > ARR_SIZE-1) {
-                cur_len = ARR_SIZE-1-idx_start;
-            }
-#if USE_OFFLOADING
-            #pragma omp target map(tofrom:a[idx_start:cur_len], b[idx_start:cur_len]) device(DEV_NR)
-            {
-#endif // USE_OFFLOADING
-                for(int j = 0; j < cur_len; j++) {
-                    printf("Device: array_a_dbl[%d] = %f at (" DPxMOD ")\n", idx_start+j, a[idx_start+j], DPxPTR(&a[idx_start+j]));
-                }
-                for(int j = 0; j < cur_len; j++) {
-                    printf("Device: array_b_int[%d] = %d at (" DPxMOD ")\n", idx_start+j, b[idx_start+j], DPxPTR(&b[idx_start+j]));
-                }
-                printf("Device: setting array_a_dbl = 13.37\n");
-                printf("Device: setting array_b_int = 42\n");
-                for(int j = 0; j < cur_len; j++) {
-                    a[idx_start+j] = 13.37;
-                    b[idx_start+j] = 42;
+        #pragma omp parallel
+        {
+        #pragma omp for
+            for(i = 0; i < NR_TASKS; i++) {
+                int idx_start = i * step;
+                int cur_len = step;
+                int idx_end = i*(step+1)-1;
+                if(idx_end > ARR_SIZE-1) {
+                    cur_len = ARR_SIZE-1-idx_start;
                 }
 #if USE_OFFLOADING
-            }
+                #pragma omp target map(tofrom:a[idx_start:cur_len], b[idx_start:cur_len]) device(DEV_NR)
+                {
 #endif // USE_OFFLOADING
+                    for(int j = 0; j < cur_len; j++) {
+                        printf("Device: array_a_dbl[%d] = %f at (" DPxMOD ")\n", idx_start+j, a[idx_start+j], DPxPTR(&a[idx_start+j]));
+                    }
+                    for(int j = 0; j < cur_len; j++) {
+                        printf("Device: array_b_int[%d] = %d at (" DPxMOD ")\n", idx_start+j, b[idx_start+j], DPxPTR(&b[idx_start+j]));
+                    }
+                    printf("Device: setting array_a_dbl = 13.37\n");
+                    printf("Device: setting array_b_int = 42\n");
+                    for(int j = 0; j < cur_len; j++) {
+                        a[idx_start+j] = 13.37;
+                        b[idx_start+j] = 42;
+                    }
+#if USE_OFFLOADING
+                }
+#endif // USE_OFFLOADING
+            }
+#if USE_MPI
+            // work on tasks as long as there are tasks
+            int res = chameleon_distributed_taskwait();
+#endif // USE_MPI
         }
 
 #else // USE_COMPLEX
@@ -154,12 +161,17 @@ int main(int argc, char **argv)
 #if USE_OFFLOADING
         }
 #endif // USE_OFFLOADING
+#if USE_MPI
+        // work on tasks as long as there are tasks
+        int res = chameleon_distributed_taskwait();
+#endif // USE_MPI
 #endif // USE_COMPLEX
 #if USE_MPI
+    } else {
+        // work on tasks as long as there are tasks
+        int res = chameleon_distributed_taskwait();
     }
     
-    // work on tasks as long as there are tasks
-    int res = chameleon_distributed_taskwait();
     MPI_Barrier(MPI_COMM_WORLD);
 
     if (iMyRank == 0)
