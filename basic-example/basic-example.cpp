@@ -11,11 +11,11 @@
 #endif
 // size of the double arrays for complex scenario
 #ifndef ARR_SIZE
-#define ARR_SIZE 10
+#define ARR_SIZE 12
 #endif
 // number of tasks for complex scenario
 #ifndef NR_TASKS
-#define NR_TASKS 2
+#define NR_TASKS 3
 #endif
 #ifndef DEV_NR
 #if USE_MPI
@@ -123,8 +123,12 @@ int main(int argc, char **argv)
             #pragma omp target map(tofrom:a[idx_start:cur_len], b[idx_start:cur_len]) device(DEV_NR)
             {
 #endif // USE_OFFLOADING
-                printf("Device: array_a_dbl[%d] = %f at (" DPxMOD ")\n", idx_start, a[idx_start], DPxPTR(&a[idx_start]));
-                printf("Device: array_b_int[%d] = %d at (" DPxMOD ")\n", idx_start, b[idx_start], DPxPTR(&b[idx_start]));
+                for(int j = 0; j < cur_len; j++) {
+                    printf("Device: array_a_dbl[%d] = %f at (" DPxMOD ")\n", idx_start+j, a[idx_start+j], DPxPTR(&a[idx_start+j]));
+                }
+                for(int j = 0; j < cur_len; j++) {
+                    printf("Device: array_b_int[%d] = %d at (" DPxMOD ")\n", idx_start+j, b[idx_start+j], DPxPTR(&b[idx_start+j]));
+                }
                 printf("Device: setting array_a_dbl = 13.37\n");
                 printf("Device: setting array_b_int = 42\n");
                 for(int j = 0; j < cur_len; j++) {
