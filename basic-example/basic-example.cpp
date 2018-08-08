@@ -11,7 +11,7 @@
 #endif
 // size of the double arrays for complex scenario
 #ifndef ARR_SIZE
-#define ARR_SIZE 20
+#define ARR_SIZE 40
 #endif
 // number of tasks for complex scenario
 #ifndef NR_TASKS
@@ -113,7 +113,7 @@ int main(int argc, char **argv)
         // run multiple threads where each is creating target tasks
         #pragma omp parallel
         {
-        #pragma omp for
+            #pragma omp for
             for(i = 0; i < NR_TASKS; i++) {
                 int idx_start = i * step;
                 int cur_len = step;
@@ -168,8 +168,11 @@ int main(int argc, char **argv)
 #endif // USE_COMPLEX
 #if USE_MPI
     } else {
-        // work on tasks as long as there are tasks
-        int res = chameleon_distributed_taskwait();
+        #pragma omp parallel
+        {
+            // work on tasks as long as there are tasks
+            int res = chameleon_distributed_taskwait();
+        }
     }
     
     MPI_Barrier(MPI_COMM_WORLD);
