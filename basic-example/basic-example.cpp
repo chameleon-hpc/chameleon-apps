@@ -11,11 +11,11 @@
 #endif
 // size of the double arrays for complex scenario
 #ifndef ARR_SIZE
-#define ARR_SIZE 40
+#define ARR_SIZE 400000
 #endif
 // number of tasks for complex scenario
 #ifndef NR_TASKS
-#define NR_TASKS 4
+#define NR_TASKS 200
 #endif
 #ifndef DEV_NR
 #if USE_MPI
@@ -93,12 +93,12 @@ int main(int argc, char **argv)
         //     printf("Master: array_a_dbl[%d] = %f at (" DPxMOD ")\n", tmp_idx_start, a[tmp_idx_start], DPxPTR(&a[tmp_idx_start]));
         //     printf("Master: array_b_int[%d] = %d at (" DPxMOD ")\n", tmp_idx_start, b[tmp_idx_start], DPxPTR(&b[tmp_idx_start]));
         // }
-        for(i = 0; i < ARR_SIZE; i++) {
-            printf("Master: array_a_dbl[%02d] = %f at (" DPxMOD ")\n", i, a[i], DPxPTR(&a[i]));
-        }
-        for(i = 0; i < ARR_SIZE; i++) {
-            printf("Master: array_b_int[%02d] = %d at (" DPxMOD ")\n", i, b[i], DPxPTR(&b[i]));
-        }
+        // for(i = 0; i < ARR_SIZE; i++) {
+        //     printf("Master: array_a_dbl[%02d] = %f at (" DPxMOD ")\n", i, a[i], DPxPTR(&a[i]));
+        // }
+        // for(i = 0; i < ARR_SIZE; i++) {
+        //     printf("Master: array_b_int[%02d] = %d at (" DPxMOD ")\n", i, b[i], DPxPTR(&b[i]));
+        // }
 #else
         scalar_A = 1;
         scalar_B = 2;
@@ -125,17 +125,19 @@ int main(int argc, char **argv)
                 #pragma omp target map(tofrom:a[idx_start:cur_len], b[idx_start:cur_len]) device(DEV_NR)
                 {
 #endif // USE_OFFLOADING
-                    for(int j = 0; j < cur_len; j++) {
-                        printf("Device: array_a_dbl[%d] = %f at (" DPxMOD ")\n", idx_start+j, a[idx_start+j], DPxPTR(&a[idx_start+j]));
-                    }
-                    for(int j = 0; j < cur_len; j++) {
-                        printf("Device: array_b_int[%d] = %d at (" DPxMOD ")\n", idx_start+j, b[idx_start+j], DPxPTR(&b[idx_start+j]));
-                    }
+                    // for(int j = 0; j < cur_len; j++) {
+                    //     printf("Device: array_a_dbl[%d] = %f at (" DPxMOD ")\n", idx_start+j, a[idx_start+j], DPxPTR(&a[idx_start+j]));
+                    // }
+                    // for(int j = 0; j < cur_len; j++) {
+                    //     printf("Device: array_b_int[%d] = %d at (" DPxMOD ")\n", idx_start+j, b[idx_start+j], DPxPTR(&b[idx_start+j]));
+                    // }
                     printf("Device: setting array_a_dbl = 13.37\n");
                     printf("Device: setting array_b_int = 42\n");
+                    for(int o = 0; o < 2000; o++) {
                     for(int j = 0; j < cur_len; j++) {
-                        a[idx_start+j] = 13.37;
+                        a[idx_start+j] = 13.37 * 20.0 / 3.0;
                         b[idx_start+j] = 42;
+                    }
                     }
 #if USE_OFFLOADING
                 }
@@ -189,12 +191,12 @@ int main(int argc, char **argv)
         //     printf("Master: array_a_dbl[%d] = %f at (" DPxMOD ")\n", tmp_idx_start, a[tmp_idx_start], DPxPTR(&a[tmp_idx_start]));
         //     printf("Master: array_b_int[%d] = %d at (" DPxMOD ")\n", tmp_idx_start, b[tmp_idx_start], DPxPTR(&b[tmp_idx_start]));
         // }
-        for(i = 0; i < ARR_SIZE; i++) {
-            printf("Master: array_a_dbl[%02d] = %f at (" DPxMOD ")\n", i, a[i], DPxPTR(&a[i]));
-        }
-        for(i = 0; i < ARR_SIZE; i++) {
-            printf("Master: array_b_int[%02d] = %d at (" DPxMOD ")\n", i, b[i], DPxPTR(&b[i]));
-        }
+        // for(i = 0; i < ARR_SIZE; i++) {
+        //     printf("Master: array_a_dbl[%02d] = %f at (" DPxMOD ")\n", i, a[i], DPxPTR(&a[i]));
+        // }
+        // for(i = 0; i < ARR_SIZE; i++) {
+        //     printf("Master: array_b_int[%02d] = %d at (" DPxMOD ")\n", i, b[i], DPxPTR(&b[i]));
+        // }
 #else
         printf("Master: scalar_A_int = %d at (" DPxMOD ")\n", scalar_A, DPxPTR(&scalar_A));
         printf("Master: scalar_B_dbl = %f at (" DPxMOD ")\n", scalar_B, DPxPTR(&scalar_B));
