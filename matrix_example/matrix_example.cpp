@@ -89,11 +89,6 @@ int main(int argc, char **argv)
 
 	chameleon_init();
 
-    #pragma omp target device(1001) // 1001 = CHAMELEON_HOST
-    {
-       //DBP("chameleon_init - dummy region\n");
-    }
-
     double fTimeStart, fTimeEnd;
 
     double *matrices_a[NR_TASKS], *matrices_b[NR_TASKS], *matrices_c[NR_TASKS];

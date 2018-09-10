@@ -49,11 +49,6 @@ int main(int argc, char **argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank);
 
     chameleon_init();
-
-    #pragma omp target device(1001) // 1001 = CHAMELEON_HOST
-    {
-       DBP("chameleon_init - dummy region\n");
-    }
    
     if (iMyRank == 0)
     {
@@ -100,8 +95,8 @@ int main(int argc, char **argv)
 
                 #pragma omp target map(tofrom:array_a_dbl[idx_start:cur_len], array_b_int[idx_start:cur_len]) device(DEV_NR)
                 {
-                    printf("OS_TID:%ld Running task with start idx %d and end idx %d\n", syscall(SYS_gettid), idx_start, idx_start+cur_len-1);
                     #if PRINT_DATA_VERBOSE
+                    printf("OS_TID:%ld Running task with start idx %d and end idx %d\n", syscall(SYS_gettid), idx_start, idx_start+cur_len-1);
                     for(int j = 0; j < cur_len; j++) {
                         printf("Device: array_a_dbl[%3d] = %f at (" DPxMOD ")\n", idx_start+j, array_a_dbl[idx_start+j], DPxPTR(&array_a_dbl[idx_start+j]));
                     }
@@ -111,7 +106,7 @@ int main(int argc, char **argv)
                     #endif
 
                     // generate enough work here
-                    for(int o = 0; o < 2000; o++) {
+                    for(int o = 0; o < 20000; o++) {
                         for(int j = 0; j < cur_len; j++) {
                             array_a_dbl[idx_start+j] = (13.37 * 20.0 / 20.0) + 1.0 - 1.0;
                             array_b_int[idx_start+j] = 42 * 2 / 2;
@@ -124,6 +119,7 @@ int main(int argc, char **argv)
             int res = chameleon_distributed_taskwait();
         }
     } else {
+        // second rank is only working on data that is speculatively send from master rank
         #pragma omp parallel
         {
             // work on tasks as long as there are tasks
