@@ -10,7 +10,7 @@
 
 // number of tasks for complex scenario
 #ifndef NR_TASKS
-#define NR_TASKS 2
+#define NR_TASKS 1
 #endif
 
 #ifndef RANDOMINIT
@@ -110,42 +110,44 @@ int main(int argc, char **argv)
     	}
     }
 
-    double A[MATRIX_SIZE*MATRIX_SIZE],B[MATRIX_SIZE*MATRIX_SIZE],C[MATRIX_SIZE*MATRIX_SIZE];
-    if(RANDOMINIT) {
-        		initialize_matrix_rnd(A);
-        		initialize_matrix_rnd(B);
-        		initialize_matrix_zero(C);
-	}
-	else {
-		initialize_matrix_test_A(A);
-		initialize_matrix_test_A(B);
-		initialize_matrix_zero(C);
-	}
+//    double A[MATRIX_SIZE*MATRIX_SIZE],B[MATRIX_SIZE*MATRIX_SIZE],C[MATRIX_SIZE*MATRIX_SIZE];
+//    if(RANDOMINIT) {
+//        		initialize_matrix_rnd(A);
+//        		initialize_matrix_rnd(B);
+//        		initialize_matrix_zero(C);
+//	}
+//	else {
+//		initialize_matrix_test_A(A);
+//		initialize_matrix_test_A(B);
+//		initialize_matrix_zero(C);
+//	}
 
 	#pragma omp parallel
     {
     	// if(iMyRank==0) {
-		#pragma omp single
-    	{
-//			#pragma omp target map(tofrom:matrices_a[0][0:MATRIX_SIZE*MATRIX_SIZE],matrices_b[0][0:MATRIX_SIZE*MATRIX_SIZE], matrices_c[0][0:MATRIX_SIZE*MATRIX_SIZE]) device(DEV_NR)
-//    		{
-//    			check_test_matrix(matrices_a[0], 1);
-//    			check_test_matrix(matrices_b[0], 1);
-//    			check_test_matrix(matrices_c[0], 0);
-//    			compute_matrix_matrix(matrices_a[0], matrices_b[0], matrices_c[0]);
-//    			check_test_matrix(matrices_c[0], 0);
-//    		}
-    		LOG(iMyRank, "offloading to chameleon");
-            #pragma omp target map(tofrom:A[0:MATRIX_SIZE*MATRIX_SIZE],B[0:MATRIX_SIZE*MATRIX_SIZE], C[0:MATRIX_SIZE*MATRIX_SIZE]) device(DEV_NR)
-            {
-                    // LOG(iMyRank, "executing");
-                    check_test_matrix(A, 1);
-                    check_test_matrix(B, 1);
-                    check_test_matrix(C, 0);
-                    compute_matrix_matrix(A, B, C);
-                    check_test_matrix(C, MATRIX_SIZE);
-            }
-    	}
+
+			#pragma omp parallel for
+    		for(int i=0; i<NR_TASKS; i++) {
+				#pragma omp target map(tofrom:matrices_a[i][0:MATRIX_SIZE*MATRIX_SIZE],matrices_b[i][0:MATRIX_SIZE*MATRIX_SIZE], matrices_c[i][0:MATRIX_SIZE*MATRIX_SIZE]) device(DEV_NR)
+				{
+					check_test_matrix(matrices_a[i], 1);
+					check_test_matrix(matrices_b[i], 1);
+					check_test_matrix(matrices_c[i], 0);
+					compute_matrix_matrix(matrices_a[i], matrices_b[i], matrices_c[i]);
+					check_test_matrix(matrices_c[i], MATRIX_SIZE);
+				}
+				LOG(iMyRank, "offloading to chameleon");
+    		}
+//            #pragma omp target map(tofrom:A[0:MATRIX_SIZE*MATRIX_SIZE],B[0:MATRIX_SIZE*MATRIX_SIZE], C[0:MATRIX_SIZE*MATRIX_SIZE]) device(DEV_NR)
+//            {
+//                    // LOG(iMyRank, "executing");
+//                    //check_test_matrix(A, 1);
+//                    //check_test_matrix(B, 1);
+//                    //check_test_matrix(C, 0);
+//                    compute_matrix_matrix(A, B, C);
+//                    //check_test_matrix(C, MATRIX_SIZE);
+//            }
+
     	// }
     	LOG(iMyRank, "entering taskwait");
     	int res = chameleon_distributed_taskwait();
@@ -153,7 +155,7 @@ int main(int argc, char **argv)
     }
 
     LOG(iMyRank, "Validation:");
-    bool pass = check_test_matrix(C, MATRIX_SIZE);
+    bool pass = check_test_matrix(matrices_c[NR_TASKS-1], MATRIX_SIZE);
     if(pass)
         LOG(iMyRank, "TEST SUCESS");
     else
