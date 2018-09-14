@@ -52,6 +52,7 @@ void initialize_matrix_test_A(double *mat) {
     }
 }
 
+#pragma omp declare target
 void compute_matrix_matrix(double *a, double *b, double *c) {
 	for(int i=0;i<MATRIX_SIZE;i++) {
 		for(int j=0;j<MATRIX_SIZE;j++) {
@@ -62,7 +63,9 @@ void compute_matrix_matrix(double *a, double *b, double *c) {
 		}
 	}
 }
+#pragma omp end declare target
 
+#pragma omp declare target
 bool check_test_matrix(double *c, double val) {
 	int iMyRank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank);
@@ -77,6 +80,7 @@ bool check_test_matrix(double *c, double val) {
 	}
 	return true;
 }
+#pragma omp end declare target
 
 int main(int argc, char **argv)
 {
@@ -126,15 +130,21 @@ int main(int argc, char **argv)
     {
     	// if(iMyRank==0) {
 
-			#pragma omp parallel for
+			#pragma omp for
     		for(int i=0; i<NR_TASKS; i++) {
-				#pragma omp target map(tofrom:matrices_a[i][0:MATRIX_SIZE*MATRIX_SIZE],matrices_b[i][0:MATRIX_SIZE*MATRIX_SIZE], matrices_c[i][0:MATRIX_SIZE*MATRIX_SIZE]) device(DEV_NR)
+                double *test_a = matrices_a[i];
+                double *test_b = matrices_b[i];
+                double *test_c = matrices_c[i];
+
+				//#pragma omp target map(tofrom:matrices_a[i][0:MATRIX_SIZE*MATRIX_SIZE],matrices_b[i][0:MATRIX_SIZE*MATRIX_SIZE], matrices_c[i][0:MATRIX_SIZE*MATRIX_SIZE]) device(DEV_NR)
+                #pragma omp target map(test_a[0:MATRIX_SIZE*MATRIX_SIZE],test_b[0:MATRIX_SIZE*MATRIX_SIZE],test_c[0:MATRIX_SIZE*MATRIX_SIZE]) device(DEV_NR)
 				{
 					check_test_matrix(matrices_a[i], 1);
 					check_test_matrix(matrices_b[i], 1);
 					check_test_matrix(matrices_c[i], 0);
 					compute_matrix_matrix(matrices_a[i], matrices_b[i], matrices_c[i]);
 					check_test_matrix(matrices_c[i], MATRIX_SIZE);
+                    
 				}
 				LOG(iMyRank, "offloading to chameleon");
     		}
