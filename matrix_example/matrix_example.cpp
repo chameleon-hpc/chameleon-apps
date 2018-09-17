@@ -192,15 +192,15 @@ int main(int argc, char **argv)
     fTimeEnd=MPI_Wtime();
     printf("#R%d: Computations took %.2f\n", iMyRank, fTimeEnd-fTimeStart);
 
-    LOG(iMyRank, "Validation:");
-    bool pass = check_test_matrix(matrices_c[numberOfTasks-1], MATRIX_SIZE);
-    if(pass)
-        LOG(iMyRank, "TEST SUCESS");
-    else
-        LOG(iMyRank, "TEST FAILED");
+//    LOG(iMyRank, "Validation:");
+//    bool pass = check_test_matrix(matrices_c[numberOfTasks-1], MATRIX_SIZE);
+//    if(pass)
+//        LOG(iMyRank, "TEST SUCESS");
+//    else
+//        LOG(iMyRank, "TEST FAILED");
 
     //deallocate matrices
-    for(int i=0; i<NR_TASKS; i++) {
+    for(int i=0; i<numberOfTasks; i++) {
     	delete[] matrices_a[i];
     	delete[] matrices_b[i];
     	delete[] matrices_c[i];
