@@ -10,11 +10,15 @@
 
 // number of tasks for complex scenario
 #ifndef NR_TASKS
-#define NR_TASKS 1
+#define NR_TASKS 10
 #endif
 
 #ifndef RANDOMINIT
 #define RANDOMINIT 0
+#endif
+
+#ifndef RANDOMDIST
+#define RANDOMDIST 1
 #endif
 
 #ifndef DEV_NR
@@ -52,6 +56,7 @@ void initialize_matrix_test_A(double *mat) {
     }
 }
 
+#pragma omp declare target
 void compute_matrix_matrix(double *a, double *b, double *c) {
 	for(int i=0;i<MATRIX_SIZE;i++) {
 		for(int j=0;j<MATRIX_SIZE;j++) {
@@ -62,7 +67,9 @@ void compute_matrix_matrix(double *a, double *b, double *c) {
 		}
 	}
 }
+#pragma omp end declare target
 
+#pragma omp declare target
 bool check_test_matrix(double *c, double val) {
 	int iMyRank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank);
@@ -77,6 +84,29 @@ bool check_test_matrix(double *c, double val) {
 	}
 	return true;
 }
+#pragma omp end declare target
+
+void compute_random_task_distribution(int *dist, int nRanks) {
+	double *weights = new double[nRanks];
+	
+	double lower_bound = 0;
+	double upper_bound = 1;
+	std::uniform_real_distribution<double> unif(lower_bound,upper_bound);
+	std::default_random_engine re;
+	double sum = 0;
+
+	for(int i=0; i<nRanks; i++) {
+		weights[i]= unif(re);
+		sum += weights[i];
+	}
+
+	for(int i=0; i<nRanks; i++) {
+		weights[i]= weights[i]/sum;
+		dist[i] = weights[i]*NR_TASKS;
+	}
+
+	delete[] weights;
+}
 
 int main(int argc, char **argv)
 {
@@ -86,18 +116,40 @@ int main(int argc, char **argv)
 	MPI_Init_thread(&argc, &argv, requested, &provided);
 	MPI_Comm_size(MPI_COMM_WORLD, &iNumProcs);
 	MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank);
+       int numberOfTasks;
 
 	chameleon_init();
 
-    double fTimeStart, fTimeEnd;
+	double fTimeStart, fTimeEnd;
 
-    double *matrices_a[NR_TASKS], *matrices_b[NR_TASKS], *matrices_c[NR_TASKS];
+	if(argc==iNumProcs+1){
+		if(iMyRank==0) {
+			LOG(iMyRank, "using user-defined initial load distribution...");
+		}
+              numberOfTasks = atoi( argv[iMyRank+1] );
+	}
+       else {
+#ifdef RANDOMDIST
+		if( iMyRank==0 ) {
+			int *dist = new int[iNumProcs];
+ 			compute_random_task_distribution(dist, iNumProcs);
+		}
+#else
+		numberOfTasks = NR_TASKS;
+#endif
+	}
 
-    //allocate and initialize matrices
-    for(int i=0; i<NR_TASKS; i++) {
-    	matrices_a[i] = new double[MATRIX_SIZE*MATRIX_SIZE];
-    	matrices_b[i] = new double[MATRIX_SIZE*MATRIX_SIZE];
-    	matrices_c[i] = new double[MATRIX_SIZE*MATRIX_SIZE];
+	double **matrices_a, **matrices_b, **matrices_c;
+
+	matrices_a = new double*[numberOfTasks];
+	matrices_b = new double*[numberOfTasks];
+	matrices_c = new double*[numberOfTasks];
+
+	//allocate and initialize matrices
+	for(int i=0; i<numberOfTasks; i++) {
+ 		matrices_a[i] = new double[MATRIX_SIZE*MATRIX_SIZE];
+    		matrices_b[i] = new double[MATRIX_SIZE*MATRIX_SIZE];
+    		matrices_c[i] = new double[MATRIX_SIZE*MATRIX_SIZE];
     	if(RANDOMINIT) {
     		initialize_matrix_rnd(matrices_a[i]);
     		initialize_matrix_rnd(matrices_b[i]);
@@ -110,52 +162,38 @@ int main(int argc, char **argv)
     	}
     }
 
-//    double A[MATRIX_SIZE*MATRIX_SIZE],B[MATRIX_SIZE*MATRIX_SIZE],C[MATRIX_SIZE*MATRIX_SIZE];
-//    if(RANDOMINIT) {
-//        		initialize_matrix_rnd(A);
-//        		initialize_matrix_rnd(B);
-//        		initialize_matrix_zero(C);
-//	}
-//	else {
-//		initialize_matrix_test_A(A);
-//		initialize_matrix_test_A(B);
-//		initialize_matrix_zero(C);
-//	}
 
-	#pragma omp parallel
+    MPI_Barrier(MPI_COMM_WORLD);
+    fTimeStart=MPI_Wtime();
+
+    #pragma omp parallel
     {
     	// if(iMyRank==0) {
-
-			#pragma omp parallel for
-    		for(int i=0; i<NR_TASKS; i++) {
-				#pragma omp target map(tofrom:matrices_a[i][0:MATRIX_SIZE*MATRIX_SIZE],matrices_b[i][0:MATRIX_SIZE*MATRIX_SIZE], matrices_c[i][0:MATRIX_SIZE*MATRIX_SIZE]) device(DEV_NR)
+		#pragma omp for
+    		for(int i=0; i<numberOfTasks; i++) {
+				double *A = matrices_a[i];
+		        double *B = matrices_b[i];
+		        double *C = matrices_c[i];	
+				#pragma omp target map(tofrom:A[0:MATRIX_SIZE*MATRIX_SIZE],B[0:MATRIX_SIZE*MATRIX_SIZE], C[0:MATRIX_SIZE*MATRIX_SIZE]) device(DEV_NR)
 				{
-					check_test_matrix(matrices_a[i], 1);
-					check_test_matrix(matrices_b[i], 1);
-					check_test_matrix(matrices_c[i], 0);
-					compute_matrix_matrix(matrices_a[i], matrices_b[i], matrices_c[i]);
-					check_test_matrix(matrices_c[i], MATRIX_SIZE);
+					check_test_matrix(A, 1);
+					check_test_matrix(B, 1);
+					check_test_matrix(C, 0);
+					compute_matrix_matrix(A, B, C);
+					check_test_matrix(C, MATRIX_SIZE);
 				}
-				LOG(iMyRank, "offloading to chameleon");
+				//LOG(iMyRank, "offloading to chameleon");
     		}
-//            #pragma omp target map(tofrom:A[0:MATRIX_SIZE*MATRIX_SIZE],B[0:MATRIX_SIZE*MATRIX_SIZE], C[0:MATRIX_SIZE*MATRIX_SIZE]) device(DEV_NR)
-//            {
-//                    // LOG(iMyRank, "executing");
-//                    //check_test_matrix(A, 1);
-//                    //check_test_matrix(B, 1);
-//                    //check_test_matrix(C, 0);
-//                    compute_matrix_matrix(A, B, C);
-//                    //check_test_matrix(C, MATRIX_SIZE);
-//            }
 
-    	// }
     	LOG(iMyRank, "entering taskwait");
     	int res = chameleon_distributed_taskwait();
     	LOG(iMyRank, "leaving taskwait");
     }
+    fTimeEnd=MPI_Wtime();
+    printf("#R%d: Computations took %.2f\n", iMyRank, fTimeEnd-fTimeStart);
 
     LOG(iMyRank, "Validation:");
-    bool pass = check_test_matrix(matrices_c[NR_TASKS-1], MATRIX_SIZE);
+    bool pass = check_test_matrix(matrices_c[numberOfTasks-1], MATRIX_SIZE);
     if(pass)
         LOG(iMyRank, "TEST SUCESS");
     else
@@ -167,6 +205,10 @@ int main(int argc, char **argv)
     	delete[] matrices_b[i];
     	delete[] matrices_c[i];
     }
+
+    delete[] matrices_a;
+    delete[] matrices_b;
+    delete[] matrices_c;
 
     MPI_Barrier(MPI_COMM_WORLD);
     chameleon_finalize();
