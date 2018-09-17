@@ -1,4 +1,4 @@
-.PHONY: clean default run run_debug plain
+.PHONY: clean default run trace run-mpi-debug 
 
 PROG=basic-example-02
 
