@@ -120,10 +120,11 @@ int main(int argc, char **argv)
 	MPI_Init_thread(&argc, &argv, requested, &provided);
 	MPI_Comm_size(MPI_COMM_WORLD, &iNumProcs);
 	MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank);
-    int numberOfTasks;
-    int matrixSize;
+	int numberOfTasks;
+	int matrixSize;
 	double fTimeStart, fTimeEnd;
-    double wTimeCham, wTimeHost;
+	double wTimeCham, wTimeHost;
+	bool pass;
 
 	chameleon_init();
 
@@ -213,11 +214,13 @@ int main(int argc, char **argv)
         printf("#R%d: Computations with chameleon offloading took %.2f\n", iMyRank, wTimeCham);
     }
     LOG(iMyRank, "Validation:");
-    bool pass = check_test_matrix(matrices_c[numberOfTasks-1], matrixSize, matrixSize);
-    if(pass)
-        LOG(iMyRank, "TEST SUCCESS");
-    else
-        LOG(iMyRank, "TEST FAILED");
+    if(numberOfTasks>0) {
+        pass = check_test_matrix(matrices_c[numberOfTasks-1], matrixSize, matrixSize);
+        if(pass)
+            LOG(iMyRank, "TEST SUCCESS");
+        else
+            LOG(iMyRank, "TEST FAILED");
+    }
 
     MPI_Barrier(MPI_COMM_WORLD);
     fTimeStart=MPI_Wtime();
@@ -253,11 +256,13 @@ int main(int argc, char **argv)
         printf("#R%d: This corresponds to a speedup of %.2f!\n", iMyRank, wTimeHost/wTimeCham);
     }  
     LOG(iMyRank, "Validation:");
-    pass = check_test_matrix(matrices_c[numberOfTasks-1], matrixSize, matrixSize);
-    if(pass)
-        LOG(iMyRank, "TEST SUCCESS");
-    else
-        LOG(iMyRank, "TEST FAILED");
+    if(numberOfTasks>0) {
+        pass = check_test_matrix(matrices_c[numberOfTasks-1], matrixSize, matrixSize);
+        if(pass)
+            LOG(iMyRank, "TEST SUCCESS");
+        else
+            LOG(iMyRank, "TEST FAILED");
+    }
 
     //deallocate matrices
     for(int i=0; i<numberOfTasks; i++) {
