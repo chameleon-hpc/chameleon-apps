@@ -1,14 +1,9 @@
-// whether or not to offload tasks
-#ifndef USE_OFFLOADING
-#define USE_OFFLOADING 0
-#endif
+// size of the matrices
+//#ifndef MATRIX_SIZE
+//#define MATRIX_SIZE 500
+//#endif
 
-// size of the double arrays for complex scenario
-#ifndef MATRIX_SIZE
-#define MATRIX_SIZE 400
-#endif
-
-// number of tasks for complex scenario
+// number of tasks 
 #ifndef NR_TASKS
 #define NR_TASKS 10
 #endif
@@ -34,36 +29,36 @@
 #include <iostream>
 #include <string>
 
-void initialize_matrix_rnd(double *mat) {
+void initialize_matrix_rnd(double *mat, int matrixSize) {
 	double lower_bound = 0;
 	double upper_bound = 10000;
 	std::uniform_real_distribution<double> unif(lower_bound,upper_bound);
 	std::default_random_engine re;
 
-	for(int i=0; i<MATRIX_SIZE*MATRIX_SIZE; i++) {
+	for(int i=0; i<matrixSize*matrixSize; i++) {
 		mat[i]= unif(re);
 	}
 }
 
-void initialize_matrix_zero(double *mat) {
-	for(int i=0; i<MATRIX_SIZE*MATRIX_SIZE; i++) {
+void initialize_matrix_zero(double *mat, int matrixSize) {
+	for(int i=0; i<matrixSize*matrixSize; i++) {
 		mat[i]= 0;
 	}
 }
 
-void initialize_matrix_test_A(double *mat) {
-	for(int i=0; i<MATRIX_SIZE*MATRIX_SIZE; i++) {
+void initialize_matrix_test_A(double *mat, int matrixSize) {
+	for(int i=0; i<matrixSize*matrixSize; i++) {
 			mat[i]= 1;
     }
 }
 
 #pragma omp declare target
-void compute_matrix_matrix(double *a, double *b, double *c) {
-	for(int i=0;i<MATRIX_SIZE;i++) {
-		for(int j=0;j<MATRIX_SIZE;j++) {
-			c[i*MATRIX_SIZE+j]=0;
-			for(int k=0;k<MATRIX_SIZE;k++) {
-				c[i*MATRIX_SIZE+j] += a[i*MATRIX_SIZE+k] * b[k*MATRIX_SIZE+j];
+void compute_matrix_matrix(double *a, double *b, double *c, int matrixSize) {
+	for(int i=0;i<matrixSize;i++) {
+		for(int j=0;j<matrixSize;j++) {
+			c[i*matrixSize+j]=0;
+			for(int k=0;k<matrixSize;k++) {
+				c[i*matrixSize+j] += a[i*matrixSize+k] * b[k*matrixSize+j];
 			}
 		}
 	}
@@ -71,13 +66,13 @@ void compute_matrix_matrix(double *a, double *b, double *c) {
 #pragma omp end declare target
 
 #pragma omp declare target
-bool check_test_matrix(double *c, double val) {
+bool check_test_matrix(double *c, double val, int matrixSize) {
 	int iMyRank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank);
-	for(int i=0;i<MATRIX_SIZE;i++) {
-		for(int j=0;j<MATRIX_SIZE;j++) {
-			if(c[i*MATRIX_SIZE+j]!=val) {
-				printf("#R%d: Error in matrix entry (%d,%d) expected:%f but value is %f\n", iMyRank,i,j,val,c[i*MATRIX_SIZE+j]);
+	for(int i=0;i<matrixSize;i++) {
+		for(int j=0;j<matrixSize;j++) {
+			if(c[i*matrixSize+j]!=val) {
+				printf("#R%d: Error in matrix entry (%d,%d) expected:%f but value is %f\n", iMyRank,i,j,val,c[i*matrixSize+j]);
                 //fprintf(stderr, "#R%d: Error in matrix entry (%d,%d) expected:%f but value is %f\n", iMyRank,i,j,val,c[i*MATRIX_SIZE+j]);
 				return false;
 			}
@@ -109,6 +104,14 @@ void compute_random_task_distribution(int *dist, int nRanks) {
 	delete[] weights;
 }
 
+void printHelpMessage() {
+    std::cout<<"Usage: mpiexec -n np ./matrixExample matrixSize [nt_(0) ... nt_(np-1)] "<<std::endl;
+    std::cout<<"    Arguments: "<<std::endl;
+    std::cout<<"        matrixSize: number of elements of the matrixSize x matrixSize matrices"<<std::endl;
+    std::cout<<"        nt_(i): number of tasks for process i "<<std::endl;
+    std::cout<<"If the number of tasks is not specified for every process, the application will generate an initial task distribution"<<std::endl; 
+}
+
 int main(int argc, char **argv)
 {
 	int iMyRank, iNumProcs;
@@ -117,33 +120,42 @@ int main(int argc, char **argv)
 	MPI_Init_thread(&argc, &argv, requested, &provided);
 	MPI_Comm_size(MPI_COMM_WORLD, &iNumProcs);
 	MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank);
-       int numberOfTasks;
+    int numberOfTasks;
+    int matrixSize;
+	double fTimeStart, fTimeEnd;
+    double wTimeCham, wTimeHost;
 
 	chameleon_init();
 
-	double fTimeStart, fTimeEnd;
-
-	if(argc==iNumProcs+1){
-		if(iMyRank==0) {
-			LOG(iMyRank, "using user-defined initial load distribution...");
-		}
-              numberOfTasks = atoi( argv[iMyRank+1] );
-	}
-       else {
-#if RANDOMDIST
-        int *dist = new int[iNumProcs];
-		if( iMyRank==0 ) {
- 			compute_random_task_distribution(dist, iNumProcs);
-		}
-        MPI_Bcast(dist, iNumProcs, MPI_INTEGER, 0, MPI_COMM_WORLD);
-        numberOfTasks = dist[iMyRank];
-        delete[] dist;
-#else
-		numberOfTasks = NR_TASKS;
-#endif
-        std::string msg = "will create "+std::to_string(numberOfTasks)+" tasks";
-        LOG(iMyRank, msg.c_str());
-	}
+    if(argc==2) {
+            matrixSize = atoi( argv[1] );
+            if(RANDOMDIST) {
+                int *dist = new int[iNumProcs];
+            	if( iMyRank==0 ) {
+ 			        compute_random_task_distribution(dist, iNumProcs);
+		        }
+                MPI_Bcast(dist, iNumProcs, MPI_INTEGER, 0, MPI_COMM_WORLD);
+                numberOfTasks = dist[iMyRank];
+                delete[] dist;
+            }
+            else {
+		        numberOfTasks = NR_TASKS;
+            }
+    }
+    else if(argc==iNumProcs+2) {
+            if(iMyRank==0) {
+    			LOG(iMyRank, "using user-defined initial load distribution...");    
+    		} 
+            matrixSize = atoi( argv[1] ); 
+            numberOfTasks = atoi( argv[iMyRank+2] ); 
+    }
+    else{ 
+            printHelpMessage();
+            return 0;     
+    }
+	
+    std::string msg = "will create "+std::to_string(numberOfTasks)+" tasks";
+    LOG(iMyRank, msg.c_str());
 
 	double **matrices_a, **matrices_b, **matrices_c;
 
@@ -153,18 +165,18 @@ int main(int argc, char **argv)
 
 	//allocate and initialize matrices
 	for(int i=0; i<numberOfTasks; i++) {
- 		matrices_a[i] = new double[MATRIX_SIZE*MATRIX_SIZE];
-    		matrices_b[i] = new double[MATRIX_SIZE*MATRIX_SIZE];
-    		matrices_c[i] = new double[MATRIX_SIZE*MATRIX_SIZE];
+ 		matrices_a[i] = new double[matrixSize*matrixSize];
+    		matrices_b[i] = new double[matrixSize*matrixSize];
+    		matrices_c[i] = new double[matrixSize*matrixSize];
     	if(RANDOMINIT) {
-    		initialize_matrix_rnd(matrices_a[i]);
-    		initialize_matrix_rnd(matrices_b[i]);
-    		initialize_matrix_zero(matrices_c[i]);
+    		initialize_matrix_rnd(matrices_a[i], matrixSize);
+    		initialize_matrix_rnd(matrices_b[i], matrixSize);
+    		initialize_matrix_zero(matrices_c[i], matrixSize);
     	}
     	else {
-    		initialize_matrix_test_A(matrices_a[i]);
-    		initialize_matrix_test_A(matrices_b[i]);
-    		initialize_matrix_zero(matrices_c[i]);
+    		initialize_matrix_test_A(matrices_a[i], matrixSize);
+    		initialize_matrix_test_A(matrices_b[i], matrixSize);
+    		initialize_matrix_zero(matrices_c[i], matrixSize);
     	}
     }
 
@@ -179,12 +191,12 @@ int main(int argc, char **argv)
 				double *A = matrices_a[i];
 		        double *B = matrices_b[i];
 		        double *C = matrices_c[i];	
-				#pragma omp target map(tofrom:A[0:MATRIX_SIZE*MATRIX_SIZE],B[0:MATRIX_SIZE*MATRIX_SIZE], C[0:MATRIX_SIZE*MATRIX_SIZE]) device(DEV_NR)
+				#pragma omp target map(tofrom: C[0:matrixSize*matrixSize]) map(to:matrixSize, A[0:matrixSize*matrixSize], B[0:matrixSize*matrixSize]) device(DEV_NR)
 				{
 					//check_test_matrix(A, 1);
 					//check_test_matrix(B, 1);
 					//check_test_matrix(C, 0);
-					compute_matrix_matrix(A, B, C);
+					compute_matrix_matrix(A, B, C, matrixSize);
 					//check_test_matrix(C, MATRIX_SIZE);
 				}
 				//LOG(iMyRank, "offloading to chameleon");
@@ -194,10 +206,18 @@ int main(int argc, char **argv)
     	int res = chameleon_distributed_taskwait();
     	//LOG(iMyRank, "leaving taskwait");
     }
+    MPI_Barrier(MPI_COMM_WORLD);
     fTimeEnd=MPI_Wtime();
+    wTimeCham = fTimeEnd-fTimeStart;
     if( iMyRank==0 ) {
-        printf("#R%d: Computations with chameleon offloading took %.2f\n", iMyRank, fTimeEnd-fTimeStart);
+        printf("#R%d: Computations with chameleon offloading took %.2f\n", iMyRank, wTimeCham);
     }
+    LOG(iMyRank, "Validation:");
+    bool pass = check_test_matrix(matrices_c[numberOfTasks-1], matrixSize, matrixSize);
+    if(pass)
+        LOG(iMyRank, "TEST SUCCESS");
+    else
+        LOG(iMyRank, "TEST FAILED");
 
     MPI_Barrier(MPI_COMM_WORLD);
     fTimeStart=MPI_Wtime();
@@ -210,31 +230,34 @@ int main(int argc, char **argv)
 				double *A = matrices_a[i];
 		        double *B = matrices_b[i];
 		        double *C = matrices_c[i];	
-				#pragma omp target map(tofrom:A[0:MATRIX_SIZE*MATRIX_SIZE],B[0:MATRIX_SIZE*MATRIX_SIZE], C[0:MATRIX_SIZE*MATRIX_SIZE]) device(1001)
+				#pragma omp target map(tofrom:C[0:matrixSize*matrixSize]) map(to:matrixSize, A[0:matrixSize*matrixSize], B[0:matrixSize*matrixSize]) device(1001)
 				{
 					//check_test_matrix(A, 1);
 					//check_test_matrix(B, 1);
 					//check_test_matrix(C, 0);
-					compute_matrix_matrix(A, B, C);
+					compute_matrix_matrix(A, B, C, matrixSize);
 					//check_test_matrix(C, MATRIX_SIZE);
 				}
 				//LOG(iMyRank, "offloading to chameleon");
     		}
 
     	//LOG(iMyRank, "entering taskwait");
-    	int res = chameleon_distributed_taskwait();
+    	//int res = chameleon_distributed_taskwait();
     	//LOG(iMyRank, "leaving taskwait");
     }
+    MPI_Barrier(MPI_COMM_WORLD);
     fTimeEnd=MPI_Wtime();
+    wTimeHost = fTimeEnd-fTimeStart;
     if( iMyRank==0 ) {
-        printf("#R%d: Computations with host offloading took %.2f\n", iMyRank, fTimeEnd-fTimeStart);
+        printf("#R%d: Computations with host offloading took %.2f\n", iMyRank, wTimeHost);
+        printf("#R%d: This corresponds to a speedup of %.2f!\n", iMyRank, wTimeHost/wTimeCham);
     }  
-//    LOG(iMyRank, "Validation:");
-//    bool pass = check_test_matrix(matrices_c[numberOfTasks-1], MATRIX_SIZE);
-//    if(pass)
-//        LOG(iMyRank, "TEST SUCESS");
-//    else
-//        LOG(iMyRank, "TEST FAILED");
+    LOG(iMyRank, "Validation:");
+    pass = check_test_matrix(matrices_c[numberOfTasks-1], matrixSize, matrixSize);
+    if(pass)
+        LOG(iMyRank, "TEST SUCCESS");
+    else
+        LOG(iMyRank, "TEST FAILED");
 
     //deallocate matrices
     for(int i=0; i<numberOfTasks; i++) {
