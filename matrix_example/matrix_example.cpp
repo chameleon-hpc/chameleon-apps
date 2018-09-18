@@ -32,6 +32,7 @@
 #include "chameleon.h"
 #include <random>
 #include <iostream>
+#include <string>
 
 void initialize_matrix_rnd(double *mat) {
 	double lower_bound = 0;
@@ -129,14 +130,19 @@ int main(int argc, char **argv)
               numberOfTasks = atoi( argv[iMyRank+1] );
 	}
        else {
-#ifdef RANDOMDIST
+#if RANDOMDIST
+        int *dist = new int[iNumProcs];
 		if( iMyRank==0 ) {
-			int *dist = new int[iNumProcs];
  			compute_random_task_distribution(dist, iNumProcs);
 		}
+        MPI_Bcast(dist, iNumProcs, MPI_INTEGER, 0, MPI_COMM_WORLD);
+        numberOfTasks = dist[iMyRank];
+        delete[] dist;
 #else
 		numberOfTasks = NR_TASKS;
 #endif
+        std::string msg = "will create "+std::to_string(numberOfTasks)+" tasks";
+        LOG(iMyRank, msg.c_str());
 	}
 
 	double **matrices_a, **matrices_b, **matrices_c;
@@ -161,7 +167,6 @@ int main(int argc, char **argv)
     		initialize_matrix_zero(matrices_c[i]);
     	}
     }
-
 
     MPI_Barrier(MPI_COMM_WORLD);
     fTimeStart=MPI_Wtime();
