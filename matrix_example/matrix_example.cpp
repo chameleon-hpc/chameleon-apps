@@ -181,22 +181,54 @@ int main(int argc, char **argv)
 		        double *C = matrices_c[i];	
 				#pragma omp target map(tofrom:A[0:MATRIX_SIZE*MATRIX_SIZE],B[0:MATRIX_SIZE*MATRIX_SIZE], C[0:MATRIX_SIZE*MATRIX_SIZE]) device(DEV_NR)
 				{
-					check_test_matrix(A, 1);
-					check_test_matrix(B, 1);
-					check_test_matrix(C, 0);
+					//check_test_matrix(A, 1);
+					//check_test_matrix(B, 1);
+					//check_test_matrix(C, 0);
 					compute_matrix_matrix(A, B, C);
-					check_test_matrix(C, MATRIX_SIZE);
+					//check_test_matrix(C, MATRIX_SIZE);
 				}
 				//LOG(iMyRank, "offloading to chameleon");
     		}
 
-    	LOG(iMyRank, "entering taskwait");
+    	//LOG(iMyRank, "entering taskwait");
     	int res = chameleon_distributed_taskwait();
-    	LOG(iMyRank, "leaving taskwait");
+    	//LOG(iMyRank, "leaving taskwait");
     }
     fTimeEnd=MPI_Wtime();
-    printf("#R%d: Computations took %.2f\n", iMyRank, fTimeEnd-fTimeStart);
+    if( iMyRank==0 ) {
+        printf("#R%d: Computations with chameleon offloading took %.2f\n", iMyRank, fTimeEnd-fTimeStart);
+    }
 
+    MPI_Barrier(MPI_COMM_WORLD);
+    fTimeStart=MPI_Wtime();
+
+    #pragma omp parallel
+    {
+    	// if(iMyRank==0) {
+		#pragma omp for
+    		for(int i=0; i<numberOfTasks; i++) {
+				double *A = matrices_a[i];
+		        double *B = matrices_b[i];
+		        double *C = matrices_c[i];	
+				#pragma omp target map(tofrom:A[0:MATRIX_SIZE*MATRIX_SIZE],B[0:MATRIX_SIZE*MATRIX_SIZE], C[0:MATRIX_SIZE*MATRIX_SIZE]) device(1001)
+				{
+					//check_test_matrix(A, 1);
+					//check_test_matrix(B, 1);
+					//check_test_matrix(C, 0);
+					compute_matrix_matrix(A, B, C);
+					//check_test_matrix(C, MATRIX_SIZE);
+				}
+				//LOG(iMyRank, "offloading to chameleon");
+    		}
+
+    	//LOG(iMyRank, "entering taskwait");
+    	int res = chameleon_distributed_taskwait();
+    	//LOG(iMyRank, "leaving taskwait");
+    }
+    fTimeEnd=MPI_Wtime();
+    if( iMyRank==0 ) {
+        printf("#R%d: Computations with host offloading took %.2f\n", iMyRank, fTimeEnd-fTimeStart);
+    }  
 //    LOG(iMyRank, "Validation:");
 //    bool pass = check_test_matrix(matrices_c[numberOfTasks-1], MATRIX_SIZE);
 //    if(pass)
