@@ -124,7 +124,7 @@ int main(int argc, char **argv)
 	int matrixSize;
 	double fTimeStart, fTimeEnd;
 	double wTimeCham, wTimeHost;
-	bool pass;
+	bool pass = true;
 
 	chameleon_init();
 
@@ -215,7 +215,9 @@ int main(int argc, char **argv)
     }
     LOG(iMyRank, "Validation:");
     if(numberOfTasks>0) {
-        pass = check_test_matrix(matrices_c[numberOfTasks-1], matrixSize, matrixSize);
+        for(int i=0; i<numberOfTasks; i++) {
+            pass &= check_test_matrix(matrices_c[i], matrixSize, matrixSize);
+        }
         if(pass)
             LOG(iMyRank, "TEST SUCCESS");
         else
@@ -257,7 +259,9 @@ int main(int argc, char **argv)
     }  
     LOG(iMyRank, "Validation:");
     if(numberOfTasks>0) {
-        pass = check_test_matrix(matrices_c[numberOfTasks-1], matrixSize, matrixSize);
+        for(int i=0; i<numberOfTasks; i++) {
+            pass &= check_test_matrix(matrices_c[i], matrixSize, matrixSize);
+        }
         if(pass)
             LOG(iMyRank, "TEST SUCCESS");
         else
