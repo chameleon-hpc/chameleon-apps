@@ -5,7 +5,7 @@
 
 // number of tasks 
 #ifndef NR_TASKS
-#define NR_TASKS 10
+#define NR_TASKS 200
 #endif
 
 #ifndef RANDOMINIT
@@ -14,6 +14,10 @@
 
 #ifndef RANDOMDIST
 #define RANDOMDIST 1
+#endif
+
+#ifndef VERY_VERBOSE
+#define VERY_VERBOSE 0
 #endif
 
 #ifndef DEV_NR
@@ -28,6 +32,8 @@
 #include <random>
 #include <iostream>
 #include <string>
+#include <sstream>
+#include "math.h"
 
 void initialize_matrix_rnd(double *mat, int matrixSize) {
 	double lower_bound = 0;
@@ -71,9 +77,8 @@ bool check_test_matrix(double *c, double val, int matrixSize) {
 	MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank);
 	for(int i=0;i<matrixSize;i++) {
 		for(int j=0;j<matrixSize;j++) {
-			if(c[i*matrixSize+j]!=val) {
-				printf("#R%d: Error in matrix entry (%d,%d) expected:%f but value is %f\n", iMyRank,i,j,val,c[i*matrixSize+j]);
-                //fprintf(stderr, "#R%d: Error in matrix entry (%d,%d) expected:%f but value is %f\n", iMyRank,i,j,val,c[i*MATRIX_SIZE+j]);
+			if(abs(c[i*matrixSize+j] - val) > 1e-3) {
+				printf("#R%d (OS_TID:%ld): Error in matrix entry (%d,%d) expected:%f but value is %f\n", iMyRank, syscall(SYS_gettid),i,j,val,c[i*matrixSize+j]);
 				return false;
 			}
 		}
@@ -179,6 +184,11 @@ int main(int argc, char **argv)
     		initialize_matrix_test_A(matrices_b[i], matrixSize);
     		initialize_matrix_zero(matrices_c[i], matrixSize);
     	}
+#if VERY_VERBOSE
+        printf("#R%d (OS_TID:%ld): Master A[%d] at (" DPxMOD ")\n", iMyRank, syscall(SYS_gettid), i, DPxPTR(&matrices_a[i][0]));
+        printf("#R%d (OS_TID:%ld): Master B[%d] at (" DPxMOD ")\n", iMyRank, syscall(SYS_gettid), i, DPxPTR(&matrices_b[i][0]));
+        printf("#R%d (OS_TID:%ld): Master C[%d] at (" DPxMOD ")\n", iMyRank, syscall(SYS_gettid), i, DPxPTR(&matrices_c[i][0]));
+#endif
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -191,16 +201,26 @@ int main(int argc, char **argv)
     		for(int i=0; i<numberOfTasks; i++) {
 				double *A = matrices_a[i];
 		        double *B = matrices_b[i];
-		        double *C = matrices_c[i];	
-				#pragma omp target map(tofrom: C[0:matrixSize*matrixSize]) map(to:matrixSize, A[0:matrixSize*matrixSize], B[0:matrixSize*matrixSize]) device(DEV_NR)
+		        double *C = matrices_c[i];
+#if VERY_VERBOSE
+                printf("#R%d (OS_TID:%ld): Itermediate A[%d] at (" DPxMOD ")\n", iMyRank, syscall(SYS_gettid), i, DPxPTR(&A[0]));
+                printf("#R%d (OS_TID:%ld): Itermediate B[%d] at (" DPxMOD ")\n", iMyRank, syscall(SYS_gettid), i, DPxPTR(&B[0]));
+                printf("#R%d (OS_TID:%ld): Itermediate C[%d] at (" DPxMOD ")\n", iMyRank, syscall(SYS_gettid), i, DPxPTR(&C[0]));	
+#endif
+                #pragma omp target map(tofrom: C[0:matrixSize*matrixSize]) map(to: A[0:matrixSize*matrixSize], B[0:matrixSize*matrixSize]) device(DEV_NR)
 				{
 					//check_test_matrix(A, 1);
 					//check_test_matrix(B, 1);
 					//check_test_matrix(C, 0);
+#if VERY_VERBOSE
+                    int iMyRank2;
+	                MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank2);
+                    printf("#R%d (OS_TID:%ld): A[%d] at (" DPxMOD ")\n", iMyRank2, syscall(SYS_gettid), i, DPxPTR(&A[0]));
+                    printf("#R%d (OS_TID:%ld): B[%d] at (" DPxMOD ")\n", iMyRank2, syscall(SYS_gettid), i, DPxPTR(&B[0]));
+                    printf("#R%d (OS_TID:%ld): C[%d] at (" DPxMOD ")\n", iMyRank2, syscall(SYS_gettid), i, DPxPTR(&C[0]));
+#endif
 					compute_matrix_matrix(A, B, C, matrixSize);
-					//check_test_matrix(C, MATRIX_SIZE);
 				}
-				//LOG(iMyRank, "offloading to chameleon");
     		}
 
     	//LOG(iMyRank, "entering taskwait");
@@ -215,8 +235,8 @@ int main(int argc, char **argv)
     }
     LOG(iMyRank, "Validation:");
     if(numberOfTasks>0) {
-        for(int i=0; i<numberOfTasks; i++) {
-            pass &= check_test_matrix(matrices_c[i], matrixSize, matrixSize);
+        for(int t=0; t<numberOfTasks; t++) {
+            pass &= check_test_matrix(matrices_c[t], matrixSize, matrixSize);
         }
         if(pass)
             LOG(iMyRank, "TEST SUCCESS");
@@ -235,7 +255,7 @@ int main(int argc, char **argv)
 				double *A = matrices_a[i];
 		        double *B = matrices_b[i];
 		        double *C = matrices_c[i];	
-				#pragma omp target map(tofrom:C[0:matrixSize*matrixSize]) map(to:matrixSize, A[0:matrixSize*matrixSize], B[0:matrixSize*matrixSize]) device(1001)
+                #pragma omp target map(tofrom: C[0:matrixSize*matrixSize]) map(to:matrixSize, A[0:matrixSize*matrixSize], B[0:matrixSize*matrixSize]) device(1001)
 				{
 					//check_test_matrix(A, 1);
 					//check_test_matrix(B, 1);
@@ -259,8 +279,8 @@ int main(int argc, char **argv)
     }  
     LOG(iMyRank, "Validation:");
     if(numberOfTasks>0) {
-        for(int i=0; i<numberOfTasks; i++) {
-            pass &= check_test_matrix(matrices_c[i], matrixSize, matrixSize);
+        for(int t=0; t<numberOfTasks; t++) {
+            pass &= check_test_matrix(matrices_c[t], matrixSize, matrixSize);
         }
         if(pass)
             LOG(iMyRank, "TEST SUCCESS");
