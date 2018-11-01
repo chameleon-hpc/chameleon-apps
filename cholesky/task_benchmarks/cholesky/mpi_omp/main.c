@@ -31,7 +31,7 @@ int main(int argc, char *argv[])
     const int ts = atoi(argv[2]); /* tile size */
     int check    = atoi(argv[3]); /* check result? */
 
-    double * const matrix = (double *) malloc(n * n * sizeof(double));
+    double * const matrix = (double *) malloc(((long)n) * n * sizeof(double));
     assert(matrix != NULL);
     initialize_matrix(n, ts, matrix);
 
