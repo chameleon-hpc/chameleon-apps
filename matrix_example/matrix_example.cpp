@@ -46,6 +46,10 @@
 #include <string>
 #include <sstream>
 #include "math.h"
+// if chameleon on loaded needed
+#include <cmath>
+#include <unistd.h>
+#include <sys/syscall.h>
 
 #if CHECK_GENERATED_TASK_ID
 #include <mutex>
