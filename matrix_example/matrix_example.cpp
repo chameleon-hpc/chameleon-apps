@@ -20,6 +20,10 @@
 #define VERY_VERBOSE 0
 #endif
 
+#ifndef CHECK_GENERATED_TASK_ID
+#define CHECK_GENERATED_TASK_ID 0
+#endif
+
 #ifndef DEV_NR
 #define DEV_NR 1002 // CHAMELEON_MPI
 #endif
@@ -34,6 +38,11 @@
 #include <string>
 #include <sstream>
 #include "math.h"
+
+#if CHECK_GENERATED_TASK_ID
+#include <mutex>
+#include <list>
+#endif
 
 void initialize_matrix_rnd(double *mat, int matrixSize) {
 	double lower_bound = 0;
@@ -131,6 +140,11 @@ int main(int argc, char **argv)
 	double wTimeCham, wTimeHost;
 	bool pass = true;
 
+#if CHECK_GENERATED_TASK_ID
+    std::mutex mtx_t_ids;
+    std::list<int32_t> t_ids;
+#endif
+
 	chameleon_init();
 
     if(argc==2) {
@@ -221,13 +235,41 @@ int main(int argc, char **argv)
 #endif
 					compute_matrix_matrix(A, B, C, matrixSize);
 				}
+
+#if CHECK_GENERATED_TASK_ID
+                int32_t last_t_id = chameleon_get_last_local_task_id_added();
+                printf("#R%d (OS_TID:%ld): last task that has been created: %d\n", iMyRank, syscall(SYS_gettid), last_t_id);
+                mtx_t_ids.lock();
+                t_ids.push_back(last_t_id);
+                mtx_t_ids.unlock();
+#endif
     		}
+
+#if CHECK_GENERATED_TASK_ID
+        #pragma omp barrier
+        #pragma omp master
+        {
+            printf("Before Running Tasks\n");
+            for (std::list<int32_t>::iterator it=t_ids.begin(); it!=t_ids.end(); ++it) {
+                printf("R#%d Task with id %d finished?? ==> %d\n", iMyRank, *it, chameleon_local_task_has_finished(*it));
+            }
+        }
+        #pragma omp barrier
+#endif
 
     	//LOG(iMyRank, "entering taskwait");
     	int res = chameleon_distributed_taskwait();
     	//LOG(iMyRank, "leaving taskwait");
     }
     MPI_Barrier(MPI_COMM_WORLD);
+
+#if CHECK_GENERATED_TASK_ID
+    printf("After Running Tasks\n");
+    for (std::list<int32_t>::iterator it=t_ids.begin(); it!=t_ids.end(); ++it) {
+        printf("R#%d Task with id %d finished?? ==> %d\n", iMyRank, *it, chameleon_local_task_has_finished(*it));
+    }
+#endif
+
     fTimeEnd=MPI_Wtime();
     wTimeCham = fTimeEnd-fTimeStart;
     if( iMyRank==0 ) {
