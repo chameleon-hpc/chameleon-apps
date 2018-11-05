@@ -1,4 +1,4 @@
-.PHONY: clean default debug run trace run-mpi-debug
+.PHONY: clean default debug simulate-work run trace run-mpi-debug
 
 PROG=main
 #MATRIX_SIZE=20
@@ -11,6 +11,9 @@ default:
 	
 debug: 
 	${MPICXX} -g -O0 -o main -std=c++11 -fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu matrix_example.cpp -lm -lchameleon -lstdc++ 
+
+simulate-work:
+	${MPICXX} -O3 -o main -std=c++11 -fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu -DSIMULATE_CONST_WORK=1 -DCALC_SPEEDUP=0 matrix_example.cpp -lm -lchameleon -lstdc++ 
 
 run:
 	$(RUN_SETTINGS) mpiexec.hydra -np 4 -genvall $(PROG) $(MATRIX_SIZE) 70 50 30 20
