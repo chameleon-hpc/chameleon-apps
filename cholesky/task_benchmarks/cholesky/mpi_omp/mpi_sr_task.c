@@ -24,6 +24,7 @@ static void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *
 #pragma omp parallel
 {
 #pragma omp single
+{
     for (int k = 0; k < nt; k++) {
         if (block_rank[k*nt+k] == mype) {
 #pragma omp task depend(out:A[k][k]) firstprivate(k)
@@ -124,7 +125,10 @@ static void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *
             }
         }
     }
+}
+    #pragma omp taskwait
 } /* end omp parallel */
+
     MPI_Barrier(MPI_COMM_WORLD);
     free(send_flags);
 }

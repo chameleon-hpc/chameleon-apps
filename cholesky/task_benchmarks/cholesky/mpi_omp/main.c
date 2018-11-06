@@ -31,7 +31,13 @@ int main(int argc, char *argv[])
     const int ts = atoi(argv[2]); /* tile size */
     int check    = atoi(argv[3]); /* check result? */
 
-    double * const matrix = (double *) malloc(((long)n) * n * sizeof(double));
+#ifdef OMP_ONLY
+    // here we just want to execute the OpenMP version
+    check = 1;
+#endif
+
+    size_t tmp_size = ((size_t) n) * n * sizeof(double);
+    double * const matrix = (double *) malloc(tmp_size);
     assert(matrix != NULL);
     initialize_matrix(n, ts, matrix);
 
@@ -102,6 +108,9 @@ int main(int argc, char *argv[])
 
     MPI_Barrier(MPI_COMM_WORLD);
 
+#ifdef OMP_ONLY
+    time_mpi = 1.0;
+#else
     time_mpi = do_cholesky_mpi(ts, nt, (double* (*)[nt])A, B, C, block_rank);
 
     /* Verification */
@@ -124,6 +133,7 @@ int main(int argc, char *argv[])
         }
         if (check_id == 0) check_id = 1;
     }
+#endif
 
     float gflops_ser = (((1.0 / 3.0) * n * n * n) / ((time_ser) * 1.0e+9));
     float gflops_mpi = (((1.0 / 3.0) * n * n * n) / ((time_mpi) * 1.0e+9));
