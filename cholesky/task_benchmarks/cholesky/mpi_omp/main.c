@@ -12,6 +12,11 @@ int main(int argc, char *argv[])
     int provided, check_id = 0;
 
     MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+    if (provided != MPI_THREAD_MULTIPLE) {
+        printf("This Compiler does not support MPI_THREAD_MULTIPLE\n");
+        exit(1);
+    }
+
     MPI_Comm_rank(MPI_COMM_WORLD, &mype);
     MPI_Comm_size(MPI_COMM_WORLD, &np);
 

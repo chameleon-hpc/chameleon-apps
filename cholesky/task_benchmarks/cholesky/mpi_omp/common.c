@@ -1,6 +1,10 @@
 
 #include "common.h"
 
+#ifdef DEBUG
+int tmp_width = 4;
+#endif
+
 /* Computation */
 void do_potrf(double * const A, int ts, int ld)
 {
@@ -42,19 +46,45 @@ void do_syrk(double *A, double *B, int ts, int ld)
 void do_mpi_send(double *buf, int size, MPI_Datatype data_type, int dst, int tag)
 {
     MPI_Request send_req;
-
+#ifdef DEBUG
+    fprintf(stderr, "#R%d (OS_TID:%ld):    SEND    Start   to      %*d with tag %*d\n", mype, syscall(SYS_gettid), tmp_width, dst, tmp_width, tag);
+#endif
     MPI_Isend(buf, size, data_type, dst, tag, MPI_COMM_WORLD, &send_req);
 
-    test_and_yield(&send_req);
+    test_and_yield(&send_req, 0, dst, tag);
+}
+
+void do_mpi_send_jk(double *buf, int size, MPI_Datatype data_type, int dst, int tag, int i, int j)
+{
+    MPI_Request send_req;
+#ifdef DEBUG
+    fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    SEND    Start   to      %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, dst, tmp_width, tag, tmp_width, i, tmp_width, j);
+#endif
+    MPI_Isend(buf, size, data_type, dst, tag, MPI_COMM_WORLD, &send_req);
+
+    test_and_yield_jk(&send_req, 0, dst, tag, i, j);
 }
 
 void do_mpi_recv(double *buf, int size, MPI_Datatype data_type, int src, int tag)
 {
     MPI_Request recv_req;
-
+#ifdef DEBUG
+    fprintf(stderr, "#R%d (OS_TID:%ld):    RECV    Start   from    %*d with tag %*d\n", mype, syscall(SYS_gettid), tmp_width, src, tmp_width, tag);
+#endif
     MPI_Irecv(buf, size, data_type, src, tag, MPI_COMM_WORLD, &recv_req);
 
-    test_and_yield(&recv_req);
+    test_and_yield(&recv_req, 1, src, tag);
+}
+
+void do_mpi_recv_jk(double *buf, int size, MPI_Datatype data_type, int src, int tag, int i, int j)
+{
+    MPI_Request recv_req;
+#ifdef DEBUG
+    fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    RECV    Start   from    %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src, tmp_width, tag, tmp_width, i, tmp_width, j);
+#endif
+    MPI_Irecv(buf, size, data_type, src, tag, MPI_COMM_WORLD, &recv_req);
+
+    test_and_yield_jk(&recv_req, 1, src, tag, i, j);
 }
 
 void do_mpi_rput(double *buf, int size, MPI_Datatype data_type, int target, int disp, MPI_Win win)
@@ -63,7 +93,7 @@ void do_mpi_rput(double *buf, int size, MPI_Datatype data_type, int target, int 
 
     MPI_Rput(buf, size, data_type, target, disp, size, data_type, win, &rput_req);
 
-    test_and_yield(&rput_req);
+    test_and_yield(&rput_req, 2, target, disp);
 
     MPI_Win_flush(target, win);
 }
@@ -96,15 +126,60 @@ void do_mpi_rput_on_comm_thread(double *buf, int size, MPI_Datatype data_type, i
     free(req);
 }
 
-inline void test_and_yield(MPI_Request *comm_req)
+inline void test_and_yield(MPI_Request *comm_req, int c_type, int src_dst, int tag)
 {
     int comm_comp = 0;
-
+#ifdef DEBUG
+    int printed = 0;
+#endif
     MPI_Test(comm_req, &comm_comp, MPI_STATUS_IGNORE);
     while (!comm_comp) {
 #pragma omp taskyield
+#ifdef DEBUG
+        if (!printed) {
+            if(c_type == 0)
+                fprintf(stderr, "#R%d (OS_TID:%ld):    SEND    Wait    to      %*d with tag %*d\n", mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag);
+            else if(c_type == 1)
+                fprintf(stderr, "#R%d (OS_TID:%ld):    RECV    Wait    from    %*d with tag %*d\n", mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag);
+            printed = 1;
+        }
+#endif
         MPI_Test(comm_req, &comm_comp, MPI_STATUS_IGNORE);
     }
+#ifdef DEBUG
+    if(c_type == 0)
+        fprintf(stderr, "#R%d (OS_TID:%ld):    SEND    End     to      %*d with tag %*d\n", mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag);
+    else if(c_type == 1)
+        fprintf(stderr, "#R%d (OS_TID:%ld):    RECV    End     from    %*d with tag %*d\n", mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag);
+#endif
+}
+
+inline void test_and_yield_jk(MPI_Request *comm_req, int c_type, int src_dst, int tag, int i, int j)
+{
+    int comm_comp = 0;
+#ifdef DEBUG
+    int printed = 0;
+#endif
+    MPI_Test(comm_req, &comm_comp, MPI_STATUS_IGNORE);
+    while (!comm_comp) {
+#pragma omp taskyield
+#ifdef DEBUG
+        if (!printed) {
+            if(c_type == 0)
+                fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    SEND    Wait    to      %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j);
+            else if(c_type == 1)
+                fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    RECV    Wait    from    %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j);
+            printed = 1;
+        }
+#endif
+        MPI_Test(comm_req, &comm_comp, MPI_STATUS_IGNORE);
+    }
+#ifdef DEBUG
+    if(c_type == 0)
+        fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    SEND    End     to      %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j);
+    else if(c_type == 1)
+        fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    RECV    End     from    %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j);
+#endif
 }
 
 inline void testall_and_yield(int comm_cnt, MPI_Request *comm_reqs)
