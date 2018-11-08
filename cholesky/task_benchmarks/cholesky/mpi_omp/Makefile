@@ -23,7 +23,8 @@ all : 	exec_mpi_sr_parallel \
 	  	exec_mpi_put_parallel \
 	  	exec_mpi_rput_task \
 	  	exec_mpi_rput_task_comm_thread \
-		exec_omp_only
+		exec_omp_only \
+		exec_mpi_sr_chameleon_v1
 
 #OBJ = main.o common.o omp_task.o timer.o
 OBJ = main.o common.o omp_task.o
@@ -46,6 +47,14 @@ exec_omp_only:
 	$(CC) $(CFLAGS) -DOMP_ONLY -c -o omp_task.o omp_task.c
 
 	$(CC) $(CFLAGS) -DOMP_ONLY -o $@ $(OBJ) $(LDFLAGS)
+exec_mpi_sr_chameleon_v1:
+	$(CC) $(CFLAGS) -DCHAMELEON -c -o main.o main.c
+	$(CC) $(CFLAGS) -DCHAMELEON -c -o common.o common.c
+	$(CC) $(CFLAGS) -DCHAMELEON -c -o omp_task.o omp_task.c
+	$(CC) $(CFLAGS) -DCHAMELEON -c -o mpi_sr_chameleon_v1.o mpi_sr_chameleon_v1.c
+
+	$(CC) $(CFLAGS) -o $@ mpi_sr_chameleon_v1.o $(OBJ) $(LDFLAGS)
+
 
 run: $(PROG)
 	$(RUN_SETTINGS) mpiexec.hydra -np 2 -genvall ./$(PROG) $(M_SIZE) $(BLOCK_SIZE) $(P_CHECK)
