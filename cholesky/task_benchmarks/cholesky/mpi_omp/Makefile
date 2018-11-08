@@ -1,8 +1,11 @@
 # compilation and linking
 CC      		= mpiicc
-# CFLAGS  		= -O3 -I./ -std=c99  -mt_mpi -qopenmp -ipo -DDEBUG
-CFLAGS  		= -O0 -g -I./ -std=c99  -mt_mpi -qopenmp -ipo -DDEBUG
-LDFLAGS 		= -std=c99 -lrt -lpthread -lm -mt_mpi -qopenmp -ipo -DDEBUG 
+# release
+# CFLAGS  		= -O3 -I./ -std=c11  -mt_mpi -qopenmp -ipo -DDEBUG
+# LDFLAGS 		= -std=c11 -lrt -lpthread -lm -mt_mpi -qopenmp -ipo -DDEBUG 
+# debug
+CFLAGS  		= -O0 -g -I./ -std=c11 -mt_mpi -qopenmp -DDEBUG
+LDFLAGS 		= -std=c11 -lrt -lpthread -lm -mt_mpi -qopenmp -DDEBUG 
 LDFLAGS 		+= -L${MKLROOT}/lib/intel64 -lmkl_intel_lp64 -lmkl_core -lmkl_sequential -lpthread -lm -ldl
 
 # settings for execution and linking

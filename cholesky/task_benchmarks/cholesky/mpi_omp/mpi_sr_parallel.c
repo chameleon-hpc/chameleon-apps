@@ -58,7 +58,7 @@ static void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *
                 MPI_Irecv(B, ts*ts, MPI_DOUBLE, block_rank[k*nt+k], k*nt+k, MPI_COMM_WORLD,
                           &recv_req);
 
-                test_and_yield(&recv_req);
+                test_and_yield(&recv_req, 1, block_rank[k*nt+k], k*nt+k);
             }
 }
         }
@@ -90,7 +90,7 @@ static void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *
                     MPI_Irecv(C[i], ts*ts, MPI_DOUBLE, block_rank[k*nt+i], k*nt+i,
                               MPI_COMM_WORLD, &recv_req);
 
-                    test_and_yield(&recv_req);
+                    test_and_yield(&recv_req, 1, block_rank[k*nt+i], k*nt+i);
                 }
 
             } else {
