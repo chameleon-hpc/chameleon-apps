@@ -10,10 +10,13 @@ double do_cholesky_ser(const int ts, const int nt, double* A[nt][nt])
 {
     double time = get_time();
 #pragma omp parallel
-#pragma omp single
+{
+#pragma omp single nowait
+{
     for (int k = 0; k < nt; k++) {
 #pragma omp task depend(out:A[k][k])
 {
+        // compute cholesky factorization of a symmetric (Hermitian) positive-definite matrix
         omp_potrf(A[k][k], ts, ts);
 #ifdef DEBUG
         if (mype == 0) printf("potrf:out:A[%d][%d]\n", k, k);
@@ -22,6 +25,7 @@ double do_cholesky_ser(const int ts, const int nt, double* A[nt][nt])
         for (int i = k + 1; i < nt; i++) {
 #pragma omp task depend(in:A[k][k]) depend(out:A[k][i])
 {
+            // solve one of the following matrix equations: op( A )* X = alpha * B
             omp_trsm(A[k][k], A[k][i], ts, ts);
 #ifdef DEBUG
             if (mype == 0) printf("trsm :in:A[%d][%d]:out:A[%d][%d]\n", k, k, k, i);
@@ -32,6 +36,7 @@ double do_cholesky_ser(const int ts, const int nt, double* A[nt][nt])
             for (int j = k + 1; j < i; j++) {
 #pragma omp task depend(in:A[k][i], A[k][j]) depend(out:A[j][i])
 {
+                // Multiplies two matrices
                 omp_gemm(A[k][i], A[k][j], A[j][i], ts, ts);
 #ifdef DEBUG
                 if (mype == 0) printf("gemm :in:A[%d][%d]:A[%d][%d]:out:A[%d][%d]\n", k, i, k, j, j, i);
@@ -40,6 +45,7 @@ double do_cholesky_ser(const int ts, const int nt, double* A[nt][nt])
             }
 #pragma omp task depend(in:A[k][i]) depend(out:A[i][i])
 {
+            // Rank-k update—multiplies a symmetric matrix by its transpose and adds a second matrix
             omp_syrk(A[k][i], A[i][i], ts, ts);
 #ifdef DEBUG
             if (mype == 0) printf("syrk :in:A[%d][%d]:out:A[%d][%d]\n", k, i, i, i);
@@ -47,7 +53,9 @@ double do_cholesky_ser(const int ts, const int nt, double* A[nt][nt])
 }
         }
     }
+}
 #pragma omp taskwait
+}
     return get_time() - time;
 }
 

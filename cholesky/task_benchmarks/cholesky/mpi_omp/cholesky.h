@@ -124,13 +124,13 @@ static double BLAS_dfpinfo(enum blas_cmach_type cmach)
 
 void add_to_diag_hierarchical (double ** matrix, const int ts, const int nt, const float alpha)
 {
-	for (int i = 0; i < nt * ts; i++)
+	for (long i = 0; i < nt * ts; i++)
 		matrix[(i/ts) * nt + (i/ts)][(i%ts) * ts + (i%ts)] += alpha;
 }
 
-void add_to_diag(double * matrix, const int n, const double alpha)
+void add_to_diag(double * matrix, const long n, const double alpha)
 {
-	for (int i = 0; i < n; i++)
+	for (long i = 0; i < n; i++)
 		matrix[ i + i * n ] += alpha;
 }
 
