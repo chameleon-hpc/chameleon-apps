@@ -20,6 +20,18 @@
 #define VERY_VERBOSE 0
 #endif
 
+#ifndef CHECK_GENERATED_TASK_ID
+#define CHECK_GENERATED_TASK_ID 0
+#endif
+
+#ifndef SIMULATE_CONST_WORK
+#define SIMULATE_CONST_WORK 0
+#endif
+
+#ifndef CALC_SPEEDUP
+#define CALC_SPEEDUP 1
+#endif
+
 #ifndef DEV_NR
 #define DEV_NR 1002 // CHAMELEON_MPI
 #endif
@@ -34,6 +46,15 @@
 #include <string>
 #include <sstream>
 #include "math.h"
+// if chameleon on loaded needed
+#include <cmath>
+#include <unistd.h>
+#include <sys/syscall.h>
+
+#if CHECK_GENERATED_TASK_ID
+#include <mutex>
+#include <list>
+#endif
 
 void initialize_matrix_rnd(double *mat, int matrixSize) {
 	double lower_bound = 0;
@@ -131,6 +152,11 @@ int main(int argc, char **argv)
 	double wTimeCham, wTimeHost;
 	bool pass = true;
 
+#if CHECK_GENERATED_TASK_ID
+    std::mutex mtx_t_ids;
+    std::list<int32_t> t_ids;
+#endif
+
 	chameleon_init();
 
     if(argc==2) {
@@ -171,9 +197,9 @@ int main(int argc, char **argv)
 
 	//allocate and initialize matrices
 	for(int i=0; i<numberOfTasks; i++) {
- 		matrices_a[i] = new double[matrixSize*matrixSize];
-    		matrices_b[i] = new double[matrixSize*matrixSize];
-    		matrices_c[i] = new double[matrixSize*matrixSize];
+ 		matrices_a[i] = new double[(long)matrixSize*matrixSize];
+    	matrices_b[i] = new double[(long)matrixSize*matrixSize];
+    	matrices_c[i] = new double[(long)matrixSize*matrixSize];
     	if(RANDOMINIT) {
     		initialize_matrix_rnd(matrices_a[i], matrixSize);
     		initialize_matrix_rnd(matrices_b[i], matrixSize);
@@ -219,15 +245,50 @@ int main(int argc, char **argv)
                     printf("#R%d (OS_TID:%ld): B[%d] at (" DPxMOD ")\n", iMyRank2, syscall(SYS_gettid), i, DPxPTR(&B[0]));
                     printf("#R%d (OS_TID:%ld): C[%d] at (" DPxMOD ")\n", iMyRank2, syscall(SYS_gettid), i, DPxPTR(&C[0]));
 #endif
+
+#if SIMULATE_CONST_WORK
+                    // simulate work by just touching the arrays and wait for 50 ms here
+                    C[matrixSize] = A[matrixSize] * B[matrixSize];
+                    usleep(50000);
+#else
 					compute_matrix_matrix(A, B, C, matrixSize);
+#endif
 				}
+
+#if CHECK_GENERATED_TASK_ID
+                int32_t last_t_id = chameleon_get_last_local_task_id_added();
+                printf("#R%d (OS_TID:%ld): last task that has been created: %d\n", iMyRank, syscall(SYS_gettid), last_t_id);
+                mtx_t_ids.lock();
+                t_ids.push_back(last_t_id);
+                mtx_t_ids.unlock();
+#endif
     		}
+
+#if CHECK_GENERATED_TASK_ID
+        #pragma omp barrier
+        #pragma omp master
+        {
+            printf("Before Running Tasks\n");
+            for (std::list<int32_t>::iterator it=t_ids.begin(); it!=t_ids.end(); ++it) {
+                printf("R#%d Task with id %d finished?? ==> %d\n", iMyRank, *it, chameleon_local_task_has_finished(*it));
+            }
+        }
+        #pragma omp barrier
+#endif
 
     	//LOG(iMyRank, "entering taskwait");
     	int res = chameleon_distributed_taskwait();
     	//LOG(iMyRank, "leaving taskwait");
     }
     MPI_Barrier(MPI_COMM_WORLD);
+
+#if CHECK_GENERATED_TASK_ID
+    printf("After Running Tasks\n");
+    for (std::list<int32_t>::iterator it=t_ids.begin(); it!=t_ids.end(); ++it) {
+        printf("R#%d Task with id %d finished?? ==> %d\n", iMyRank, *it, chameleon_local_task_has_finished(*it));
+    }
+#endif
+
     fTimeEnd=MPI_Wtime();
     wTimeCham = fTimeEnd-fTimeStart;
     if( iMyRank==0 ) {
@@ -245,8 +306,9 @@ int main(int argc, char **argv)
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
-    fTimeStart=MPI_Wtime();
 
+#if CALC_SPEEDUP
+    fTimeStart=MPI_Wtime();
     #pragma omp parallel
     {
     	// if(iMyRank==0) {
@@ -276,7 +338,7 @@ int main(int argc, char **argv)
     if( iMyRank==0 ) {
         printf("#R%d: Computations with host offloading took %.2f\n", iMyRank, wTimeHost);
         printf("#R%d: This corresponds to a speedup of %.2f!\n", iMyRank, wTimeHost/wTimeCham);
-    }  
+    }
     LOG(iMyRank, "Validation:");
     if(numberOfTasks>0) {
         for(int t=0; t<numberOfTasks; t++) {
@@ -287,6 +349,7 @@ int main(int argc, char **argv)
         else
             LOG(iMyRank, "TEST FAILED");
     }
+#endif
 
     //deallocate matrices
     for(int i=0; i<numberOfTasks; i++) {

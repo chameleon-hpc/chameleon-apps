@@ -13,6 +13,15 @@
 #include <assert.h>
 #include <sys/time.h>
 
+#ifdef DEBUG
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#include <unistd.h>
+#include <sys/syscall.h>
+extern int tmp_width;
+#endif
+
 //#include "timer.h"
 
 #ifdef _USE_HBW
@@ -47,6 +56,8 @@ void do_syrk(double *A, double *B, int ts, int ld);
 
 void do_mpi_send(double *buf, int size, MPI_Datatype data_type, int dst, int tag);
 void do_mpi_recv(double *buf, int size, MPI_Datatype data_type, int src, int tag);
+void do_mpi_send_jk(double *buf, int size, MPI_Datatype data_type, int dst, int tag, int i, int j);
+void do_mpi_recv_jk(double *buf, int size, MPI_Datatype data_type, int src, int tag, int i, int j);
 void do_mpi_rput(double *buf, int size, MPI_Datatype data_type, int target, int disp, MPI_Win win);
 
 void do_mpi_send_on_comm_thread(double *buf, int size, MPI_Datatype data_type, int dst, int tag);
@@ -54,7 +65,8 @@ void do_mpi_recv_on_comm_thread(double *buf, int size, MPI_Datatype data_type, i
 void do_mpi_rput_on_comm_thread(double *buf, int size, MPI_Datatype data_type, int target,
                                 int disp, MPI_Win win);
 
-void test_and_yield(MPI_Request *comm_req);
+void test_and_yield(MPI_Request *comm_req, int c_type, int src_dst, int tag);
+void test_and_yield_jk(MPI_Request *comm_req, int c_type, int src_dst, int tag, int i, int j);
 void testall_and_yield(int comm_cnt, MPI_Request *comm_reqs);
 
 void reset_send_flags(char *send_flags);
