@@ -1,6 +1,6 @@
 
 #include "common.h"
-// #include "chameleon.h"
+#include "chameleon.h"
 
 static void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, double *C[nt],
                          int *block_rank);
@@ -9,13 +9,13 @@ double do_cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B,
                        int *block_rank)
 {
     double time;
-    // chameleon_init();
+    chameleon_init();
 
     time = get_time();
     cholesky_mpi(ts, nt, (double* (*)[nt])A, B, C, block_rank);
     time = get_time() - time;
 
-    // chameleon_finalize();
+    chameleon_finalize();
     return time;
 }
 
@@ -87,12 +87,15 @@ static void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *
             }
         }
 
-        #pragma omp barrier
+        // #pragma omp barrier
 
         // TODO: start communication threads or active them if already present
 
         #pragma omp single
         {
+            // chameleon call to wake up threads
+            wake_up_comm_threads();
+
             for (int i = k + 1; i < nt; i++) {
 
                 if (block_rank[k*nt+i] != mype) {
@@ -180,7 +183,7 @@ static void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *
         // TODO: distributed taskwait should go here
         // TODO: revise taskwait and prohibit breakout if commthreads actived or taskwait has not been called everywhere
         // TODO: otherwise race condition might occur if thread is faster than the one that is creating the first task and breakout occurs
-
+        chameleon_distributed_taskwait(1);
     }
 } /* end omp parallel */
     MPI_Barrier(MPI_COMM_WORLD);
