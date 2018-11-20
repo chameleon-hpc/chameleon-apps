@@ -41,12 +41,13 @@
 
 #include <mpi.h>
 #include "chameleon.h"
+#include <cstdlib>
+#include <cstdio>
 #include <random>
 #include <iostream>
 #include <string>
 #include <sstream>
 #include "math.h"
-// if chameleon on loaded needed
 #include <cmath>
 #include <unistd.h>
 #include <sys/syscall.h>
@@ -98,7 +99,7 @@ bool check_test_matrix(double *c, double val, int matrixSize) {
 	MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank);
 	for(int i=0;i<matrixSize;i++) {
 		for(int j=0;j<matrixSize;j++) {
-			if(abs(c[i*matrixSize+j] - val) > 1e-3) {
+			if(fabs(c[i*matrixSize+j] - val) > 1e-3) {
 				printf("#R%d (OS_TID:%ld): Error in matrix entry (%d,%d) expected:%f but value is %f\n", iMyRank, syscall(SYS_gettid),i,j,val,c[i*matrixSize+j]);
 				return false;
 			}
@@ -277,7 +278,7 @@ int main(int argc, char **argv)
 #endif
 
     	//LOG(iMyRank, "entering taskwait");
-    	int res = chameleon_distributed_taskwait();
+    	int res = chameleon_distributed_taskwait(0);
     	//LOG(iMyRank, "leaving taskwait");
     }
     MPI_Barrier(MPI_COMM_WORLD);
@@ -327,10 +328,6 @@ int main(int argc, char **argv)
 				}
 				//LOG(iMyRank, "offloading to chameleon");
     		}
-
-    	//LOG(iMyRank, "entering taskwait");
-    	//int res = chameleon_distributed_taskwait();
-    	//LOG(iMyRank, "leaving taskwait");
     }
     MPI_Barrier(MPI_COMM_WORLD);
     fTimeEnd=MPI_Wtime();

@@ -74,10 +74,10 @@ int main(int argc, char **argv)
         }
 #if USE_MPI
         // work on tasks as long as there are tasks
-        int res = chameleon_distributed_taskwait();
+        int res = chameleon_distributed_taskwait(0);
     } else {
         // work on tasks as long as there are tasks
-        int res = chameleon_distributed_taskwait();
+        int res = chameleon_distributed_taskwait(0);
     }
     
     // wait until all is finished

@@ -116,14 +116,14 @@ int main(int argc, char **argv)
             }
 
             // work on tasks as long as there are tasks
-            int res = chameleon_distributed_taskwait();
+            int res = chameleon_distributed_taskwait(0);
         }
     } else {
         // second rank is only working on data that is speculatively send from master rank
         #pragma omp parallel
         {
             // work on tasks as long as there are tasks
-            int res = chameleon_distributed_taskwait();
+            int res = chameleon_distributed_taskwait(0);
         }
     }
     
