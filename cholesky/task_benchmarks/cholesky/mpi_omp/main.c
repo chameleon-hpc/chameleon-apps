@@ -124,7 +124,8 @@ int main(int argc, char *argv[])
             for (int j = 0; j < nt; j++) {
                 if (block_rank[i * nt + j] == mype) {
                     for (int k = 0; k < ts*ts; k++) {
-                        if (Ans[i][j][k] != A[i][j][k]) {
+                        if (fabs(Ans[i][j][k] - A[i][j][k]) > 10E-3) {
+                            printf("Expected: %.7f, Value: %.7f\n", Ans[i][j][k], A[i][j][k]);
                             check_id = 2;
                             break;
                         }
