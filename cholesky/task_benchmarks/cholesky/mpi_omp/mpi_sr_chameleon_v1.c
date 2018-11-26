@@ -2,6 +2,57 @@
 #include "common.h"
 #include "chameleon.h"
 
+long syscall(long number, ...);
+int32_t chameleon_taskyield();
+void testall_and_yield_cham(int comm_cnt, MPI_Request *comm_reqs);
+void test_and_yield_cham(MPI_Request *comm_req, int c_type, int src_dst, int tag, int i, int j);
+
+inline void testall_and_yield_cham(int comm_cnt, MPI_Request *comm_reqs)
+{
+    if (!comm_cnt) return;
+
+    int comm_comp = 0;
+
+
+    MPI_Testall(comm_cnt, comm_reqs, &comm_comp, MPI_STATUSES_IGNORE);
+    while (!comm_comp) {
+        // call specific chameleon taskyield
+        int32_t res = chameleon_taskyield();
+        #pragma omp taskyield
+        MPI_Testall(comm_cnt, comm_reqs, &comm_comp, MPI_STATUSES_IGNORE);
+    }
+}
+
+inline void test_and_yield_cham(MPI_Request *comm_req, int c_type, int src_dst, int tag, int i, int j)
+{
+    int comm_comp = 0;
+#ifdef DEBUG
+    int printed = 0;
+#endif
+    MPI_Test(comm_req, &comm_comp, MPI_STATUS_IGNORE);
+    while (!comm_comp) {
+        // call specific chameleon taskyield
+        int32_t res = chameleon_taskyield();
+        #pragma omp taskyield
+#ifdef DEBUG
+        if (!printed) {
+            if(c_type == 0)
+                fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    SEND    Wait    to      %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j);
+            else if(c_type == 1)
+                fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    RECV    Wait    from    %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j);
+            printed = 1;
+        }
+#endif
+        MPI_Test(comm_req, &comm_comp, MPI_STATUS_IGNORE);
+    }
+#ifdef DEBUG
+    if(c_type == 0)
+        fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    SEND    End     to      %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j);
+    else if(c_type == 1)
+        fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    RECV    End     from    %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j);
+#endif
+}
+
 static void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, double *C[nt],
                          int *block_rank);
 
@@ -51,7 +102,7 @@ static void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *
                                     &send_reqs[send_cnt++]);
                         }
                     }
-                    testall_and_yield(send_cnt, send_reqs);
+                    testall_and_yield_cham(send_cnt, send_reqs);
                 }
             }
         } else {
@@ -64,7 +115,7 @@ static void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *
                     MPI_Irecv(B, ts*ts, MPI_DOUBLE, block_rank[k*nt+k], k*nt+k, MPI_COMM_WORLD,
                             &recv_req);
 
-                    test_and_yield(&recv_req, 1, block_rank[k*nt+k], k*nt+k);
+                    test_and_yield_cham(&recv_req, 1, block_rank[k*nt+k], k*nt+k, k, k);
                 }
             }
         }
@@ -87,13 +138,9 @@ static void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *
             }
         }
 
-        // #pragma omp barrier
-
-        // TODO: start communication threads or active them if already present
-
-        #pragma omp single
+        #pragma omp single nowait
         {
-            // chameleon call to wake up threads
+            // chameleon call to start/wake up communication threads
             wake_up_comm_threads();
 
             for (int i = k + 1; i < nt; i++) {
@@ -110,8 +157,7 @@ static void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *
                         MPI_Irecv(C[i], ts*ts, MPI_DOUBLE, block_rank[k*nt+i], k*nt+i,
                                 MPI_COMM_WORLD, &recv_req);
 
-                        // TODO: we need a custom taskyield here
-                        test_and_yield(&recv_req, 1, block_rank[k*nt+i], k*nt+i);
+                        test_and_yield_cham(&recv_req, 1, block_rank[k*nt+i], k*nt+i, i, k);
                     }
 
                 } else {
@@ -131,34 +177,48 @@ static void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *
                                         MPI_COMM_WORLD, &send_reqs[send_cnt++]);
                             }
                         }
-
-                        // TODO: we need a custom taskyield here
-                        testall_and_yield(send_cnt, send_reqs);
+                        testall_and_yield_cham(send_cnt, send_reqs);
                     }
                 }
 
+                double *tmp_a_k_i   = A[k][i];
+                double *tmp_a_i_i   = A[i][i];
+                double *tmp_c_i     = C[i];
+
                 for (int j = k + 1; j < i; j++) {
 
+                    double *tmp_a_k_j   = A[k][j];
+                    double *tmp_a_j_i   = A[j][i];
+                    double *tmp_c_j     = C[j];
+
                     if (block_rank[j*nt+i] == mype) {
-                        if (block_rank[k*nt+i] == mype && block_rank[k*nt+j] == mype) {
-                            #pragma omp task
+                        if (block_rank[k*nt+i] == mype && block_rank[k*nt+j] == mype) {                            
+                            // #pragma omp task
+                            #pragma omp target map(to: tmp_a_k_i[0:ts*ts], tmp_a_k_j[0:ts*ts]) map(tofrom: tmp_a_j_i[0:ts*ts]) device(1002)
                             {
-                                do_gemm(A[k][i], A[k][j], A[j][i], ts, ts);
+                                // do_gemm(A[k][i], A[k][j], A[j][i], ts, ts);
+                                do_gemm(tmp_a_k_i, tmp_a_k_j, tmp_a_j_i, ts, ts);
                             }
                         } else if (block_rank[k*nt+i] != mype && block_rank[k*nt+j] == mype) {
-                            #pragma omp task
+                            // #pragma omp task
+                            #pragma omp target map(to: tmp_c_i[0:ts*ts], tmp_a_k_j[0:ts*ts]) map(tofrom: tmp_a_j_i[0:ts*ts]) device(1002)
                             {
-                                do_gemm(C[i], A[k][j], A[j][i], ts, ts);
+                                do_gemm(tmp_c_i, tmp_a_k_j, tmp_a_j_i, ts, ts);
+                                // do_gemm(C[i], A[k][j], A[j][i], ts, ts);
                             }
                         } else if (block_rank[k*nt+i] == mype && block_rank[k*nt+j] != mype) {
-                            #pragma omp task
+                            // #pragma omp task
+                            #pragma omp target map(to: tmp_a_k_i[0:ts*ts], tmp_c_j[0:ts*ts]) map(tofrom: tmp_a_j_i[0:ts*ts]) device(1002)
                             {
-                                do_gemm(A[k][i], C[j], A[j][i], ts, ts);
+                                do_gemm(tmp_a_k_i, tmp_c_j, tmp_a_j_i, ts, ts);
+                                // do_gemm(A[k][i], C[j], A[j][i], ts, ts);
                             }
                         } else {
-                            #pragma omp task
+                            // #pragma omp task
+                            #pragma omp target map(to: tmp_c_i[0:ts*ts], tmp_c_j[0:ts*ts]) map(tofrom: tmp_a_j_i[0:ts*ts]) device(1002)
                             {
-                                do_gemm(C[i], C[j], A[j][i], ts, ts);
+                                do_gemm(tmp_c_i, tmp_c_j, tmp_a_j_i, ts, ts);
+                                // do_gemm(C[i], C[j], A[j][i], ts, ts);
                             }
                         }
                     }
@@ -166,14 +226,18 @@ static void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *
 
                 if (block_rank[i*nt+i] == mype) {
                     if (block_rank[k*nt+i] == mype) {
-                        #pragma omp task
+                        // #pragma omp task
+                        #pragma omp target map(tofrom: tmp_a_k_i[0:ts*ts]) map(to: tmp_a_i_i[0:ts*ts]) device(1002)
                         {
-                            do_syrk(A[k][i], A[i][i], ts, ts);
+                            do_syrk(tmp_a_k_i, tmp_a_i_i, ts, ts);
+                            // do_syrk(A[k][i], A[i][i], ts, ts);
                         }
                     } else {
-                        #pragma omp task
+                        // #pragma omp task
+                        #pragma omp target map(tofrom: tmp_c_i[0:ts*ts]) map(to: tmp_a_i_i[0:ts*ts]) device(1002)
                         {
-                            do_syrk(C[i], A[i][i], ts, ts);
+                            do_syrk(tmp_c_i, tmp_a_i_i, ts, ts);
+                            // do_syrk(C[i], A[i][i], ts, ts);
                         }
                     }
                 }

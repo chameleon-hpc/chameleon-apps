@@ -1,11 +1,23 @@
 
 #include "common.h"
 
+long syscall(long number, ...);
+
+#ifndef PRINT_LVLS
+#define PRINT_LVLS 0
+#endif
+
 #ifdef DEBUG
 int tmp_width = 4;
+
+int tmp_lvl = 0;
+#if PRINT_LVLS
+#pragma omp threadprivate(tmp_lvl)
+#endif
 #endif
 
 /* Computation */
+#pragma omp declare target
 void do_potrf(double * const A, int ts, int ld)
 {
     static int INFO;
@@ -13,7 +25,9 @@ void do_potrf(double * const A, int ts, int ld)
 
     LAPACKE_dpotrf(LAPACK_COL_MAJOR, L, ts, A, ts);
 }
+#pragma omp end declare target
 
+#pragma omp declare target
 void do_trsm(double *A, double *B, int ts, int ld)
 {
     static char LO = 'L', TR = 'T', NU = 'N', RI = 'R';
@@ -22,7 +36,9 @@ void do_trsm(double *A, double *B, int ts, int ld)
     cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasTrans, CblasNonUnit,
                 ts, ts, DONE, A, ld, B, ld);
 }
+#pragma omp end declare target
 
+#pragma omp declare target
 void do_gemm(double *A, double *B, double *C, int ts, int ld)
 {
     static const char TR = 'T', NT = 'N';
@@ -31,7 +47,9 @@ void do_gemm(double *A, double *B, double *C, int ts, int ld)
     cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans, ts, ts, ts, DMONE, A, ld,
                 B, ld, DONE, C, ld);
 }
+#pragma omp end declare target
 
+#pragma omp declare target
 void do_syrk(double *A, double *B, int ts, int ld)
 {
     static char LO = 'L', NT = 'N';
@@ -40,7 +58,7 @@ void do_syrk(double *A, double *B, int ts, int ld)
     cblas_dsyrk(CblasColMajor, CblasLower, CblasNoTrans, ts, ts, DMONE, A, ld,
                 DONE, B, ld);
 }
-
+#pragma omp end declare target
 
 /* Communication */
 void do_mpi_send(double *buf, int size, MPI_Datatype data_type, int dst, int tag)
@@ -58,7 +76,7 @@ void do_mpi_send_jk(double *buf, int size, MPI_Datatype data_type, int dst, int 
 {
     MPI_Request send_req;
 #ifdef DEBUG
-    fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    SEND    Start   to      %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, dst, tmp_width, tag, tmp_width, i, tmp_width, j);
+    fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    SEND    Start   to      %*d with tag %*d    [%*d][%*d]        Lvl: %*d\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, dst, tmp_width, tag, tmp_width, i, tmp_width, j, tmp_width, tmp_lvl);
 #endif
     MPI_Isend(buf, size, data_type, dst, tag, MPI_COMM_WORLD, &send_req);
 
@@ -80,7 +98,7 @@ void do_mpi_recv_jk(double *buf, int size, MPI_Datatype data_type, int src, int 
 {
     MPI_Request recv_req;
 #ifdef DEBUG
-    fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    RECV    Start   from    %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src, tmp_width, tag, tmp_width, i, tmp_width, j);
+    fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    RECV    Start   from    %*d with tag %*d    [%*d][%*d]        Lvl: %*d\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src, tmp_width, tag, tmp_width, i, tmp_width, j, tmp_width, tmp_lvl);
 #endif
     MPI_Irecv(buf, size, data_type, src, tag, MPI_COMM_WORLD, &recv_req);
 
@@ -162,23 +180,31 @@ inline void test_and_yield_jk(MPI_Request *comm_req, int c_type, int src_dst, in
 #endif
     MPI_Test(comm_req, &comm_comp, MPI_STATUS_IGNORE);
     while (!comm_comp) {
-#pragma omp taskyield
 #ifdef DEBUG
         if (!printed) {
             if(c_type == 0)
-                fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    SEND    Wait    to      %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j);
+                fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    SEND    Wait    to      %*d with tag %*d    [%*d][%*d]        Lvl: %*d\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j, tmp_width, tmp_lvl);
             else if(c_type == 1)
-                fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    RECV    Wait    from    %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j);
+                fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    RECV    Wait    from    %*d with tag %*d    [%*d][%*d]        Lvl: %*d\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j, tmp_width, tmp_lvl);
             printed = 1;
         }
+#if PRINT_LVLS
+        tmp_lvl++;
+#endif
+#endif
+#pragma omp taskyield
+#ifdef DEBUG 
+#if PRINT_LVLS
+        tmp_lvl--;
+#endif
 #endif
         MPI_Test(comm_req, &comm_comp, MPI_STATUS_IGNORE);
     }
 #ifdef DEBUG
     if(c_type == 0)
-        fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    SEND    End     to      %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j);
+        fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    SEND    End     to      %*d with tag %*d    [%*d][%*d]        Lvl: %*d\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j, tmp_width, tmp_lvl);
     else if(c_type == 1)
-        fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    RECV    End     from    %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j);
+        fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    RECV    End     from    %*d with tag %*d    [%*d][%*d]        Lvl: %*d\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j, tmp_width, tmp_lvl);
 #endif
 }
 

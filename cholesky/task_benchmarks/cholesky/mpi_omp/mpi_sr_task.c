@@ -50,7 +50,7 @@ static void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *
             get_recv_flag(&recv_flag, block_rank, k, k, k+1, nt-1, nt);
 
             if (recv_flag) {
-#pragma omp task untied depend(out:B) firstprivate(k, ts, nt) shared(B, block_rank)
+#pragma omp task untied depend(out:B) firstprivate(k, ts, nt, block_rank) shared(B)
                 do_mpi_recv_jk(B, ts*ts, MPI_DOUBLE, block_rank[k*nt+k], k*nt+k, k, k);
             }
         }
@@ -88,7 +88,7 @@ static void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *
                 get_recv_flag(&recv_flag, block_rank, i, i, i, i, nt);
 
                 if (recv_flag) {
-#pragma omp task untied depend(out:C[i]) firstprivate(k, i, ts, nt) shared(C, block_rank)
+#pragma omp task untied depend(out:C[i]) firstprivate(k, i, ts, nt, block_rank) shared(C)
                     do_mpi_recv_jk(C[i], ts*ts, MPI_DOUBLE, block_rank[k*nt+i], k*nt+i, i, k);
                 }
             }
@@ -129,8 +129,9 @@ static void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *
     
     #pragma omp barrier
     // #pragma omp taskwait
-
+#ifdef DEBUG
     fprintf(stderr, "#R%d (OS_TID:%ld):    I'm done\n", mype, syscall(SYS_gettid));
+#endif
 } /* end omp parallel */
 
     MPI_Barrier(MPI_COMM_WORLD);
