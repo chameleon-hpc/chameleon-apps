@@ -1,12 +1,11 @@
 
 ifneq ($(TARGET),)
-include ../$(TARGET).def
+include ../flags_$(TARGET).def
 else
 TARGET=generic
 CFLAGS=-fopenmp
 LDFLAGS=-fopenmp
 endif
-
 
 all : ch_$(TARGET)_single ch_$(TARGET)_single_noyield ch_$(TARGET)_single_timing Makefile
 ch_$(TARGET)_single: ch_ompss.c ch_common.c Makefile

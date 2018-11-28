@@ -1,18 +1,24 @@
 #!/bin/bash
 
-last_prgenv=$(module list 2>&1 | grep PrgEnv | cut -d \- -f 2 | cut -d \/ -f 1)
-
-
-for target in gnu intel cray
+# for target in intel
+for target in intel clang chameleon
 do
-  module swap PrgEnv-${last_prgenv} PrgEnv-${target}
-  module load numlib/intel/mkl/2018.1
-  TARGET=${target}_cray make -C singlecom-deps clean all
-  last_prgenv=$target
-done
+  # load default modules
+  module purge
+  module load DEVELOP
 
-module swap PrgEnv-${last_prgenv} PrgEnv-gnu
-module load compiler/ompss/17.12-gnu-7.2.0
-TARGET=ompss_cray make -C singlecom-deps clean all
-TARGET=ompss_cray make -C fine-deps clean all
-TARGET=ompss_cray make -C perrank-deps clean all
+  # load target specific compiler and libraries
+  while IFS='' read -r line || [[ -n "$line" ]]; do
+    if  [[ $line == LOAD_COMPILER* ]] || [[ $line == LOAD_LIBS* ]] ; then
+      eval "$line"
+    fi
+  done < "flags_${target}.def"
+  module load ${LOAD_COMPILER}
+  module load intelmpi/2018.3
+  module load ${LOAD_LIBS}
+  module li
+
+  # make corresponding targets
+  TARGET=${target} make -C singlecom-deps clean all
+  TARGET=${target} make -C fine-deps clean all
+done
