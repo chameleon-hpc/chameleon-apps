@@ -1,3 +1,6 @@
-CC = cc
-CFLAGS  += -I${MKLROOT}/include -O3 -I./ -std=gnu99  -fopenmp -g
-LDFLAGS += -std=gnu99 -lrt -lpthread -lm -fopenmp
+LOAD_COMPILER="clang/7.0"
+LOAD_LIBS="LIBRARIES intelmkl/2018"
+
+CC      = I_MPI_CC=clang I_MPI_CXX=clang++ mpiicc
+CFLAGS  = -O3 -g -std=c11 -I./ -mt_mpi -fopenmp -w $(FLAGS_MKL_INCLUDE)
+LDFLAGS = -std=c11 -lrt -lpthread -lm -mt_mpi -fopenmp -w $(FLAGS_MKL_LINKER)
