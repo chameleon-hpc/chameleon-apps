@@ -2,6 +2,55 @@
 #include "ch_common.h"
 #include "../timing.h"
 
+// void testall_and_yield_cham(int comm_cnt, MPI_Request *comm_reqs);
+// void test_and_yield_cham(MPI_Request *comm_req, int c_type, int src_dst, int tag, int i, int j);
+
+// inline void testall_and_yield_cham(int comm_cnt, MPI_Request *comm_reqs)
+// {
+//     if (!comm_cnt) return;
+
+//     int comm_comp = 0;
+
+
+//     MPI_Testall(comm_cnt, comm_reqs, &comm_comp, MPI_STATUSES_IGNORE);
+//     while (!comm_comp) {
+//         // call specific chameleon taskyield
+//         int32_t res = chameleon_taskyield();
+//         #pragma omp taskyield
+//         MPI_Testall(comm_cnt, comm_reqs, &comm_comp, MPI_STATUSES_IGNORE);
+//     }
+// }
+
+// inline void test_and_yield_cham(MPI_Request *comm_req, int c_type, int src_dst, int tag, int i, int j)
+// {
+//     int comm_comp = 0;
+// #ifdef DEBUG
+//     int printed = 0;
+// #endif
+//     MPI_Test(comm_req, &comm_comp, MPI_STATUS_IGNORE);
+//     while (!comm_comp) {
+//         // call specific chameleon taskyield
+//         int32_t res = chameleon_taskyield();
+//         #pragma omp taskyield
+// #ifdef DEBUG
+//         if (!printed) {
+//             if(c_type == 0)
+//                 fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    SEND    Wait    to      %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j);
+//             else if(c_type == 1)
+//                 fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    RECV    Wait    from    %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j);
+//             printed = 1;
+//         }
+// #endif
+//         MPI_Test(comm_req, &comm_comp, MPI_STATUS_IGNORE);
+//     }
+// #ifdef DEBUG
+//     if(c_type == 0)
+//         fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    SEND    End     to      %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j);
+//     else if(c_type == 1)
+//         fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    RECV    End     from    %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j);
+// #endif
+// }
+
 void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, double *C[nt], int *block_rank)
 {
 #ifdef CHAMELEON
@@ -17,51 +66,56 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
     for (int k = 0; k < nt; k++) {
 
         if (block_rank[k*nt+k] == mype) {
-#pragma omp single
+            #pragma omp single
             omp_potrf(A[k][k], ts, ts);
 
-#pragma omp master
-{
-            send_cnt = 0;
-            reset_send_flags(send_flags);
-            send_cnt = get_send_flags(send_flags, block_rank, k, k, k+1, nt-1, nt);
-
-            if (send_cnt != 0) {
-
+            #pragma omp master
+            {
                 send_cnt = 0;
-                for (int dst = 0; dst < np; dst++) {
-                    if (send_flags[dst] && dst != mype) {
-                        MPI_Isend(A[k][k], ts*ts, MPI_DOUBLE, dst, k*nt+k, MPI_COMM_WORLD,
-                                  &send_reqs[send_cnt++]);
+                reset_send_flags(send_flags);
+                send_cnt = get_send_flags(send_flags, block_rank, k, k, k+1, nt-1, nt);
+
+                if (send_cnt != 0) {
+
+                    send_cnt = 0;
+                    for (int dst = 0; dst < np; dst++) {
+                        if (send_flags[dst] && dst != mype) {
+                            MPI_Isend(A[k][k], ts*ts, MPI_DOUBLE, dst, k*nt+k, MPI_COMM_WORLD,
+                                    &send_reqs[send_cnt++]);
+                        }
                     }
+                    // testall_and_yield_cham(send_cnt, send_reqs);
+                    waitall(send_reqs, send_cnt);
                 }
-                // testall_and_yield(send_cnt, send_reqs);
-                waitall(send_reqs, send_cnt);
             }
-}
         } else {
-#pragma omp single
-{
-            recv_flag = 0;
-            get_recv_flag(&recv_flag, block_rank, k, k, k+1, nt-1, nt);
+            #pragma omp single
+            {
+                recv_flag = 0;
+                get_recv_flag(&recv_flag, block_rank, k, k, k+1, nt-1, nt);
 
-            if (recv_flag) {
-                MPI_Irecv(B, ts*ts, MPI_DOUBLE, block_rank[k*nt+k], k*nt+k, MPI_COMM_WORLD,
-                          &recv_req);
-                // test_and_yield(&recv_req, 1, block_rank[k*nt+k], k*nt+k);
-                wait(&recv_req);
-
+                if (recv_flag) {
+                    MPI_Irecv(B, ts*ts, MPI_DOUBLE, block_rank[k*nt+k], k*nt+k, MPI_COMM_WORLD,
+                            &recv_req);
+                    // test_and_yield_cham(&recv_req, 1, block_rank[k*nt+k], k*nt+k, k, k);
+                    wait(&recv_req);
+                }
             }
-}
         }
 
         #pragma omp for
         for (int i = k + 1; i < nt; i++) {
             if (block_rank[k*nt+i] == mype) {
                 if (block_rank[k*nt+k] == mype) {
-                    omp_trsm(A[k][k], A[k][i], ts, ts);
+                    #pragma omp task
+                    {
+                        omp_trsm(A[k][k], A[k][i], ts, ts);
+                    }
                 } else {
-                    omp_trsm(B, A[k][i], ts, ts);
+                    #pragma omp task
+                    {
+                        omp_trsm(B, A[k][i], ts, ts);
+                    }
                 }
             }
         }
@@ -69,146 +123,146 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
         #pragma omp single
         {
 #ifdef CHAMELEON
-        // wake up chameleon communication threads already here
-        wake_up_comm_threads();
+            // chameleon call to start/wake up communication threads
+            wake_up_comm_threads();
 #endif
-        for (int i = k + 1; i < nt; i++) {
+            for (int i = k + 1; i < nt; i++) {
 
-            if (block_rank[k*nt+i] != mype) {
+                if (block_rank[k*nt+i] != mype) {
 
-                recv_flag = 0;
-                get_recv_flag(&recv_flag, block_rank, k+1, i-1, i, i, nt);
-                get_recv_flag(&recv_flag, block_rank, i, i, i+1, nt-1, nt);
-                get_recv_flag(&recv_flag, block_rank, i, i, i, i, nt);
+                    recv_flag = 0;
+                    get_recv_flag(&recv_flag, block_rank, k+1, i-1, i, i, nt);
+                    get_recv_flag(&recv_flag, block_rank, i, i, i+1, nt-1, nt);
+                    get_recv_flag(&recv_flag, block_rank, i, i, i, i, nt);
 
-                if (recv_flag) {
+                    if (recv_flag) {
 
-                    MPI_Irecv(C[i], ts*ts, MPI_DOUBLE, block_rank[k*nt+i], k*nt+i,
-                              MPI_COMM_WORLD, &recv_req);
+                        MPI_Irecv(C[i], ts*ts, MPI_DOUBLE, block_rank[k*nt+i], k*nt+i,
+                                MPI_COMM_WORLD, &recv_req);
 
-                    // test_and_yield(&recv_req, 1, block_rank[k*nt+i], k*nt+i);
-                    wait(&recv_req);
-                }
+                        // test_and_yield_cham(&recv_req, 1, block_rank[k*nt+i], k*nt+i, i, k);
+                        wait(&recv_req);
+                    }
 
-            } else {
-
-                send_cnt = 0;
-                reset_send_flags(send_flags);
-                send_cnt += get_send_flags(send_flags, block_rank, k+1, i-1, i, i, nt);
-                send_cnt += get_send_flags(send_flags, block_rank, i, i, i+1, nt-1, nt);
-                send_cnt += get_send_flags(send_flags, block_rank, i, i, i, i, nt);
-
-                if (send_cnt != 0) {
+                } else {
 
                     send_cnt = 0;
-                    for (int dst = 0; dst < np; dst++) {
-                        if (send_flags[dst] && dst != mype) {
-                            MPI_Isend(A[k][i], ts*ts, MPI_DOUBLE, dst, k*nt+i,
-                                      MPI_COMM_WORLD, &send_reqs[send_cnt++]);
+                    reset_send_flags(send_flags);
+                    send_cnt += get_send_flags(send_flags, block_rank, k+1, i-1, i, i, nt);
+                    send_cnt += get_send_flags(send_flags, block_rank, i, i, i+1, nt-1, nt);
+                    send_cnt += get_send_flags(send_flags, block_rank, i, i, i, i, nt);
+
+                    if (send_cnt != 0) {
+
+                        send_cnt = 0;
+                        for (int dst = 0; dst < np; dst++) {
+                            if (send_flags[dst] && dst != mype) {
+                                MPI_Isend(A[k][i], ts*ts, MPI_DOUBLE, dst, k*nt+i,
+                                        MPI_COMM_WORLD, &send_reqs[send_cnt++]);
+                            }
                         }
+                        // testall_and_yield_cham(send_cnt, send_reqs);
+                        waitall(send_reqs, send_cnt);
                     }
-                    // testall_and_yield(send_cnt, send_reqs);
-                    waitall(send_reqs, send_cnt);
                 }
-            }
-
-#ifdef CHAMELEON
-            // temporary pointers to be able to define slices for offloading
-            double *tmp_a_k_i   = A[k][i];
-            double *tmp_a_i_i   = A[i][i];
-            double *tmp_c_i     = C[i];
-#endif
-
-            for (int j = k + 1; j < i; j++) {
 
 #ifdef CHAMELEON
                 // temporary pointers to be able to define slices for offloading
-                double *tmp_a_k_j   = A[k][j];
-                double *tmp_a_j_i   = A[j][i];
-                double *tmp_c_j     = C[j];
+                double *tmp_a_k_i   = A[k][i];
+                double *tmp_a_i_i   = A[i][i];
+                double *tmp_c_i     = C[i];
 #endif
 
-                if (block_rank[j*nt+i] == mype) {
-                    if (block_rank[k*nt+i] == mype && block_rank[k*nt+j] == mype) {
+                for (int j = k + 1; j < i; j++) {
+
 #ifdef CHAMELEON
-                        #pragma omp target map(to: tmp_a_k_i[0:ts*ts], tmp_a_k_j[0:ts*ts]) map(tofrom: tmp_a_j_i[0:ts*ts]) device(1002)
-                        {
-                            omp_gemm(tmp_a_k_i, tmp_a_k_j, tmp_a_j_i, ts, ts);
-                        }
-#else
-                        #pragma omp task
-                        {
-                            omp_gemm(A[k][i], A[k][j], A[j][i], ts, ts);
-                        }
+                    // temporary pointers to be able to define slices for offloading
+                    double *tmp_a_k_j   = A[k][j];
+                    double *tmp_a_j_i   = A[j][i];
+                    double *tmp_c_j     = C[j];
 #endif
-                    } else if (block_rank[k*nt+i] != mype && block_rank[k*nt+j] == mype) {
+
+                    if (block_rank[j*nt+i] == mype) {
+                        if (block_rank[k*nt+i] == mype && block_rank[k*nt+j] == mype) {
 #ifdef CHAMELEON
-                        #pragma omp target map(to: tmp_c_i[0:ts*ts], tmp_a_k_j[0:ts*ts]) map(tofrom: tmp_a_j_i[0:ts*ts]) device(1002)
-                        {
-                            omp_gemm(tmp_c_i, tmp_a_k_j, tmp_a_j_i, ts, ts);
-                        }
+                            #pragma omp target map(to: tmp_a_k_i[0:ts*ts], tmp_a_k_j[0:ts*ts]) map(tofrom: tmp_a_j_i[0:ts*ts]) device(1002)
+                            {
+                                omp_gemm(tmp_a_k_i, tmp_a_k_j, tmp_a_j_i, ts, ts);
+                            }
 #else
-                        #pragma omp task
-                        {
-                            omp_gemm(C[i], A[k][j], A[j][i], ts, ts);
-                        }
+                            #pragma omp task
+                            {
+                                omp_gemm(A[k][i], A[k][j], A[j][i], ts, ts);
+                            }
 #endif
-                    } else if (block_rank[k*nt+i] == mype && block_rank[k*nt+j] != mype) {
+                        } else if (block_rank[k*nt+i] != mype && block_rank[k*nt+j] == mype) {
 #ifdef CHAMELEON
-                        #pragma omp target map(to: tmp_a_k_i[0:ts*ts], tmp_c_j[0:ts*ts]) map(tofrom: tmp_a_j_i[0:ts*ts]) device(1002)
+                            #pragma omp target map(to: tmp_c_i[0:ts*ts], tmp_a_k_j[0:ts*ts]) map(tofrom: tmp_a_j_i[0:ts*ts]) device(1002)
+                            {
+                                omp_gemm(tmp_c_i, tmp_a_k_j, tmp_a_j_i, ts, ts);
+                            }
+#else
+                            #pragma omp task
+                            {
+                                omp_gemm(C[i], A[k][j], A[j][i], ts, ts);
+                            }
+#endif
+                        } else if (block_rank[k*nt+i] == mype && block_rank[k*nt+j] != mype) {
+#ifdef CHAMELEON
+                            #pragma omp target map(to: tmp_a_k_i[0:ts*ts], tmp_c_j[0:ts*ts]) map(tofrom: tmp_a_j_i[0:ts*ts]) device(1002)
+                            {
+                                omp_gemm(tmp_a_k_i, tmp_c_j, tmp_a_j_i, ts, ts);
+                            }
+#else
+                            #pragma omp task
+                            {
+                                omp_gemm(A[k][i], C[j], A[j][i], ts, ts);
+                            }
+#endif
+                        } else {
+#ifdef CHAMELEON
+                            #pragma omp target map(to: tmp_c_i[0:ts*ts], tmp_c_j[0:ts*ts]) map(tofrom: tmp_a_j_i[0:ts*ts]) device(1002)
+                            {
+                                omp_gemm(tmp_c_i, tmp_c_j, tmp_a_j_i, ts, ts);
+                            }
+#else
+                            #pragma omp task
+                            {
+                                omp_gemm(C[i], C[j], A[j][i], ts, ts);
+                            }
+#endif
+                        }
+                    }
+                }
+
+                if (block_rank[i*nt+i] == mype) {
+                    if (block_rank[k*nt+i] == mype) {
+#ifdef CHAMELEON
+                        #pragma omp target map(tofrom: tmp_a_k_i[0:ts*ts]) map(to: tmp_a_i_i[0:ts*ts]) device(1002)
                         {
-                            omp_gemm(tmp_a_k_i, tmp_c_j, tmp_a_j_i, ts, ts);
+                            omp_syrk(tmp_a_k_i, tmp_a_i_i, ts, ts);
                         }
 #else
                         #pragma omp task
                         {
-                            omp_gemm(A[k][i], C[j], A[j][i], ts, ts);
+                            omp_syrk(A[k][i], A[i][i], ts, ts);
                         }
 #endif
                     } else {
 #ifdef CHAMELEON
-                        #pragma omp target map(to: tmp_c_i[0:ts*ts], tmp_c_j[0:ts*ts]) map(tofrom: tmp_a_j_i[0:ts*ts]) device(1002)
+                        #pragma omp target map(tofrom: tmp_c_i[0:ts*ts]) map(to: tmp_a_i_i[0:ts*ts]) device(1002)
                         {
-                            omp_gemm(tmp_c_i, tmp_c_j, tmp_a_j_i, ts, ts);
+                            omp_syrk(tmp_c_i, tmp_a_i_i, ts, ts);
                         }
 #else
                         #pragma omp task
                         {
-                            omp_gemm(C[i], C[j], A[j][i], ts, ts);
+                            omp_syrk(C[i], A[i][i], ts, ts);
                         }
 #endif
                     }
                 }
             }
-
-            if (block_rank[i*nt+i] == mype) {
-                if (block_rank[k*nt+i] == mype) {
-#ifdef CHAMELEON
-                    #pragma omp target map(tofrom: tmp_a_k_i[0:ts*ts]) map(to: tmp_a_i_i[0:ts*ts]) device(1002)
-                    {
-                        omp_syrk(tmp_a_k_i, tmp_a_i_i, ts, ts);
-                    }
-#else
-                    #pragma omp task
-                    {
-                        omp_syrk(A[k][i], A[i][i], ts, ts);
-                    }
-#endif
-                } else {
-#ifdef CHAMELEON
-                    #pragma omp target map(tofrom: tmp_c_i[0:ts*ts]) map(to: tmp_a_i_i[0:ts*ts]) device(1002)
-                    {
-                        omp_syrk(tmp_c_i, tmp_a_i_i, ts, ts);
-                    }
-#else
-                    #pragma omp task
-                    {
-                        omp_syrk(C[i], A[i][i], ts, ts);
-                    }
-#endif
-                }
-            }
-        }
         }
 #ifdef CHAMELEON
         // TODO: distributed taskwait should go here
@@ -217,7 +271,6 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
         chameleon_distributed_taskwait(1);
 #endif
     }
-
 } /* end omp parallel */
     MPI_Barrier(MPI_COMM_WORLD);
 
