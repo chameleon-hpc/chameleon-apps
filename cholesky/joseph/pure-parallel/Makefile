@@ -26,7 +26,7 @@ ch_$(TARGET)_par_timing: ch_ompss.c ../common/ch_common.c Makefile
 	$(CC) $(CFLAGS) -o $@ ch_ompss.c -g ../common/ch_common.c $(LDFLAGS) -DUSE_TIMING
 
 run:
-	$(RUN_SETTINGS) mpiexec -np $(NUM_RANKS) -genvall ./$(PROG_EXE) $(MATRIX_SIZE) $(BLOCK_SIZE) $(BOOL_CHECK)
+	$(RUN_SETTINGS) mpiexec.hydra -np $(NUM_RANKS) -genvall ./$(PROG_EXE) $(MATRIX_SIZE) $(BLOCK_SIZE) $(BOOL_CHECK)
 
 clean:
 	rm -f *.o ch_$(TARGET)_par ch_$(TARGET)_par_timing
