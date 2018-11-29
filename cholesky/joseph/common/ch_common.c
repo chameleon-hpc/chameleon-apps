@@ -6,30 +6,48 @@
 
 static void get_block_rank(int *block_rank, int nt);
 
+#ifdef CHAMELEON
+#pragma omp declare target
+#endif
 void omp_potrf(double * const A, int ts, int ld)
 {
     static int INFO;
     static const char L = 'L';
     dpotrf_(&L, &ts, A, &ld, &INFO);
 }
+#ifdef CHAMELEON
+#pragma omp end declare target
+#pragma omp declare target
+#endif
 void omp_trsm(double *A, double *B, int ts, int ld)
 {
     static char LO = 'L', TR = 'T', NU = 'N', RI = 'R';
     static double DONE = 1.0;
     dtrsm_(&RI, &LO, &TR, &NU, &ts, &ts, &DONE, A, &ld, B, &ld );
 }
+#ifdef CHAMELEON
+#pragma omp end declare target
+#pragma omp declare target
+#endif
 void omp_gemm(double *A, double *B, double *C, int ts, int ld)
 {
     static const char TR = 'T', NT = 'N';
     static double DONE = 1.0, DMONE = -1.0;
     dgemm_(&NT, &TR, &ts, &ts, &ts, &DMONE, A, &ld, B, &ld, &DONE, C, &ld);
 }
+#ifdef CHAMELEON
+#pragma omp end declare target
+#pragma omp declare target
+#endif
 void omp_syrk(double *A, double *B, int ts, int ld)
 {
     static char LO = 'L', NT = 'N';
     static double DONE = 1.0, DMONE = -1.0;
     dsyrk_(&LO, &NT, &ts, &ts, &DMONE, A, &ld, &DONE, B, &ld );
 }
+#ifdef CHAMELEON
+#pragma omp end declare target
+#endif
 
 void cholesky_single(const int ts, const int nt, double* A[nt][nt])
 {
@@ -85,7 +103,11 @@ inline void wait(MPI_Request *comm_req)
 
     MPI_Test(comm_req, &comm_comp, MPI_STATUS_IGNORE);
     while (!comm_comp) {
+#ifdef CHAMELEON
+    int32_t res = chameleon_taskyield();
+#else
 #pragma omp taskyield
+#endif
         MPI_Test(comm_req, &comm_comp, MPI_STATUS_IGNORE);
     }
 //    MPI_Wait(comm_req, MPI_STATUS_IGNORE);
@@ -94,6 +116,33 @@ inline void wait(MPI_Request *comm_req)
 inline void reset_send_flags(char *send_flags)
 {
     for (int i = 0; i < np; i++) send_flags[i] = 0;
+}
+
+inline int get_send_flags(char *send_flags, int *block_rank, int itr1_str, int itr1_end, int itr2_str, int itr2_end, int n)
+{
+    int send_cnt = 0;
+    for (int i = itr1_str; i <= itr1_end; i++) {
+        for (int j = itr2_str; j <= itr2_end; j++) {
+            if (!send_flags[block_rank[i*n+j]]) {
+                send_flags[block_rank[i*n+j]] = 1;
+                send_cnt++;
+            }
+        }
+    }
+    return send_cnt;
+}
+
+inline void get_recv_flag(char *recv_flag, int *block_rank, int itr1_str, int itr1_end, int itr2_str, int itr2_end, int n)
+{
+    if (*recv_flag == 1) return;
+
+    for (int i = itr1_str; i <= itr1_end; i++) {
+        for (int j = itr2_str; j <= itr2_end; j++) {
+            if (block_rank[i*n+j] == mype) {
+                *recv_flag = 1;
+            }
+        }
+    }
 }
 
 int main(int argc, char *argv[])
@@ -213,10 +262,17 @@ int main(int argc, char *argv[])
             for (int j = 0; j < nt; j++) {
                 if (block_rank[i * nt + j] == mype) {
                     for (int k = 0; k < ts*ts; k++) {
-                        if (Ans[i][j][k] != A[i][j][k]) check = 2;
+                        // if (Ans[i][j][k] != A[i][j][k]) check = 2;
+                        if (Ans[i][j][k] != A[i][j][k]) {
+                            check = 2;
+                            printf("Expected: %f    Value: %f    Diff: %f\n", Ans[i][j][k], A[i][j][k], abs(Ans[i][j][k]-A[i][j][k]));
+                            break;
+                        }
                     }
                 }
+                if(check == 2) break;
             }
+            if(check == 2) break;
         }
     }
 
