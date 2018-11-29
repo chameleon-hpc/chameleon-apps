@@ -2,55 +2,6 @@
 #include "ch_common.h"
 #include "../timing.h"
 
-// void testall_and_yield_cham(int comm_cnt, MPI_Request *comm_reqs);
-// void test_and_yield_cham(MPI_Request *comm_req, int c_type, int src_dst, int tag, int i, int j);
-
-// inline void testall_and_yield_cham(int comm_cnt, MPI_Request *comm_reqs)
-// {
-//     if (!comm_cnt) return;
-
-//     int comm_comp = 0;
-
-
-//     MPI_Testall(comm_cnt, comm_reqs, &comm_comp, MPI_STATUSES_IGNORE);
-//     while (!comm_comp) {
-//         // call specific chameleon taskyield
-//         int32_t res = chameleon_taskyield();
-//         #pragma omp taskyield
-//         MPI_Testall(comm_cnt, comm_reqs, &comm_comp, MPI_STATUSES_IGNORE);
-//     }
-// }
-
-// inline void test_and_yield_cham(MPI_Request *comm_req, int c_type, int src_dst, int tag, int i, int j)
-// {
-//     int comm_comp = 0;
-// #ifdef DEBUG
-//     int printed = 0;
-// #endif
-//     MPI_Test(comm_req, &comm_comp, MPI_STATUS_IGNORE);
-//     while (!comm_comp) {
-//         // call specific chameleon taskyield
-//         int32_t res = chameleon_taskyield();
-//         #pragma omp taskyield
-// #ifdef DEBUG
-//         if (!printed) {
-//             if(c_type == 0)
-//                 fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    SEND    Wait    to      %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j);
-//             else if(c_type == 1)
-//                 fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    RECV    Wait    from    %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j);
-//             printed = 1;
-//         }
-// #endif
-//         MPI_Test(comm_req, &comm_comp, MPI_STATUS_IGNORE);
-//     }
-// #ifdef DEBUG
-//     if(c_type == 0)
-//         fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    SEND    End     to      %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j);
-//     else if(c_type == 1)
-//         fprintf(stderr, "[%0*d][%0*d]    #R%d (OS_TID:%ld):    RECV    End     from    %*d with tag %*d    [%*d][%*d]\n",tmp_width, i, tmp_width, j, mype, syscall(SYS_gettid), tmp_width, src_dst, tmp_width, tag, tmp_width, i, tmp_width, j);
-// #endif
-// }
-
 void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, double *C[nt], int *block_rank)
 {
 #ifdef CHAMELEON
@@ -84,7 +35,6 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                                     &send_reqs[send_cnt++]);
                         }
                     }
-                    // testall_and_yield_cham(send_cnt, send_reqs);
                     waitall(send_reqs, send_cnt);
                 }
             }
@@ -97,7 +47,6 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                 if (recv_flag) {
                     MPI_Irecv(B, ts*ts, MPI_DOUBLE, block_rank[k*nt+k], k*nt+k, MPI_COMM_WORLD,
                             &recv_req);
-                    // test_and_yield_cham(&recv_req, 1, block_rank[k*nt+k], k*nt+k, k, k);
                     wait(&recv_req);
                 }
             }
@@ -140,7 +89,6 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                         MPI_Irecv(C[i], ts*ts, MPI_DOUBLE, block_rank[k*nt+i], k*nt+i,
                                 MPI_COMM_WORLD, &recv_req);
 
-                        // test_and_yield_cham(&recv_req, 1, block_rank[k*nt+i], k*nt+i, i, k);
                         wait(&recv_req);
                     }
 
@@ -161,7 +109,6 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                                         MPI_COMM_WORLD, &send_reqs[send_cnt++]);
                             }
                         }
-                        // testall_and_yield_cham(send_cnt, send_reqs);
                         waitall(send_reqs, send_cnt);
                     }
                 }
@@ -264,13 +211,13 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                 }
             }
         }
+    }
 #ifdef CHAMELEON
         // TODO: distributed taskwait should go here
         // TODO: revise taskwait and prohibit breakout if commthreads actived or taskwait has not been called everywhere
         // TODO: otherwise race condition might occur if thread is faster than the one that is creating the first task and breakout occurs
         chameleon_distributed_taskwait(1);
 #endif
-    }
 } /* end omp parallel */
     MPI_Barrier(MPI_COMM_WORLD);
 
