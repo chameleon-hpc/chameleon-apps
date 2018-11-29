@@ -40,6 +40,11 @@ void omp_syrk(double *A, double *B, int ts, int ld)
 
 void cholesky_single(const int ts, const int nt, double* A[nt][nt])
 {
+    // speed up "serial" verification with only a single rank
+#pragma omp parallel
+{
+#pragma omp single
+{
     for (int k = 0; k < nt; k++) {
 #pragma omp task depend(out: A[k][k])
 {
@@ -77,6 +82,8 @@ void cholesky_single(const int ts, const int nt, double* A[nt][nt])
         }
     }
 #pragma omp taskwait
+}
+}
 }
 
 inline void wait(MPI_Request *comm_req)
@@ -187,6 +194,7 @@ int main(int argc, char *argv[])
     MPI_Alloc_mem(ts * ts * sizeof(double), MPI_INFO_NULL, &C[i]);
   }
 
+#pragma omp parallel
 #pragma omp single
     num_threads = omp_get_num_threads();
 
@@ -224,7 +232,8 @@ int main(int argc, char *argv[])
     float time_ser = t4;
     float gflops_ser = (((1.0 / 3.0) * n * n * n) / ((time_ser) * 1.0e+9));
 
-    printf("test:%s-%d-%d-%d:mype:%2d:np:%2d:threads:%2d:result:%s:gflops:%f:time:%f:gflops_ser:%f:time_ser:%f\n", argv[0], n, ts, num_threads, mype, np, num_threads, result[check], gflops_mpi, t2, gflops_ser, t4);
+    if(mype == 0 || check == 2)
+        printf("test:%s-%d-%d-%d:mype:%2d:np:%2d:threads:%2d:result:%s:gflops:%f:time:%f:gflops_ser:%f:time_ser:%f\n", argv[0], n, ts, num_threads, mype, np, num_threads, result[check], gflops_mpi, t2, gflops_ser, t4);
 
     for (int i = 0; i < nt; i++) {
         for (int j = 0; j < nt; j++) {
