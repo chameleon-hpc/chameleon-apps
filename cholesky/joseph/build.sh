@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # for target in intel clang chameleon
-for target in intel
+for target in intel chameleon
 do
   # load default modules
   module purge
@@ -19,6 +19,7 @@ do
   module li
 
   # make corresponding targets
+  TARGET=${target} make -C pure-parallel clean all
   TARGET=${target} make -C singlecom-deps clean all
   TARGET=${target} make -C fine-deps clean all
 done

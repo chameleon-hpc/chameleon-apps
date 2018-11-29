@@ -12,6 +12,10 @@
 #include <mpi.h>
 #include <omp.h>
 
+#ifdef CHAMELEON
+#include "chameleon.h"
+#endif
+
 #ifdef _USE_HBW
 #include <hbwmalloc.h>
 #endif
@@ -33,6 +37,9 @@ void omp_trsm(double *A, double *B, int ts, int ld);
 void omp_gemm(double *A, double *B, double *C, int ts, int ld);
 void omp_syrk(double *A, double *B, int ts, int ld);
 
+int get_send_flags(char *send_flags, int *block_rank, int itr1_str, int itr1_end, int itr2_str, int itr2_end, int n);
+void get_recv_flag(char *recv_flag, int *block_rank, int itr1_str, int itr1_end, int itr2_str, int itr2_end, int n);
+
 void wait(MPI_Request *comm_req);
 
 inline static void waitall(MPI_Request *comm_req, int n)
@@ -45,7 +52,12 @@ inline static void waitall(MPI_Request *comm_req, int n)
     MPI_Testall(n, comm_req, &flag, MPI_STATUSES_IGNORE);
     if (flag) break;
     (void)flag; // <-- make the Cray compiler happy
+
+#ifdef CHAMELEON
+    int32_t res = chameleon_taskyield();
+#else
 #pragma omp taskyield
+#endif
   }
 #endif
 }
