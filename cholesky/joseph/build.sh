@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# for target in intel
-for target in intel clang chameleon
+# for target in intel clang chameleon
+for target in intel
 do
   # load default modules
   module purge

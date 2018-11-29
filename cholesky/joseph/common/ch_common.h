@@ -28,8 +28,13 @@ void omp_trsm(double *A, double *B, int ts, int ld);
 void omp_gemm(double *A, double *B, double *C, int ts, int ld);
 void omp_syrk(double *A, double *B, int ts, int ld);
 
+void wait(MPI_Request *comm_req);
+
 inline static void waitall(MPI_Request *comm_req, int n)
 {
+#ifdef DISABLE_TASKYIELD
+  MPI_Waitall(n, comm_req, MPI_STATUSES_IGNORE);
+#else
   while (1) {
     int flag = 0;
     MPI_Testall(n, comm_req, &flag, MPI_STATUSES_IGNORE);
@@ -37,6 +42,7 @@ inline static void waitall(MPI_Request *comm_req, int n)
     (void)flag; // <-- make the Cray compiler happy
 #pragma omp taskyield
   }
+#endif
 }
 void reset_send_flags(char *send_flags);
 
