@@ -1,3 +1,5 @@
+#ifndef _BENCH_CHOLESKY_TIMING_
+#define _BENCH_CHOLESKY_TIMING_
 
 enum {
     TIME_POTRF = 0,
@@ -86,4 +88,4 @@ static void waitall_impl(MPI_Request *comm_req, int nreq, double *timer)
 #define PRINT_TIMINGS()
 #endif
 
-
+#endif // _BENCH_CHOLESKY_TIMING_

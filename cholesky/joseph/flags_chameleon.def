@@ -2,5 +2,5 @@ LOAD_COMPILER="clang-dev/cham.rel"
 LOAD_LIBS="LIBRARIES intelmkl/2018 omp/chameleon.rel chameleon-lib/1.0"
 
 CC      = I_MPI_CC=clang I_MPI_CXX=clang++ mpiicc
-CFLAGS  = -O3 -g -std=c11 -I./ -I../common -mt_mpi -fopenmp -w $(FLAGS_MKL_INCLUDE) -DCHAMELEON -fopenmp-targets=x86_64-unknown-linux-gnu
+CFLAGS  = -O3 -g -std=c11 -I./ -I../common -mt_mpi -fopenmp -w $(FLAGS_MKL_INCLUDE) -DCHAMELEON -fopenmp-targets=x86_64-unknown-linux-gnu -DHAVE_COMM_SENTINEL -DHAVE_INTERMEDIATE_COMM_SENTINEL
 LDFLAGS = -std=c11 -lrt -lpthread -lm -mt_mpi -fopenmp -w $(FLAGS_MKL_LINKER) -DCHAMELEON -lchameleon -fopenmp-targets=x86_64-unknown-linux-gnu
