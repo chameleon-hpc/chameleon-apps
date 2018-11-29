@@ -1,3 +1,5 @@
+#ifndef _BENCH_CHOLESKY_H_
+#define _BENCH_CHOLESKY_H_
 
 #include <math.h>
 #include <omp.h>
@@ -326,3 +328,4 @@ static double * malloc_block (const int ts)
 	return block;
 }
 
+#endif

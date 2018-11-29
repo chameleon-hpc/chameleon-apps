@@ -1,11 +1,16 @@
 #ifndef _BENCH_CHOLESKY_COMMON_
 #define _BENCH_CHOLESKY_COMMON_
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <errno.h>
+#include <assert.h>
+
 #include <mkl.h>
 #include <mpi.h>
 #include <omp.h>
-
-//#define DEBUG
 
 #ifdef _USE_HBW
 #include <hbwmalloc.h>
