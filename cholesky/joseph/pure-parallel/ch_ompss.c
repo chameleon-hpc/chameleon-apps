@@ -1,6 +1,7 @@
 
 #include "ch_common.h"
 #include "../timing.h"
+#include "../timing_override.h"
 
 void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, double *C[nt], int *block_rank)
 {
@@ -8,10 +9,17 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
     chameleon_init();
 #endif
 
+#ifdef USE_TIMING
+#pragma omp parallel
+#pragma omp master
+    INIT_TIMING(omp_get_num_threads());
+#endif
+    
     int send_cnt = 0;
     char recv_flag = 0, *send_flags = malloc(sizeof(char) * np);
     MPI_Request recv_req, *send_reqs = malloc(sizeof(MPI_Request) * np);
 
+    START_TIMING(TIME_TOTAL);
 #pragma omp parallel
 {
     for (int k = 0; k < nt; k++) {
@@ -22,6 +30,7 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
 
             #pragma omp master
             {
+                START_TIMING(TIME_COMM);
                 send_cnt = 0;
                 reset_send_flags(send_flags);
                 send_cnt = get_send_flags(send_flags, block_rank, k, k, k+1, nt-1, nt);
@@ -37,10 +46,12 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                     }
                     waitall(send_reqs, send_cnt);
                 }
+                END_TIMING(TIME_COMM);
             }
         } else {
             #pragma omp single
             {
+                START_TIMING(TIME_COMM);
                 recv_flag = 0;
                 get_recv_flag(&recv_flag, block_rank, k, k, k+1, nt-1, nt);
 
@@ -49,6 +60,7 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                             &recv_req);
                     wait(&recv_req);
                 }
+                END_TIMING(TIME_COMM);
             }
         }
 
@@ -76,9 +88,8 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
             wake_up_comm_threads();
 #endif
             for (int i = k + 1; i < nt; i++) {
-
                 if (block_rank[k*nt+i] != mype) {
-
+                    START_TIMING(TIME_COMM);
                     recv_flag = 0;
                     get_recv_flag(&recv_flag, block_rank, k+1, i-1, i, i, nt);
                     get_recv_flag(&recv_flag, block_rank, i, i, i+1, nt-1, nt);
@@ -91,9 +102,9 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
 
                         wait(&recv_req);
                     }
-
+                    END_TIMING(TIME_COMM);
                 } else {
-
+                    START_TIMING(TIME_COMM);
                     send_cnt = 0;
                     reset_send_flags(send_flags);
                     send_cnt += get_send_flags(send_flags, block_rank, k+1, i-1, i, i, nt);
@@ -111,6 +122,7 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                         }
                         waitall(send_reqs, send_cnt);
                     }
+                    END_TIMING(TIME_COMM);
                 }
 
 #ifdef CHAMELEON
@@ -119,9 +131,9 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                 double *tmp_a_i_i   = A[i][i];
                 double *tmp_c_i     = C[i];
 #endif
-
+                {
+                START_TIMING(TIME_CREATE);
                 for (int j = k + 1; j < i; j++) {
-
 #ifdef CHAMELEON
                     // temporary pointers to be able to define slices for offloading
                     double *tmp_a_k_j   = A[k][j];
@@ -209,17 +221,23 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
 #endif
                     }
                 }
+                END_TIMING(TIME_CREATE);
+                }
             }
         }
-    }
 #ifdef CHAMELEON
-        // TODO: distributed taskwait should go here
-        // TODO: revise taskwait and prohibit breakout if commthreads actived or taskwait has not been called everywhere
-        // TODO: otherwise race condition might occur if thread is faster than the one that is creating the first task and breakout occurs
+        // distributed taskwait should go here
         chameleon_distributed_taskwait(1);
 #endif
+    }
 } /* end omp parallel */
+    END_TIMING(TIME_TOTAL);
     MPI_Barrier(MPI_COMM_WORLD);
+#pragma omp parallel
+#pragma omp master
+    PRINT_TIMINGS(omp_get_num_threads());
+
+	FREE_TIMING();
 
 #ifdef CHAMELEON
     chameleon_finalize();
