@@ -3,6 +3,14 @@
 
 #include "ch_common.h"
 #include "cholesky.h"
+#include "../timing.h"
+
+#if (defined(DEBUG) || defined(USE_TIMING))
+_Atomic int cnt_pdotrf = 0;
+_Atomic int cnt_trsm = 0;
+_Atomic int cnt_gemm = 0;
+_Atomic int cnt_syrk = 0;
+#endif
 
 static void get_block_rank(int *block_rank, int nt);
 
@@ -11,9 +19,16 @@ static void get_block_rank(int *block_rank, int nt);
 #endif
 void omp_potrf(double * const A, int ts, int ld)
 {
+#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON)
+    cnt_pdotrf++;
+    START_TIMING(TIME_POTRF);
+#endif
     static int INFO;
     static const char L = 'L';
     dpotrf_(&L, &ts, A, &ld, &INFO);
+#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON)
+    END_TIMING(TIME_POTRF);
+#endif
 }
 #ifdef CHAMELEON
 #pragma omp end declare target
@@ -21,9 +36,16 @@ void omp_potrf(double * const A, int ts, int ld)
 #endif
 void omp_trsm(double *A, double *B, int ts, int ld)
 {
+#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON)
+    cnt_trsm++;
+    START_TIMING(TIME_TRSM);
+#endif
     static char LO = 'L', TR = 'T', NU = 'N', RI = 'R';
     static double DONE = 1.0;
     dtrsm_(&RI, &LO, &TR, &NU, &ts, &ts, &DONE, A, &ld, B, &ld );
+#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON)
+    END_TIMING(TIME_TRSM);
+#endif
 }
 #ifdef CHAMELEON
 #pragma omp end declare target
@@ -31,9 +53,16 @@ void omp_trsm(double *A, double *B, int ts, int ld)
 #endif
 void omp_gemm(double *A, double *B, double *C, int ts, int ld)
 {
+#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON)
+    cnt_gemm++;
+    START_TIMING(TIME_GEMM);
+#endif
     static const char TR = 'T', NT = 'N';
     static double DONE = 1.0, DMONE = -1.0;
     dgemm_(&NT, &TR, &ts, &ts, &ts, &DMONE, A, &ld, B, &ld, &DONE, C, &ld);
+#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON)
+    END_TIMING(TIME_GEMM);
+#endif
 }
 #ifdef CHAMELEON
 #pragma omp end declare target
@@ -41,9 +70,16 @@ void omp_gemm(double *A, double *B, double *C, int ts, int ld)
 #endif
 void omp_syrk(double *A, double *B, int ts, int ld)
 {
+#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON)
+    cnt_syrk++;
+    START_TIMING(TIME_SYRK);
+#endif
     static char LO = 'L', NT = 'N';
     static double DONE = 1.0, DMONE = -1.0;
     dsyrk_(&LO, &NT, &ts, &ts, &DMONE, A, &ld, &DONE, B, &ld );
+#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON)
+    END_TIMING(TIME_SYRK);
+#endif
 }
 #ifdef CHAMELEON
 #pragma omp end declare target
@@ -180,7 +216,7 @@ int main(int argc, char *argv[])
     int *block_rank = malloc(nt * nt * sizeof(int));
     get_block_rank(block_rank, nt);
 
-#ifdef DEBUG
+#if (defined(DEBUG) || defined(USE_TIMING))
     if (mype == 0) {
         for (int i = 0; i < nt; i++) {
             for (int j = 0; j < nt; j++) {
@@ -189,6 +225,23 @@ int main(int argc, char *argv[])
             printf("\n");
         }
     }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // calculate how many tiles are assigned to the speicifc ranks and how many diagonals
+    int nr_tiles = 0;
+    int nr_tiles_diag = 0;
+    for (int i = 0; i < nt; i++) {
+        for (int j = i; j < nt; j++) {
+            if(block_rank[i * nt + j] == mype)
+            {
+                nr_tiles++;
+                if(i == j)
+                    nr_tiles_diag++;
+            }
+        }
+    }
+    printf("[%d] has %d tiles in total and %d tiles on the diagonal\n", mype, nr_tiles, nr_tiles_diag);
 #endif
 
     double *A[nt][nt], *B, *C[nt], *Ans[nt][nt];
@@ -240,12 +293,15 @@ int main(int argc, char *argv[])
 #pragma omp single
     num_threads = omp_get_num_threads();
 
+    INIT_TIMING(num_threads);
+    RESET_TIMINGS(num_threads);
     const float t3 = get_time();
     if (check) cholesky_single(ts, nt, (double* (*)[nt]) Ans);
     const float t4 = get_time() - t3;
 
     MPI_Barrier(MPI_COMM_WORLD);
 
+    RESET_TIMINGS(num_threads);
     if (mype == 0)
       printf("Starting parallel computation\n");
     const float t1 = get_time();
@@ -284,6 +340,9 @@ int main(int argc, char *argv[])
     if(mype == 0 || check == 2)
         printf("test:%s-%d-%d-%d:mype:%2d:np:%2d:threads:%2d:result:%s:gflops:%f:time:%f:gflops_ser:%f:time_ser:%f\n", argv[0], n, ts, num_threads, mype, np, num_threads, result[check], gflops_mpi, t2, gflops_ser, t4);
 
+#if (defined(DEBUG) || defined(USE_TIMING))
+    printf("[%d] count#pdotrf:%d:count#trsm:%d:count#gemm:%d:count#syrk:%d\n", mype, cnt_pdotrf, cnt_trsm, cnt_gemm, cnt_syrk);
+#endif
     for (int i = 0; i < nt; i++) {
         for (int j = 0; j < nt; j++) {
             if (block_rank[i*nt+j] == mype) {
