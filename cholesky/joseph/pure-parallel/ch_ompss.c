@@ -64,22 +64,55 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
             }
         }
 
+#ifdef CHAMELEON
+        // temporary pointers to be able to define slices for offloading
+        double *tmp_a_k_k, *tmp_a_k_i;
+        #pragma omp single
+        {
+            tmp_a_k_k   = &A[k][k][0];
+        }
+        #pragma omp for private(tmp_a_k_i)
+#else
         #pragma omp for
+#endif
         for (int i = k + 1; i < nt; i++) {
             if (block_rank[k*nt+i] == mype) {
+#ifdef CHAMELEON
+                tmp_a_k_i = &A[k][i][0];
+#endif
                 if (block_rank[k*nt+k] == mype) {
+#ifdef CHAMELEON
+                    printf("R#%d T#%d (OS_TID:%ld): --> AKK = " DPxMOD ", AKI = " DPxMOD "\n", mype, omp_get_thread_num(), syscall(SYS_gettid), DPxPTR(tmp_a_k_k), DPxPTR(tmp_a_k_i));
+                    #pragma omp target map(to: tmp_a_k_k[0:ts*ts]) map(tofrom: tmp_a_k_i[0:ts*ts]) device(1002)
+                    {
+                        omp_trsm(tmp_a_k_k, tmp_a_k_i, ts, ts);
+                    }
+#else
                     #pragma omp task
                     {
                         omp_trsm(A[k][k], A[k][i], ts, ts);
                     }
+#endif
                 } else {
+#ifdef CHAMELEON
+                    printf("R#%d T#%d (OS_TID:%ld): --> B = " DPxMOD ", AKI = " DPxMOD "\n", mype, omp_get_thread_num(), syscall(SYS_gettid), DPxPTR(B), DPxPTR(tmp_a_k_i));
+                    #pragma omp target map(to: B[0:ts*ts]) map(tofrom: tmp_a_k_i[0:ts*ts]) device(1002)
+                    {
+                        omp_trsm(B, tmp_a_k_i, ts, ts);
+                    }
+#else
                     #pragma omp task
                     {
                         omp_trsm(B, A[k][i], ts, ts);
                     }
+#endif
                 }
             }
         }
+
+#ifdef CHAMELEON
+        chameleon_distributed_taskwait(0);
+#endif
 
         #pragma omp single
         {
