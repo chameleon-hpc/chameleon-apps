@@ -1,6 +1,12 @@
 #ifndef _BENCH_CHOLESKY_COMMON_
 #define _BENCH_CHOLESKY_COMMON_
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#include <sys/syscall.h>
+#include <unistd.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,6 +20,21 @@
 
 #ifdef CHAMELEON
 #include "chameleon.h"
+#ifndef my_print
+#define my_print(...) chameleon_print(0, "Cholesky", mype, __VA_ARGS__);
+#endif
+#else
+#ifndef my_print
+#define my_print(...) fprintf(stderr, __VA_ARGS__);
+#endif
+#endif
+
+#ifndef DPxMOD
+#define DPxMOD "0x%0*" PRIxPTR
+#endif
+
+#ifndef DPxPTR
+#define DPxPTR(ptr) ((int)(2*sizeof(uintptr_t))), ((uintptr_t) (ptr))
 #endif
 
 #ifdef _USE_HBW
