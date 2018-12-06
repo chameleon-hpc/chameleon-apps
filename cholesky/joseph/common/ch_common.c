@@ -176,6 +176,7 @@ inline void get_recv_flag(char *recv_flag, int *block_rank, int itr1_str, int it
         for (int j = itr2_str; j <= itr2_end; j++) {
             if (block_rank[i*n+j] == mype) {
                 *recv_flag = 1;
+                return;
             }
         }
     }
