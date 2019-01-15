@@ -323,7 +323,7 @@ int main(int argc, char **argv)
 				double *A = matrices_a[i];
 		        double *B = matrices_b[i];
 		        double *C = matrices_c[i];	
-                /*#pragma omp target map(tofrom: C[0:matrixSize*matrixSize]) map(to:matrixSize, A[0:matrixSize*matrixSize], B[0:matrixSize*matrixSize]) device(1001)
+                #pragma omp target map(tofrom: C[0:matrixSize*matrixSize]) map(to:matrixSize, A[0:matrixSize*matrixSize], B[0:matrixSize*matrixSize]) device(1001)
 				{
 					//check_test_matrix(A, 1, matrixSize);
 					//check_test_matrix(B, 1, matrixSize);
@@ -331,7 +331,6 @@ int main(int argc, char **argv)
 					compute_matrix_matrix(A, B, C, matrixSize);
 					//check_test_matrix(C, MATRIX_SIZE);
 				}
-        */
 				//LOG(iMyRank, "offloading to chameleon");
     		}
     }
