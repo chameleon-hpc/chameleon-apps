@@ -2,9 +2,10 @@
 
 tmp_result_folder="results_`date '+%Y%m%d_%H%M%S'`"
 # m_size=5120
-m_size=10240
+#m_size=10240
+m_size=15360
 b_size=512
-b_check=1
+b_check=0
 n_ranks=2
 n_threads=4
 
@@ -32,6 +33,8 @@ do
   # parallel version tests
   for version in ch_${target}_par
   do
+        OMP_PLACES=cores \
+        OMP_PROC_BIND=spread \
         OMP_NUM_THREADS=${n_threads} \
         NUM_RANKS=${n_ranks} \
         PROG_EXE=${version} \

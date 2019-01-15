@@ -10,10 +10,10 @@ endif
 # parameters and settings for execution
 RUN_SETTINGS    = OMP_PLACES=cores OMP_PROC_BIND=spread I_MPI_PIN=1 I_MPI_PIN_DOMAIN=auto
 NUM_RANKS       ?= 2 
-PROG_EXE        ?= ch_intel_par
-MATRIX_SIZE     ?= 5120
+PROG_EXE        ?= ch_$(TARGET)_par
+MATRIX_SIZE     ?= 15360
 BLOCK_SIZE      ?= 512
-BOOL_CHECK      ?= 1
+BOOL_CHECK      ?= 0
 # CFLAGS          += -DDEBUG
 # LDFLAGS         += -DDEBUG
 
