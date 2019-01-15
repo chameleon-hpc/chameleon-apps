@@ -29,7 +29,7 @@
 #endif
 
 #ifndef CALC_SPEEDUP
-#define CALC_SPEEDUP 1
+#define CALC_SPEEDUP 0
 #endif
 
 //#define LOG(rank, str) fprintf(stderr, "#R%d: %s\n", rank, str)
@@ -282,7 +282,6 @@ int main(int argc, char **argv)
         }
         #pragma omp barrier
 #endif
-
     	//LOG(iMyRank, "entering taskwait");
     	int res = chameleon_distributed_taskwait(0);
     	//LOG(iMyRank, "leaving taskwait");
@@ -324,7 +323,7 @@ int main(int argc, char **argv)
 				double *A = matrices_a[i];
 		        double *B = matrices_b[i];
 		        double *C = matrices_c[i];	
-                #pragma omp target map(tofrom: C[0:matrixSize*matrixSize]) map(to:matrixSize, A[0:matrixSize*matrixSize], B[0:matrixSize*matrixSize]) device(1001)
+                /*#pragma omp target map(tofrom: C[0:matrixSize*matrixSize]) map(to:matrixSize, A[0:matrixSize*matrixSize], B[0:matrixSize*matrixSize]) device(1001)
 				{
 					//check_test_matrix(A, 1, matrixSize);
 					//check_test_matrix(B, 1, matrixSize);
@@ -332,6 +331,7 @@ int main(int argc, char **argv)
 					compute_matrix_matrix(A, B, C, matrixSize);
 					//check_test_matrix(C, MATRIX_SIZE);
 				}
+        */
 				//LOG(iMyRank, "offloading to chameleon");
     		}
     }
