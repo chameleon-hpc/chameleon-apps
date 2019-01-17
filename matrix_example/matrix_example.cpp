@@ -57,6 +57,10 @@
 #include <list>
 #endif
 
+
+#define SPEC_RESTRICT __restrict__
+//#define SPEC_RESTRICT restrict
+
 void initialize_matrix_rnd(double *mat, int matrixSize) {
 	double lower_bound = 0;
 	double upper_bound = 10000;
@@ -81,7 +85,7 @@ void initialize_matrix_test_A(double *mat, int matrixSize) {
 }
 
 #pragma omp declare target
-void compute_matrix_matrix(double *a, double *b, double *c, int matrixSize) {
+void compute_matrix_matrix(double * SPEC_RESTRICT a, double * SPEC_RESTRICT b, double * SPEC_RESTRICT c, int matrixSize) {
 	for(int i=0;i<matrixSize;i++) {
 		for(int j=0;j<matrixSize;j++) {
 			c[i*matrixSize+j]=0;
@@ -226,9 +230,9 @@ int main(int argc, char **argv)
     	// if(iMyRank==0) {
 		#pragma omp for
     		for(int i=0; i<numberOfTasks; i++) {
-				double *A = matrices_a[i];
-		        double *B = matrices_b[i];
-		        double *C = matrices_c[i];
+				double * SPEC_RESTRICT A = matrices_a[i];
+		        double * SPEC_RESTRICT B = matrices_b[i];
+		        double * SPEC_RESTRICT C = matrices_c[i];
 #if VERY_VERBOSE
                 printf("#R%d (OS_TID:%ld): Itermediate A[%d] at (" DPxMOD ")\n", iMyRank, syscall(SYS_gettid), i, DPxPTR(&A[0]));
                 printf("#R%d (OS_TID:%ld): Itermediate B[%d] at (" DPxMOD ")\n", iMyRank, syscall(SYS_gettid), i, DPxPTR(&B[0]));
