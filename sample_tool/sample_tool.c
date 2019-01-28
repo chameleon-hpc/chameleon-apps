@@ -53,25 +53,32 @@ static cham_t_get_thread_data_t cham_t_get_thread_data;
 //            frame->enter_frame.ptr, buffer, task_type, thread_num);
 // }
 
-// Sample callback
 static void
-on_cham_t_callback_thread_end(
-    cham_t_data_t *thread_data)
+on_cham_t_callback_task_create(
+    cham_t_data_t *task_data,
+    TargetTaskEntryTy * task)
 {
-    // printf("%" PRIu64 ": cham_t_event_thread_end: thread_id=%" PRIu64 "\n", cham_t_get_thread_data()->value, thread_data->value);
+    cham_t_data_t * rank_data       = cham_t_get_rank_data();
+    cham_t_data_t * thread_data     = cham_t_get_thread_data();
+    printf("on_cham_t_callback_task_create ==> rank_data=%" PRIu64 ";thread_data=%" PRIu64 ";task_data=%" PRIu64 "\n", rank_data->value, thread_data->value, task_data->value);
 }
 
 static void
-on_cham_t_callback_task_create(
-    TargetTaskEntryTy * task,
-    cham_t_data_t *rank_data,
-    cham_t_data_t *thread_data,
-    cham_t_data_t *task_data)
+on_cham_t_callback_task_schedule(
+    cham_t_data_t *new_task_data,
+    cham_t_task_flag_t new_task_flag,
+    TargetTaskEntryTy * new_task,
+    cham_t_task_schedule_type_t schedule_type,
+    cham_t_data_t *prior_task_data,
+    cham_t_task_flag_t prior_task_flag,
+    TargetTaskEntryTy * prior_task)
 {
-    printf("OS_TID\t%ld\ton_cham_t_callback_task_create;rank_data=%" PRIu64 ";thread_data=%" PRIu64 ";task_data=%" PRIu64 "\n", syscall(SYS_gettid), rank_data->value, thread_data->value, task_data->value);
-    // cham_t_data_t* r_data = cham_t_get_rank_data();
-    // cham_t_data_t* t_data = cham_t_get_thread_data();
-    // printf("OS_TID\t%ld\ton_cham_t_callback_task_create verification;rank_data=%" PRIu64 ";thread_data=%" PRIu64 "\n", syscall(SYS_gettid), r_data->value, t_data->value);
+    char val_new_task_flag[50];
+    char val_prior_task_flag[50];
+    cham_t_task_flag_t_value(new_task_flag, val_new_task_flag);
+    cham_t_task_flag_t_value(prior_task_flag, val_prior_task_flag);
+
+    printf("on_cham_t_callback_task_schedule ==> schedule_type=%s;new_task_data=%" PRIu64 ";new_task_flag=%s;prior_task_data=%" PRIu64 ";prior_task_flag=%s\n", cham_t_task_schedule_type_t_values[schedule_type], new_task_data->value, val_new_task_flag, prior_task_data->value, val_prior_task_flag);
 }
 
 #define register_callback_t(name, type)                                         \
@@ -130,7 +137,7 @@ int cham_t_initialize(
 //   register_callback(cham_t_callback_thread_begin);
 
     register_callback(cham_t_callback_task_create);
-    register_callback(cham_t_callback_thread_end);
+    register_callback(cham_t_callback_task_schedule);
 
     printf("0: NULL_POINTER=%p\n", (void*)NULL);
     return 1; //success
