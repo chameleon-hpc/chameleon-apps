@@ -8,12 +8,16 @@
 #define __STDC_FORMAT_MACROS
 #endif
 
-#include <inttypes.h>
 #include "chameleon.h"
 #include "chameleon_tools.h"
+#include <unistd.h>
+#include <sys/syscall.h>
+#include <inttypes.h>
 
 static cham_t_set_callback_t cham_t_set_callback;
 static cham_t_get_callback_t cham_t_get_callback;
+static cham_t_get_rank_data_t cham_t_get_rank_data;
+static cham_t_get_thread_data_t cham_t_get_thread_data;
 
 // static cham_t_get_state_t cham_t_get_state;
 // static cham_t_get_task_info_t cham_t_get_task_info;
@@ -64,7 +68,10 @@ on_cham_t_callback_task_create(
     cham_t_data_t *thread_data,
     cham_t_data_t *task_data)
 {
-    printf("on_cham_t_callback_task_create: rank_data=%" PRIu64 " thread_data=%" PRIu64 " task_data=%" PRIu64 "\n", rank_data->value, thread_data->value, task_data->value);
+    printf("OS_TID\t%ld\ton_cham_t_callback_task_create;rank_data=%" PRIu64 ";thread_data=%" PRIu64 ";task_data=%" PRIu64 "\n", syscall(SYS_gettid), rank_data->value, thread_data->value, task_data->value);
+    // cham_t_data_t* r_data = cham_t_get_rank_data();
+    // cham_t_data_t* t_data = cham_t_get_thread_data();
+    // printf("OS_TID\t%ld\ton_cham_t_callback_task_create verification;rank_data=%" PRIu64 ";thread_data=%" PRIu64 "\n", syscall(SYS_gettid), r_data->value, t_data->value);
 }
 
 #define register_callback_t(name, type)                                         \
@@ -82,6 +89,8 @@ int cham_t_initialize(
 {
     cham_t_set_callback = (cham_t_set_callback_t) lookup("cham_t_set_callback");
     cham_t_get_callback = (cham_t_get_callback_t) lookup("cham_t_get_callback");
+    cham_t_get_rank_data = (cham_t_get_rank_data_t) lookup("cham_t_get_rank_data");
+    cham_t_get_thread_data = (cham_t_get_thread_data_t) lookup("cham_t_get_thread_data");
 
     // cham_t_get_unique_id = (cham_t_get_unique_id_t) lookup("cham_t_get_unique_id");
     // cham_t_get_num_procs = (cham_t_get_num_procs_t) lookup("cham_t_get_num_procs");
@@ -122,7 +131,6 @@ int cham_t_initialize(
 
     register_callback(cham_t_callback_task_create);
     register_callback(cham_t_callback_thread_end);
-    
 
     printf("0: NULL_POINTER=%p\n", (void*)NULL);
     return 1; //success
