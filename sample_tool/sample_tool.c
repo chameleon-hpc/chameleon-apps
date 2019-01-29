@@ -78,7 +78,12 @@ on_cham_t_callback_task_schedule(
     cham_t_task_flag_t_value(new_task_flag, val_new_task_flag);
     cham_t_task_flag_t_value(prior_task_flag, val_prior_task_flag);
 
-    printf("on_cham_t_callback_task_schedule ==> schedule_type=%s;new_task_data=%" PRIu64 ";new_task_flag=%s;prior_task_data=%" PRIu64 ";prior_task_flag=%s\n", cham_t_task_schedule_type_t_values[schedule_type], new_task_data->value, val_new_task_flag, prior_task_data->value, val_prior_task_flag);
+    if(prior_task_data) {
+        printf("on_cham_t_callback_task_schedule ==> schedule_type=%s;new_task_data=%" PRIu64 ";new_task_flag=%s;prior_task_data=%" PRIu64 ";prior_task_flag=%s\n", cham_t_task_schedule_type_t_values[schedule_type], new_task_data->value, val_new_task_flag, prior_task_data->value, val_prior_task_flag);
+    }
+    else {
+        printf("on_cham_t_callback_task_schedule ==> schedule_type=%s;new_task_data=%" PRIu64 ";new_task_flag=%s;prior_task_data=%p;prior_task_flag=%s\n", cham_t_task_schedule_type_t_values[schedule_type], new_task_data->value, val_new_task_flag, prior_task_data, val_prior_task_flag);
+    }
 }
 
 #define register_callback_t(name, type)                                         \
