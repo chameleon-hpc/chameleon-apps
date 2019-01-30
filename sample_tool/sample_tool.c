@@ -10,14 +10,25 @@
 
 #include "chameleon.h"
 #include "chameleon_tools.h"
+
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <inttypes.h>
+#include <assert.h>
+
+#define TASK_TOOL_SAMPLE_DATA_SIZE 10
 
 static cham_t_set_callback_t cham_t_set_callback;
 static cham_t_get_callback_t cham_t_get_callback;
 static cham_t_get_rank_data_t cham_t_get_rank_data;
 static cham_t_get_thread_data_t cham_t_get_thread_data;
+
+// sample struct to save some information for a task
+typedef struct my_task_data_t {
+    int64_t task_id;
+    int32_t size_data;
+    double * sample_data;    
+} my_task_data_t;
 
 // static cham_t_get_state_t cham_t_get_state;
 // static cham_t_get_task_info_t cham_t_get_task_info;
@@ -55,35 +66,129 @@ static cham_t_get_thread_data_t cham_t_get_thread_data;
 
 static void
 on_cham_t_callback_task_create(
-    cham_t_data_t *task_data,
-    TargetTaskEntryTy * task)
+    TargetTaskEntryTy * task,
+    cham_t_data_t *task_data)
 {
+    int64_t internal_task_id        = chameleon_get_task_id(task);
+
+    // create custom data structure and use task_data as pointer
+    my_task_data_t * cur_task_data  = (my_task_data_t*) malloc(sizeof(my_task_data_t));
+    cur_task_data->task_id          = internal_task_id;
+    cur_task_data->size_data        = TASK_TOOL_SAMPLE_DATA_SIZE;
+    cur_task_data->sample_data      = (double*) malloc(cur_task_data->size_data * sizeof(double));
+    int i;
+    for(i = 0; i < cur_task_data->size_data; i++) {
+        cur_task_data->sample_data[i] = internal_task_id;
+    }    
+    task_data->ptr                  = (void*) cur_task_data;
+    
+    // access data containers for current rank and current thread
     cham_t_data_t * rank_data       = cham_t_get_rank_data();
     cham_t_data_t * thread_data     = cham_t_get_thread_data();
-    printf("on_cham_t_callback_task_create ==> rank_data=%" PRIu64 ";thread_data=%" PRIu64 ";task_data=%" PRIu64 "\n", rank_data->value, thread_data->value, task_data->value);
+
+    printf("on_cham_t_callback_task_create ==> task_id=%" PRIu64 ";rank_data=%" PRIu64 ";thread_data=%" PRIu64 ";task_data=" DPxMOD "\n", internal_task_id, rank_data, thread_data, DPxPTR(task_data->ptr));
 }
 
 static void
 on_cham_t_callback_task_schedule(
-    cham_t_data_t *new_task_data,
-    cham_t_task_flag_t new_task_flag,
-    TargetTaskEntryTy * new_task,
+    TargetTaskEntryTy *task,
+    cham_t_task_flag_t task_flag,
+    cham_t_data_t *task_data,
     cham_t_task_schedule_type_t schedule_type,
-    cham_t_data_t *prior_task_data,
+    TargetTaskEntryTy *prior_task,
     cham_t_task_flag_t prior_task_flag,
-    TargetTaskEntryTy * prior_task)
+    cham_t_data_t *prior_task_data)
 {
-    char val_new_task_flag[50];
+    int64_t internal_task_id    = chameleon_get_task_id(task);
+
+    char val_task_flag[50];
     char val_prior_task_flag[50];
-    cham_t_task_flag_t_value(new_task_flag, val_new_task_flag);
+    cham_t_task_flag_t_value(task_flag, val_task_flag);
     cham_t_task_flag_t_value(prior_task_flag, val_prior_task_flag);
 
     if(prior_task_data) {
-        printf("on_cham_t_callback_task_schedule ==> schedule_type=%s;new_task_data=%" PRIu64 ";new_task_flag=%s;prior_task_data=%" PRIu64 ";prior_task_flag=%s\n", cham_t_task_schedule_type_t_values[schedule_type], new_task_data->value, val_new_task_flag, prior_task_data->value, val_prior_task_flag);
+        int64_t prior_internal_task_id    = chameleon_get_task_id(prior_task);
+        printf("on_cham_t_callback_task_schedule ==> schedule_type=%s;task_id=%" PRIu64 ";task_flag=%s;task_data=" DPxMOD ";prior_task_id=%" PRIu64 ";prior_task_flag=%s;prior_task_data=" DPxMOD "\n", cham_t_task_schedule_type_t_values[schedule_type], internal_task_id, val_task_flag, DPxPTR(task_data->ptr), prior_internal_task_id, val_prior_task_flag, DPxPTR(prior_task_data->ptr));
     }
     else {
-        printf("on_cham_t_callback_task_schedule ==> schedule_type=%s;new_task_data=%" PRIu64 ";new_task_flag=%s;prior_task_data=%p;prior_task_flag=%s\n", cham_t_task_schedule_type_t_values[schedule_type], new_task_data->value, val_new_task_flag, prior_task_data, val_prior_task_flag);
+        printf("on_cham_t_callback_task_schedule ==> schedule_type=%s;task_id=%" PRIu64 ";task_flag=%s;task_data=" DPxMOD ";prior_task_id=%" PRIu64 ";prior_task_flag=%s;prior_task_data=" DPxMOD "\n", cham_t_task_schedule_type_t_values[schedule_type], internal_task_id, val_task_flag, DPxPTR(task_data->ptr), 0, val_prior_task_flag, DPxPTR(prior_task_data));
     }
+
+    // verification that task tool data is correct
+    my_task_data_t * cur_task_data = (my_task_data_t *) task_data->ptr;
+    assert(cur_task_data->task_id == internal_task_id);
+    assert(cur_task_data->size_data == TASK_TOOL_SAMPLE_DATA_SIZE);
+    int i;
+    for(i = 0; i < cur_task_data->size_data; i++) {
+        assert(cur_task_data->sample_data[i] == (double)internal_task_id);
+    }
+
+    if(schedule_type == cham_t_task_end) {
+        // dont need tool data any more ==> clean up
+        free(task_data->ptr);
+    }
+}
+
+static void *
+on_cham_t_callback_encode_task_tool_data(
+    TargetTaskEntryTy *task,
+    cham_t_data_t *task_data,    
+    int32_t *size) 
+{
+    int64_t internal_task_id    = chameleon_get_task_id(task);
+    printf("on_cham_t_callback_encode_task_tool_data ==> task_id=%" PRIu64 "\n", internal_task_id);
+
+    // determine size of buffer
+    my_task_data_t *cur_task_data = (my_task_data_t *) task_data->ptr;
+    *size = 
+        sizeof(int64_t) +   // task_id
+        sizeof(int32_t) +   // data size
+        cur_task_data->size_data * sizeof(double); // data
+
+    // create new buffer
+    char * cur_buf = (char*) malloc(*size);
+    void * buff_start = (void*)cur_buf;
+
+    // set id
+    ((int64_t *) cur_buf)[0] = cur_task_data->task_id;
+    cur_buf += sizeof(int64_t);
+
+    // set data size
+    ((int32_t *) cur_buf)[0] = cur_task_data->size_data;
+    cur_buf += sizeof(int32_t);
+
+    // copy data
+    memcpy(cur_buf, cur_task_data->sample_data, cur_task_data->size_data * sizeof(double));
+    return buff_start;
+}
+
+static void 
+on_cham_t_callback_decode_task_tool_data(
+    TargetTaskEntryTy *task,
+    cham_t_data_t *task_data,
+    void *buffer,
+    int32_t size)
+{
+    int64_t internal_task_id    = chameleon_get_task_id(task);
+    printf("on_cham_t_callback_decode_task_tool_data ==> task_id=%" PRIu64 "\n", internal_task_id);
+
+    my_task_data_t * cur_task_data  = (my_task_data_t*) malloc(sizeof(my_task_data_t));
+    char * cur_buf = (char*) buffer;
+
+    // task_id
+    cur_task_data->task_id          = ((int64_t *) cur_buf)[0];
+    cur_buf += sizeof(int64_t);
+
+    // size of sample data
+    cur_task_data->size_data        = ((int32_t *) cur_buf)[0];
+    cur_buf += sizeof(int32_t);
+
+    // sample data
+    cur_task_data->sample_data      = (double*) malloc(cur_task_data->size_data * sizeof(double));
+    memcpy(cur_task_data->sample_data, cur_buf, cur_task_data->size_data * sizeof(double));
+
+    // need to set structure pointer again
+    task_data->ptr = (void*) cur_task_data;
 }
 
 #define register_callback_t(name, type)                                         \
@@ -143,8 +248,9 @@ int cham_t_initialize(
 
     register_callback(cham_t_callback_task_create);
     register_callback(cham_t_callback_task_schedule);
+    register_callback(cham_t_callback_encode_task_tool_data);
+    register_callback(cham_t_callback_decode_task_tool_data);
 
-    printf("0: NULL_POINTER=%p\n", (void*)NULL);
     return 1; //success
 }
 
