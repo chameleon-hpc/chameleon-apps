@@ -174,8 +174,12 @@ int main(int argc, char **argv)
     std::mutex mtx_t_ids;
     std::list<int32_t> t_ids;
 #endif
-
-	chameleon_init();
+    // chameleon_init();
+    #pragma omp parallel
+    {
+        chameleon_thread_init();
+    }
+	
     // necessary to be aware of binary base addresses to calculate offset for target functions
     chameleon_determine_base_addresses((void *)&main);
 
@@ -369,6 +373,10 @@ int main(int argc, char **argv)
     delete[] matrices_c;
 
     MPI_Barrier(MPI_COMM_WORLD);
+    #pragma omp parallel
+    {
+        chameleon_thread_finalize();
+    }
     chameleon_finalize();
     MPI_Finalize();
 //#endif

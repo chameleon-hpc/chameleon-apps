@@ -22,6 +22,7 @@ static cham_t_set_callback_t cham_t_set_callback;
 static cham_t_get_callback_t cham_t_get_callback;
 static cham_t_get_rank_data_t cham_t_get_rank_data;
 static cham_t_get_thread_data_t cham_t_get_thread_data;
+static cham_t_get_rank_info_t cham_t_get_rank_info;
 
 // sample struct to save some information for a task
 typedef struct my_task_data_t {
@@ -65,6 +66,22 @@ typedef struct my_task_data_t {
 // }
 
 static void
+on_cham_t_callback_thread_init(
+    cham_t_data_t *thread_data)
+{
+    thread_data->value = syscall(SYS_gettid);
+    printf("on_cham_t_callback_thread_init ==> thread_id=%d\n", thread_data->value);
+}
+
+static void
+on_cham_t_callback_thread_finalize(
+    cham_t_data_t *thread_data)
+{
+    thread_data->value = syscall(SYS_gettid);
+    printf("on_cham_t_callback_thread_finalize ==> thread_id=%d\n", thread_data->value);
+}
+
+static void
 on_cham_t_callback_task_create(
     TargetTaskEntryTy * task,
     cham_t_data_t *task_data)
@@ -86,7 +103,7 @@ on_cham_t_callback_task_create(
     cham_t_data_t * rank_data       = cham_t_get_rank_data();
     cham_t_data_t * thread_data     = cham_t_get_thread_data();
 
-    printf("on_cham_t_callback_task_create ==> task_id=%" PRIu64 ";rank_data=%" PRIu64 ";thread_data=%" PRIu64 ";task_data=" DPxMOD "\n", internal_task_id, rank_data, thread_data, DPxPTR(task_data->ptr));
+    printf("on_cham_t_callback_task_create ==> task_id=%" PRIu64 ";rank_data=%" PRIu64 ";thread_data=%" PRIu64 ";task_data=" DPxMOD "\n", internal_task_id, rank_data->value, thread_data->value, DPxPTR(task_data->ptr));
 }
 
 static void
@@ -208,6 +225,7 @@ int cham_t_initialize(
     cham_t_get_callback = (cham_t_get_callback_t) lookup("cham_t_get_callback");
     cham_t_get_rank_data = (cham_t_get_rank_data_t) lookup("cham_t_get_rank_data");
     cham_t_get_thread_data = (cham_t_get_thread_data_t) lookup("cham_t_get_thread_data");
+    cham_t_get_rank_info = (cham_t_get_rank_info_t) lookup("cham_t_get_rank_info");
 
     // cham_t_get_unique_id = (cham_t_get_unique_id_t) lookup("cham_t_get_unique_id");
     // cham_t_get_num_procs = (cham_t_get_num_procs_t) lookup("cham_t_get_num_procs");
@@ -246,10 +264,16 @@ int cham_t_initialize(
 //   register_callback(cham_t_callback_task_dependence);
 //   register_callback(cham_t_callback_thread_begin);
 
+    register_callback(cham_t_callback_thread_init);
+    register_callback(cham_t_callback_thread_finalize);
     register_callback(cham_t_callback_task_create);
     register_callback(cham_t_callback_task_schedule);
     register_callback(cham_t_callback_encode_task_tool_data);
     register_callback(cham_t_callback_decode_task_tool_data);
+
+    cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
+    cham_t_data_t * r_data      = cham_t_get_rank_data();
+    r_data->value               = r_info->comm_rank;
 
     return 1; //success
 }
