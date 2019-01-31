@@ -1,15 +1,21 @@
 module test
+ use iso_c_binding
  contains
 
   subroutine foo(n, y, arr) bind(c)
     integer, intent(in) :: n
     integer, intent(in) :: y
-    integer, dimension(50), intent(inout) :: arr
+    type(c_ptr),value, intent(in) :: arr
+  !  integer, dimension(50), intent(inout) :: arr
     integer :: i
- 
+    integer, pointer :: arr_ptr(:)
+
+  ! write(*,*) 'cptr after',arr
+   call c_f_pointer(arr, arr_ptr,[50]) 
+
     write(*,*) 'foo called', n, y
-    do i=1, size(arr)
-      write(*,*) i,arr(i)
+    do i=1, size(arr_ptr)
+      write(*,*) i,arr_ptr(i)
     end do
   end subroutine
 end module 
@@ -48,6 +54,8 @@ use iso_c_binding
   args(3)%valptr = c_loc(arr)
   args(3)%size = sizeof(arr)
   args(3)%type = 3
+
+ ! write(*,*) 'c_ptr before', c_loc(arr)  
 
   ierr = chameleon_init()
   ierr = chameleon_determine_base_addresses(c_null_ptr)
