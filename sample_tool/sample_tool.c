@@ -84,7 +84,8 @@ on_cham_t_callback_thread_finalize(
 static void
 on_cham_t_callback_task_create(
     TargetTaskEntryTy * task,
-    cham_t_data_t *task_data)
+    cham_t_data_t *task_data,
+    const void *codeptr_ra)
 {
     int64_t internal_task_id        = chameleon_get_task_id(task);
 
@@ -103,7 +104,7 @@ on_cham_t_callback_task_create(
     cham_t_data_t * rank_data       = cham_t_get_rank_data();
     cham_t_data_t * thread_data     = cham_t_get_thread_data();
 
-    printf("on_cham_t_callback_task_create ==> task_id=%" PRIu64 ";rank_data=%" PRIu64 ";thread_data=%" PRIu64 ";task_data=" DPxMOD "\n", internal_task_id, rank_data->value, thread_data->value, DPxPTR(task_data->ptr));
+    printf("on_cham_t_callback_task_create ==> task_id=%" PRIu64 ";codeptr_ra=" DPxMOD ";rank_data=%" PRIu64 ";thread_data=%" PRIu64 ";task_data=" DPxMOD "\n", internal_task_id, DPxPTR(codeptr_ra), rank_data->value, thread_data->value, DPxPTR(task_data->ptr));
 }
 
 static void
@@ -208,6 +209,16 @@ on_cham_t_callback_decode_task_tool_data(
     task_data->ptr = (void*) cur_task_data;
 }
 
+static void 
+on_cham_t_callback_sync_region(
+    cham_t_sync_region_type_t sync_region_type,
+    cham_t_sync_region_status_t sync_region_status,
+    cham_t_data_t *thread_data,
+    const void *codeptr_ra)
+{
+    printf("on_cham_t_callback_sync_region ==> thread_id=%" PRIu64 ";region_type=%s;region_status=%s;codeptr_ra=" DPxMOD "\n", thread_data->value, cham_t_sync_region_type_t_values[sync_region_type], cham_t_sync_region_status_t_values[sync_region_status], DPxPTR(codeptr_ra));
+}
+
 #define register_callback_t(name, type)                                         \
 do{                                                                             \
     type f_##name = &on_##name;                                                 \
@@ -270,6 +281,7 @@ int cham_t_initialize(
     register_callback(cham_t_callback_task_schedule);
     register_callback(cham_t_callback_encode_task_tool_data);
     register_callback(cham_t_callback_decode_task_tool_data);
+    register_callback(cham_t_callback_sync_region);
 
     cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
     cham_t_data_t * r_data      = cham_t_get_rank_data();
