@@ -219,6 +219,17 @@ on_cham_t_callback_sync_region(
     printf("on_cham_t_callback_sync_region ==> thread_id=%" PRIu64 ";region_type=%s;region_status=%s;codeptr_ra=" DPxMOD "\n", thread_data->value, cham_t_sync_region_type_t_values[sync_region_type], cham_t_sync_region_status_t_values[sync_region_status], DPxPTR(codeptr_ra));
 }
 
+static int32_t 
+on_cham_t_callback_determine_local_load(
+    int64_t* task_ids_local,
+    int32_t num_ids_local,
+    int64_t* task_ids_stolen,
+    int32_t num_ids_stolen)
+{
+    printf("on_cham_t_callback_determine_local_load ==> task_ids_local=" DPxMOD ";num_ids_local=%d;task_ids_stolen=" DPxMOD ";num_ids_stolen=%d\n", DPxPTR(task_ids_local), num_ids_local, DPxPTR(task_ids_stolen), num_ids_stolen);
+    return (num_ids_local+num_ids_stolen);
+}
+
 #define register_callback_t(name, type)                                         \
 do{                                                                             \
     type f_##name = &on_##name;                                                 \
@@ -282,6 +293,7 @@ int cham_t_initialize(
     register_callback(cham_t_callback_encode_task_tool_data);
     register_callback(cham_t_callback_decode_task_tool_data);
     register_callback(cham_t_callback_sync_region);
+    register_callback(cham_t_callback_determine_local_load);
 
     cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
     cham_t_data_t * r_data      = cham_t_get_rank_data();
