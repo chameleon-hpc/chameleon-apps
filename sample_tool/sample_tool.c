@@ -230,6 +230,74 @@ on_cham_t_callback_determine_local_load(
     return (num_ids_local+num_ids_stolen);
 }
 
+int compare( const void *pa, const void *pb )
+{
+    const int *a = pa;
+    const int *b = pb;
+    if(a[0] == b[0])
+        return a[1] - b[1];
+    else
+        return a[0] - b[0];
+}
+
+static void
+on_cham_t_callback_compute_num_task_to_offload(
+    int32_t* num_tasks_to_offload_per_rank,
+    const int32_t* load_info_per_rank)
+{
+    cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
+    printf("on_cham_t_callback_compute_num_task_to_offload ==> comm_rank=%d;comm_size=%d;num_tasks_to_offload_per_rank=" DPxMOD ";load_info_per_rank=" DPxMOD "\n", r_info->comm_rank, r_info->comm_size, DPxPTR(num_tasks_to_offload_per_rank), DPxPTR(load_info_per_rank));
+
+    // Sort rank loads and keep track of indices
+    int tmp_sorted_array[r_info->comm_size][2];
+    int i;
+    for (i = 0; i < r_info->comm_size; i++)
+	{
+        tmp_sorted_array[i][0] = load_info_per_rank[i];
+        tmp_sorted_array[i][1] = i;
+    }
+
+    // for(i = 0; i < r_info->comm_size;++i)
+    //     printf("%2d, %2d\n", tmp_sorted_array[i][0], tmp_sorted_array[i][1]);
+
+    qsort(tmp_sorted_array, r_info->comm_size, sizeof tmp_sorted_array[0], compare);
+
+    // for(i = 0; i < r_info->comm_size;++i)
+    //     printf("%2d, %2d\n", tmp_sorted_array[i][0], tmp_sorted_array[i][1]);
+
+    int min_val = load_info_per_rank[tmp_sorted_array[0][1]];
+    int max_val = load_info_per_rank[tmp_sorted_array[r_info->comm_size-1][1]];
+    
+    int load_this_rank = load_info_per_rank[r_info->comm_rank];
+    
+    if(max_val > min_val) {
+        int pos = 0;
+        for(i = 0; i < r_info->comm_size; i++) {
+            if(tmp_sorted_array[i][1] == r_info->comm_rank) {
+                pos = i;
+                break;
+            }
+        }
+
+        // only offload if on the upper side
+        if((pos+1) >= ((double)r_info->comm_size/2.0))
+        {
+            int other_pos = r_info->comm_size-pos;
+            // need to adapt in case of even number
+            if(r_info->comm_size % 2 == 0)
+                other_pos--;
+            int other_idx = tmp_sorted_array[other_pos][1];
+            int other_val = load_info_per_rank[other_idx];
+
+            // calculate ration between those two and just move if over a certain threshold
+            double ratio = (double)(load_this_rank-other_val) / (double)load_this_rank;
+            if(other_val < load_this_rank && ratio > 0.5) {
+                num_tasks_to_offload_per_rank[other_idx] = 1;
+            }
+        }
+    }
+}
+
 #define register_callback_t(name, type)                                         \
 do{                                                                             \
     type f_##name = &on_##name;                                                 \
@@ -294,6 +362,7 @@ int cham_t_initialize(
     register_callback(cham_t_callback_decode_task_tool_data);
     register_callback(cham_t_callback_sync_region);
     register_callback(cham_t_callback_determine_local_load);
+    register_callback(cham_t_callback_compute_num_task_to_offload);
 
     cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
     cham_t_data_t * r_data      = cham_t_get_rank_data();
