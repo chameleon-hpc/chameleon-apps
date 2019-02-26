@@ -10,14 +10,14 @@ RUN_SETTINGS=OMP_PLACES=cores OMP_PROC_BIND=spread I_MPI_PIN=1 I_MPI_PIN_DOMAIN=
 LINKER_FLAGS=-lm -lchameleon -lstdc++
 
 # ===== Clang compiler
-MPICXX=I_MPI_CXX=clang++ mpiicpc
+#MPICXX=I_MPI_CXX=clang++ mpiicpc
 # === used for target offloading
 # FLAGS_OPENMP=-fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu
 # === used with maunal API call
 FLAGS_OPENMP=-fopenmp
 
 # ===== Intel compiler
-#MPICXX=I_MPI_CXX=icpc mpiicpc
+MPICXX=I_MPI_CXX=icpc mpiicpc
 #FLAGS_OPENMP=-qopenmp -qno-openmp-offload -Wno-unknown-pragmas
 #FLAGS_OPENMP=-qopenmp -qopenmp-offload=host -Wno-unknown-pragmas
 
