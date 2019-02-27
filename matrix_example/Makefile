@@ -18,7 +18,7 @@ FLAGS_OPENMP=-fopenmp
 
 # ===== Intel compiler
 MPICXX=I_MPI_CXX=icpc mpiicpc
-#FLAGS_OPENMP=-qopenmp -qno-openmp-offload -Wno-unknown-pragmas
+FLAGS_OPENMP=-qopenmp -qno-openmp-offload -Wno-unknown-pragmas
 #FLAGS_OPENMP=-qopenmp -qopenmp-offload=host -Wno-unknown-pragmas
 
 default: 
