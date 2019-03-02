@@ -220,6 +220,7 @@ int main(int argc, char **argv)
 	matrices_c = new double*[numberOfTasks];
 
 	//allocate and initialize matrices
+    #pragma omp parallel for
 	for(int i=0; i<numberOfTasks; i++) {
  		matrices_a[i] = new double[(long)matrixSize*matrixSize];
     	matrices_b[i] = new double[(long)matrixSize*matrixSize];
@@ -260,7 +261,6 @@ int main(int argc, char **argv)
                 // here we need to call library function to add task entry point and parameters by hand
                 void* literal_matrix_size   = *(void**)(&matrixSize);
                 void* literal_i             = *(void**)(&i);
-                // int literal_restore         = *((int*)&literal_matrix_size); // for verification
                 int32_t res = chameleon_add_task_manual(
                     (void *)&matrixMatrixKernel, 
                     5, // number of parameters that will follow

@@ -201,6 +201,7 @@ int main(int argc, char **argv)
 	matrices_c = new double*[numberOfTasks];
 
 	//allocate and initialize matrices
+	#pragma omp parallel for
 	for(int i=0; i<numberOfTasks; i++) {
  		matrices_a[i] = new double[(long)matrixSize*matrixSize];
     	matrices_b[i] = new double[(long)matrixSize*matrixSize];
