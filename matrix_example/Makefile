@@ -7,28 +7,27 @@ PROG=main
 MATRIX_SIZE=300
 
 RUN_SETTINGS=OMP_PLACES=cores OMP_PROC_BIND=spread I_MPI_PIN=1 I_MPI_PIN_DOMAIN=auto
+CXX_COMPILE_FLAGS=-std=c++11
 LINKER_FLAGS=-lm -lchameleon -lstdc++
 
-# ===== Clang compiler
-#MPICXX=I_MPI_CXX=clang++ mpiicpc
-# === used for target offloading
-# FLAGS_OPENMP=-fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu
-# === used with maunal API call
-FLAGS_OPENMP=-fopenmp
-
-# ===== Intel compiler
-MPICXX=I_MPI_CXX=icpc mpiicpc
-FLAGS_OPENMP=-qopenmp -qno-openmp-offload -Wno-unknown-pragmas
-#FLAGS_OPENMP=-qopenmp -qopenmp-offload=host -Wno-unknown-pragmas
+ifeq ($(CXX),clang++)
+    MPICXX=I_MPI_CXX=clang++ mpiicpc
+    CXX_COMPILE_FLAGS+=-fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu # used with target offloading
+    #CXX_COMPILE_FLAGS+=-fopenmp # used with manual API
+else ifeq ($(CXX),icpc)
+    MPICXX=I_MPI_CXX=icpc mpiicpc
+    MPIF90=I_MPI_F90=ifort mpiifort
+    CXX_COMPILE_FLAGS+=-qopenmp -qno-openmp-offload -Wno-unknown-pragmas
+endif
 
 default: 
-	${MPICXX} -g -O3 -o $(PROG) -std=c++11 $(FLAGS_OPENMP) $(FILE_NAMES) $(LINKER_FLAGS)
+	${MPICXX} -g -O3 -o $(PROG) $(CXX_COMPILE_FLAGS) $(FILE_NAMES) $(LINKER_FLAGS)
 	
 debug: 
-	${MPICXX} -g -O0 -o $(PROG) -std=c++11 $(FLAGS_OPENMP) $(FILE_NAMES) $(LINKER_FLAGS)
+	${MPICXX} -g -O0 -o $(PROG) $(CXX_COMPILE_FLAGS) $(FILE_NAMES) $(LINKER_FLAGS)
 
 simulate-work:
-	${MPICXX} -O3 -o $(PROG) -std=c++11 $(FLAGS_OPENMP) -DSIMULATE_CONST_WORK=1 -DCALC_SPEEDUP=0 $(FILE_NAMES) $(LINKER_FLAGS)
+	${MPICXX} -O3 -o $(PROG) $(CXX_COMPILE_FLAGS) -DSIMULATE_CONST_WORK=1 -DCALC_SPEEDUP=0 $(FILE_NAMES) $(LINKER_FLAGS)
 
 run:
 	$(RUN_SETTINGS) mpiexec.hydra -np 4 -genvall $(PROG) $(MATRIX_SIZE) 70 50 30 20
