@@ -83,7 +83,7 @@ on_cham_t_callback_thread_finalize(
 
 static void
 on_cham_t_callback_task_create(
-    TargetTaskEntryTy * task,
+    cham_migratable_task_t * task,
     cham_t_data_t *task_data,
     const void *codeptr_ra)
 {
@@ -109,11 +109,11 @@ on_cham_t_callback_task_create(
 
 static void
 on_cham_t_callback_task_schedule(
-    TargetTaskEntryTy *task,
+    cham_migratable_task_t *task,
     cham_t_task_flag_t task_flag,
     cham_t_data_t *task_data,
     cham_t_task_schedule_type_t schedule_type,
-    TargetTaskEntryTy *prior_task,
+    cham_migratable_task_t *prior_task,
     cham_t_task_flag_t prior_task_flag,
     cham_t_data_t *prior_task_data)
 {
@@ -149,7 +149,7 @@ on_cham_t_callback_task_schedule(
 
 static void *
 on_cham_t_callback_encode_task_tool_data(
-    TargetTaskEntryTy *task,
+    cham_migratable_task_t *task,
     cham_t_data_t *task_data,    
     int32_t *size) 
 {
@@ -182,7 +182,7 @@ on_cham_t_callback_encode_task_tool_data(
 
 static void 
 on_cham_t_callback_decode_task_tool_data(
-    TargetTaskEntryTy *task,
+    cham_migratable_task_t *task,
     cham_t_data_t *task_data,
     void *buffer,
     int32_t size)
