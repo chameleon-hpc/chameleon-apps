@@ -261,14 +261,15 @@ int main(int argc, char **argv)
                 // here we need to call library function to add task entry point and parameters by hand
                 void* literal_matrix_size   = *(void**)(&matrixSize);
                 void* literal_i             = *(void**)(&i);
-                int32_t res = chameleon_add_task_manual(
-                    (void *)&matrixMatrixKernel, 
-                    5, // number of parameters that will follow
-                    A, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO, 
-                    B, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO, 
-                    C, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM,
-                    literal_matrix_size, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL,
-                    literal_i, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+
+                map_data_entry_t* args = (map_data_entry_t*) malloc(5*sizeof(map_data_entry_t));
+                args[0] = map_data_entry_t(A, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                args[1] = map_data_entry_t(B, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                args[2] = map_data_entry_t(C, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
+                args[3] = map_data_entry_t(literal_matrix_size, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                args[4] = map_data_entry_t(literal_i, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                
+                int32_t res = chameleon_add_task_manual((void *)&matrixMatrixKernel, 5, args);
 
 #if CHECK_GENERATED_TASK_ID
                 int32_t last_t_id = chameleon_get_last_local_task_id_added();
