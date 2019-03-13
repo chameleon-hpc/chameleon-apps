@@ -117,7 +117,7 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
         {
 // #ifdef CHAMELEON
 //             // chameleon call to start/wake up communication threads
-//             wake_up_comm_threads();
+//             chameleon_wake_up_comm_threads();
 // #endif
             for (int i = k + 1; i < nt; i++) {
                 my_print("Iteration [%03d][%03d]\tR#%d T#%d (OS_TID:%ld): --> 0 Begin\n", k, i, mype, omp_get_thread_num(), syscall(SYS_gettid));

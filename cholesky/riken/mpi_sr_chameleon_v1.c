@@ -141,7 +141,7 @@ static void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *
         #pragma omp single nowait
         {
             // chameleon call to start/wake up communication threads
-            wake_up_comm_threads();
+            chameleon_wake_up_comm_threads();
 
             for (int i = k + 1; i < nt; i++) {
 
