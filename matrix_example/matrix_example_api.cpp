@@ -278,10 +278,10 @@ int main(int argc, char **argv)
                 delete[] args;
 
                 // get the id of the last task added
-                int32_t last_t_id = chameleon_get_last_local_task_id_added();
+                TYPE_TASK_ID last_t_id = chameleon_get_last_local_task_id_added();
                 
 #if CHECK_GENERATED_TASK_ID
-                printf("#R%d (OS_TID:%ld): last task that has been created: %d\n", iMyRank, syscall(SYS_gettid), last_t_id);
+                printf("#R%d (OS_TID:%ld): last task that has been created: %ld\n", iMyRank, syscall(SYS_gettid), last_t_id);
                 mtx_t_ids.lock();
                 t_ids.push_back(last_t_id);
                 mtx_t_ids.unlock();
