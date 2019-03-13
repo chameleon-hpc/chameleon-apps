@@ -26,8 +26,8 @@ static cham_t_get_rank_info_t cham_t_get_rank_info;
 
 // sample struct to save some information for a task
 typedef struct my_task_data_t {
-    int64_t task_id;
-    int32_t size_data;
+    TYPE_TASK_ID task_id;
+    size_t size_data;
     double * sample_data;    
 } my_task_data_t;
 
@@ -87,7 +87,7 @@ on_cham_t_callback_task_create(
     cham_t_data_t *task_data,
     const void *codeptr_ra)
 {
-    int64_t internal_task_id        = chameleon_get_task_id(task);
+    TYPE_TASK_ID internal_task_id        = chameleon_get_task_id(task);
 
     // create custom data structure and use task_data as pointer
     my_task_data_t * cur_task_data  = (my_task_data_t*) malloc(sizeof(my_task_data_t));
@@ -117,7 +117,7 @@ on_cham_t_callback_task_schedule(
     cham_t_task_flag_t prior_task_flag,
     cham_t_data_t *prior_task_data)
 {
-    int64_t internal_task_id    = chameleon_get_task_id(task);
+    TYPE_TASK_ID internal_task_id    = chameleon_get_task_id(task);
 
     char val_task_flag[50];
     char val_prior_task_flag[50];
@@ -125,7 +125,7 @@ on_cham_t_callback_task_schedule(
     cham_t_task_flag_t_value(prior_task_flag, val_prior_task_flag);
 
     if(prior_task_data) {
-        int64_t prior_internal_task_id    = chameleon_get_task_id(prior_task);
+        TYPE_TASK_ID prior_internal_task_id    = chameleon_get_task_id(prior_task);
         printf("on_cham_t_callback_task_schedule ==> schedule_type=%s;task_id=%" PRIu64 ";task_flag=%s;task_data=" DPxMOD ";prior_task_id=%" PRIu64 ";prior_task_flag=%s;prior_task_data=" DPxMOD "\n", cham_t_task_schedule_type_t_values[schedule_type], internal_task_id, val_task_flag, DPxPTR(task_data->ptr), prior_internal_task_id, val_prior_task_flag, DPxPTR(prior_task_data->ptr));
     }
     else {
@@ -151,16 +151,16 @@ static void *
 on_cham_t_callback_encode_task_tool_data(
     cham_migratable_task_t *task,
     cham_t_data_t *task_data,    
-    int32_t *size) 
+    size_t *size) 
 {
-    int64_t internal_task_id    = chameleon_get_task_id(task);
+    TYPE_TASK_ID internal_task_id    = chameleon_get_task_id(task);
     printf("on_cham_t_callback_encode_task_tool_data ==> task_id=%" PRIu64 "\n", internal_task_id);
 
     // determine size of buffer
     my_task_data_t *cur_task_data = (my_task_data_t *) task_data->ptr;
     *size = 
-        sizeof(int64_t) +   // task_id
-        sizeof(int32_t) +   // data size
+        sizeof(TYPE_TASK_ID) +   // task_id
+        sizeof(size_t) +   // data size
         cur_task_data->size_data * sizeof(double); // data
 
     // create new buffer
@@ -168,12 +168,12 @@ on_cham_t_callback_encode_task_tool_data(
     void * buff_start = (void*)cur_buf;
 
     // set id
-    ((int64_t *) cur_buf)[0] = cur_task_data->task_id;
-    cur_buf += sizeof(int64_t);
+    ((TYPE_TASK_ID *) cur_buf)[0] = cur_task_data->task_id;
+    cur_buf += sizeof(TYPE_TASK_ID);
 
     // set data size
-    ((int32_t *) cur_buf)[0] = cur_task_data->size_data;
-    cur_buf += sizeof(int32_t);
+    ((size_t *) cur_buf)[0] = cur_task_data->size_data;
+    cur_buf += sizeof(size_t);
 
     // copy data
     memcpy(cur_buf, cur_task_data->sample_data, cur_task_data->size_data * sizeof(double));
@@ -185,21 +185,21 @@ on_cham_t_callback_decode_task_tool_data(
     cham_migratable_task_t *task,
     cham_t_data_t *task_data,
     void *buffer,
-    int32_t size)
+    size_t size)
 {
-    int64_t internal_task_id    = chameleon_get_task_id(task);
+    TYPE_TASK_ID internal_task_id    = chameleon_get_task_id(task);
     printf("on_cham_t_callback_decode_task_tool_data ==> task_id=%" PRIu64 "\n", internal_task_id);
 
     my_task_data_t * cur_task_data  = (my_task_data_t*) malloc(sizeof(my_task_data_t));
     char * cur_buf = (char*) buffer;
 
     // task_id
-    cur_task_data->task_id          = ((int64_t *) cur_buf)[0];
-    cur_buf += sizeof(int64_t);
+    cur_task_data->task_id          = ((TYPE_TASK_ID *) cur_buf)[0];
+    cur_buf += sizeof(TYPE_TASK_ID);
 
     // size of sample data
-    cur_task_data->size_data        = ((int32_t *) cur_buf)[0];
-    cur_buf += sizeof(int32_t);
+    cur_task_data->size_data        = ((size_t *) cur_buf)[0];
+    cur_buf += sizeof(size_t);
 
     // sample data
     cur_task_data->sample_data      = (double*) malloc(cur_task_data->size_data * sizeof(double));
@@ -221,9 +221,9 @@ on_cham_t_callback_sync_region(
 
 static int32_t 
 on_cham_t_callback_determine_local_load(
-    int64_t* task_ids_local,
+    TYPE_TASK_ID* task_ids_local,
     int32_t num_ids_local,
-    int64_t* task_ids_stolen,
+    TYPE_TASK_ID* task_ids_stolen,
     int32_t num_ids_stolen)
 {
     printf("on_cham_t_callback_determine_local_load ==> task_ids_local=" DPxMOD ";num_ids_local=%d;task_ids_stolen=" DPxMOD ";num_ids_stolen=%d\n", DPxPTR(task_ids_local), num_ids_local, DPxPTR(task_ids_stolen), num_ids_stolen);
@@ -241,12 +241,12 @@ int compare( const void *pa, const void *pb )
 }
 
 static void
-on_cham_t_callback_compute_num_task_to_offload(
+on_cham_t_callback_select_num_tasks_to_offload(
     int32_t* num_tasks_to_offload_per_rank,
     const int32_t* load_info_per_rank)
 {
     cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
-    printf("on_cham_t_callback_compute_num_task_to_offload ==> comm_rank=%d;comm_size=%d;num_tasks_to_offload_per_rank=" DPxMOD ";load_info_per_rank=" DPxMOD "\n", r_info->comm_rank, r_info->comm_size, DPxPTR(num_tasks_to_offload_per_rank), DPxPTR(load_info_per_rank));
+    printf("on_cham_t_callback_select_num_tasks_to_offload ==> comm_rank=%d;comm_size=%d;num_tasks_to_offload_per_rank=" DPxMOD ";load_info_per_rank=" DPxMOD "\n", r_info->comm_rank, r_info->comm_size, DPxPTR(num_tasks_to_offload_per_rank), DPxPTR(load_info_per_rank));
 
     // Sort rank loads and keep track of indices
     int tmp_sorted_array[r_info->comm_size][2];
@@ -362,7 +362,7 @@ int cham_t_initialize(
     register_callback(cham_t_callback_decode_task_tool_data);
     register_callback(cham_t_callback_sync_region);
     register_callback(cham_t_callback_determine_local_load);
-    register_callback(cham_t_callback_compute_num_task_to_offload);
+    register_callback(cham_t_callback_select_num_tasks_to_offload);
 
     cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
     cham_t_data_t * r_data      = cham_t_get_rank_data();
