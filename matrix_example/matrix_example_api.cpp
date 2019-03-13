@@ -1,8 +1,3 @@
-// size of the matrices
-//#ifndef MATRIX_SIZE
-//#define MATRIX_SIZE 500
-//#endif
-
 // number of tasks 
 #ifndef NR_TASKS
 #define NR_TASKS 200
@@ -32,9 +27,14 @@
 #define CALC_SPEEDUP 1
 #endif
 
+#ifndef USE_TASK_ANNOTATIONS
+#define USE_TASK_ANNOTATIONS 1
+#endif
+
 //#define LOG(rank, str) fprintf(stderr, "#R%d: %s\n", rank, str)
 #define LOG(rank, str) printf("#R%d: %s\n", rank, str)
 
+#include <assert.h>
 #include <mpi.h>
 #include "chameleon.h"
 #include <cstdlib>
@@ -136,9 +136,6 @@ void printHelpMessage() {
 }
 
 void matrixMatrixKernel(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, double * SPEC_RESTRICT C, int matrixSize, int i) {
-    //check_test_matrix(A, 1);
-    //check_test_matrix(B, 1);
-    //check_test_matrix(C, 0);
 #if VERY_VERBOSE
     int iMyRank2;
     MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank2);
@@ -178,9 +175,8 @@ int main(int argc, char **argv)
     #pragma omp parallel
     {
         chameleon_thread_init();
-    }
-	
-    // necessary to be aware of binary base addresses to calculate offset for target functions
+    }	
+    // necessary to be aware of binary base addresses to calculate offset for target entry functions
     chameleon_determine_base_addresses((void *)&main);
 
     if(argc==2) {
@@ -262,21 +258,47 @@ int main(int argc, char **argv)
                 void* literal_matrix_size   = *(void**)(&matrixSize);
                 void* literal_i             = *(void**)(&i);
 
-                map_data_entry_t* args = (map_data_entry_t*) malloc(5*sizeof(map_data_entry_t));
-                args[0] = map_data_entry_t(A, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
-                args[1] = map_data_entry_t(B, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
-                args[2] = map_data_entry_t(C, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
-                args[3] = map_data_entry_t(literal_matrix_size, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
-                args[4] = map_data_entry_t(literal_i, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
-                
-                int32_t res = chameleon_add_task_manual((void *)&matrixMatrixKernel, 5, args);
+                chameleon_map_data_entry_t* args = new chameleon_map_data_entry_t[5];
+                args[0] = chameleon_map_data_entry_t(A, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                args[1] = chameleon_map_data_entry_t(B, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                args[2] = chameleon_map_data_entry_t(C, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
+                args[3] = chameleon_map_data_entry_t(literal_matrix_size, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                args[4] = chameleon_map_data_entry_t(literal_i, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
 
-#if CHECK_GENERATED_TASK_ID
+#if USE_TASK_ANNOTATIONS
+                chameleon_annotations_t* annotations = chameleon_create_annotation_container();
+                chameleon_set_annotation_int(annotations, "Int", 42);
+                chameleon_set_annotation_double(annotations, "Dbl", 42.1345);
+                chameleon_set_annotation_string(annotations, "Str", "Test123");
+                int32_t res = chameleon_add_task_manual_w_annotations((void *)&matrixMatrixKernel, 5, args, annotations);
+#else
+                int32_t res = chameleon_add_task_manual((void *)&matrixMatrixKernel, 5, args);
+#endif
+                // clean up again
+                delete[] args;
+
+                // get the id of the last task added
                 int32_t last_t_id = chameleon_get_last_local_task_id_added();
+                
+#if CHECK_GENERATED_TASK_ID
                 printf("#R%d (OS_TID:%ld): last task that has been created: %d\n", iMyRank, syscall(SYS_gettid), last_t_id);
                 mtx_t_ids.lock();
                 t_ids.push_back(last_t_id);
                 mtx_t_ids.unlock();
+#endif
+#if USE_TASK_ANNOTATIONS
+                chameleon_annotations_t* tmp_annotations = chameleon_get_task_annotations(last_t_id);
+                int     found = 0; 
+                int     val_annotation_int;
+                double  val_annotation_dbl;
+                char*   val_annotation_string;
+                
+                found = chameleon_get_annotation_int(tmp_annotations, "Int", &val_annotation_int);
+                assert(found == 1 && val_annotation_int == 42);
+                found = chameleon_get_annotation_double(tmp_annotations, "Dbl", &val_annotation_dbl);
+                assert(found == 1 && val_annotation_dbl == 42.1345);
+                found = chameleon_get_annotation_string(tmp_annotations, "Str", &val_annotation_string);
+                assert(found == 1 && strcmp("Test123", val_annotation_string) == 0);
 #endif
     		}
 
@@ -326,22 +348,16 @@ int main(int argc, char **argv)
     fTimeStart=MPI_Wtime();
     #pragma omp parallel
     {
-    	// if(iMyRank==0) {
 		#pragma omp for
-    		for(int i=0; i<numberOfTasks; i++) {
-				double *A = matrices_a[i];
-		        double *B = matrices_b[i];
-		        double *C = matrices_c[i];	
-                #pragma omp target map(tofrom: C[0:matrixSize*matrixSize]) map(to:matrixSize, A[0:matrixSize*matrixSize], B[0:matrixSize*matrixSize]) device(1001)
-				{
-					//check_test_matrix(A, 1, matrixSize);
-					//check_test_matrix(B, 1, matrixSize);
-					//check_test_matrix(C, 0, matrixSize);
-					compute_matrix_matrix(A, B, C, matrixSize);
-					//check_test_matrix(C, MATRIX_SIZE);
-				}
-				//LOG(iMyRank, "offloading to chameleon");
-    		}
+        for(int i=0; i<numberOfTasks; i++) {
+            double *A = matrices_a[i];
+            double *B = matrices_b[i];
+            double *C = matrices_c[i];	
+            #pragma omp target map(tofrom: C[0:matrixSize*matrixSize]) map(to:matrixSize, A[0:matrixSize*matrixSize], B[0:matrixSize*matrixSize]) device(1001)
+            {
+                compute_matrix_matrix(A, B, C, matrixSize);
+            }
+        }
     }
     MPI_Barrier(MPI_COMM_WORLD);
     fTimeEnd=MPI_Wtime();
@@ -351,6 +367,7 @@ int main(int argc, char **argv)
         printf("#R%d: This corresponds to a speedup of %.2f!\n", iMyRank, wTimeHost/wTimeCham);
     }
     LOG(iMyRank, "Validation:");
+    pass = true;
     if(numberOfTasks>0) {
         for(int t=0; t<numberOfTasks; t++) {
             pass &= check_test_matrix(matrices_c[t], matrixSize, matrixSize);
@@ -380,6 +397,5 @@ int main(int argc, char **argv)
     }
     chameleon_finalize();
     MPI_Finalize();
-//#endif
     return 0;
 }
