@@ -259,11 +259,11 @@ int main(int argc, char **argv)
                 void* literal_i             = *(void**)(&i);
 
                 chameleon_map_data_entry_t* args = new chameleon_map_data_entry_t[5];
-                args[0] = chameleon_map_data_entry_t(A, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
-                args[1] = chameleon_map_data_entry_t(B, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
-                args[2] = chameleon_map_data_entry_t(C, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
-                args[3] = chameleon_map_data_entry_t(literal_matrix_size, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
-                args[4] = chameleon_map_data_entry_t(literal_i, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                args[0] = chameleon_map_data_entry_init(A, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                args[1] = chameleon_map_data_entry_init(B, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                args[2] = chameleon_map_data_entry_init(C, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
+                args[3] = chameleon_map_data_entry_init(literal_matrix_size, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                args[4] = chameleon_map_data_entry_init(literal_i, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
 
 #if USE_TASK_ANNOTATIONS
                 chameleon_annotations_t* annotations = chameleon_create_annotation_container();
