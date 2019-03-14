@@ -23,6 +23,7 @@ static cham_t_get_callback_t cham_t_get_callback;
 static cham_t_get_rank_data_t cham_t_get_rank_data;
 static cham_t_get_thread_data_t cham_t_get_thread_data;
 static cham_t_get_rank_info_t cham_t_get_rank_info;
+static cham_t_get_task_data_t cham_t_get_task_data;
 
 // sample struct to save some information for a task
 typedef struct my_task_data_t {
@@ -151,7 +152,7 @@ static void *
 on_cham_t_callback_encode_task_tool_data(
     cham_migratable_task_t *task,
     cham_t_data_t *task_data,    
-    size_t *size) 
+    int32_t *size) 
 {
     TYPE_TASK_ID internal_task_id    = chameleon_get_task_id(task);
     printf("on_cham_t_callback_encode_task_tool_data ==> task_id=%" PRIu64 "\n", internal_task_id);
@@ -172,8 +173,8 @@ on_cham_t_callback_encode_task_tool_data(
     cur_buf += sizeof(TYPE_TASK_ID);
 
     // set data size
-    ((size_t *) cur_buf)[0] = cur_task_data->size_data;
-    cur_buf += sizeof(size_t);
+    ((int32_t *) cur_buf)[0] = cur_task_data->size_data;
+    cur_buf += sizeof(int32_t);
 
     // copy data
     memcpy(cur_buf, cur_task_data->sample_data, cur_task_data->size_data * sizeof(double));
@@ -185,7 +186,7 @@ on_cham_t_callback_decode_task_tool_data(
     cham_migratable_task_t *task,
     cham_t_data_t *task_data,
     void *buffer,
-    size_t size)
+    int32_t size)
 {
     TYPE_TASK_ID internal_task_id    = chameleon_get_task_id(task);
     printf("on_cham_t_callback_decode_task_tool_data ==> task_id=%" PRIu64 "\n", internal_task_id);
@@ -198,8 +199,8 @@ on_cham_t_callback_decode_task_tool_data(
     cur_buf += sizeof(TYPE_TASK_ID);
 
     // size of sample data
-    cur_task_data->size_data        = ((size_t *) cur_buf)[0];
-    cur_buf += sizeof(size_t);
+    cur_task_data->size_data        = ((int32_t *) cur_buf)[0];
+    cur_buf += sizeof(int32_t);
 
     // sample data
     cur_task_data->sample_data      = (double*) malloc(cur_task_data->size_data * sizeof(double));
@@ -298,6 +299,22 @@ on_cham_t_callback_select_num_tasks_to_offload(
     }
 }
 
+static cham_t_migration_tupel_t*
+on_cham_t_callback_select_tasks_for_migration(
+    const int32_t* load_info_per_rank,
+    TYPE_TASK_ID* task_ids_local,
+    int32_t num_ids_local,
+    int32_t* num_tuples)
+{
+    cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
+    printf("on_cham_t_callback_select_tasks_for_migration ==> comm_rank=%d;comm_size=%d;load_info_per_rank=" DPxMOD ";task_ids_local=" DPxMOD ";num_ids_local=%d\n", r_info->comm_rank, r_info->comm_size, DPxPTR(load_info_per_rank), DPxPTR(task_ids_local), num_ids_local);
+
+    // cham_t_migration_tupel_t* task_migration_tuples = malloc(20*sizeof(cham_t_migration_tupel_t));
+    cham_t_migration_tupel_t* task_migration_tuples = NULL;
+    num_tuples = 0;
+    return task_migration_tuples;
+}
+
 #define register_callback_t(name, type)                                         \
 do{                                                                             \
     type f_##name = &on_##name;                                                 \
@@ -316,6 +333,7 @@ int cham_t_initialize(
     cham_t_get_rank_data = (cham_t_get_rank_data_t) lookup("cham_t_get_rank_data");
     cham_t_get_thread_data = (cham_t_get_thread_data_t) lookup("cham_t_get_thread_data");
     cham_t_get_rank_info = (cham_t_get_rank_info_t) lookup("cham_t_get_rank_info");
+    cham_t_get_task_data = (cham_t_get_task_data_t) lookup("cham_t_get_task_data");
 
     // cham_t_get_unique_id = (cham_t_get_unique_id_t) lookup("cham_t_get_unique_id");
     // cham_t_get_num_procs = (cham_t_get_num_procs_t) lookup("cham_t_get_num_procs");
@@ -363,6 +381,7 @@ int cham_t_initialize(
     register_callback(cham_t_callback_sync_region);
     register_callback(cham_t_callback_determine_local_load);
     register_callback(cham_t_callback_select_num_tasks_to_offload);
+    register_callback(cham_t_callback_select_tasks_for_migration);
 
     cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
     cham_t_data_t * r_data      = cham_t_get_rank_data();
