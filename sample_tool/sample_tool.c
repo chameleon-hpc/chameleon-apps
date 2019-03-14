@@ -100,6 +100,10 @@ on_cham_t_callback_task_create(
         cur_task_data->sample_data[i] = internal_task_id;
     }    
     task_data->ptr                  = (void*) cur_task_data;
+
+    // late equipment of task with annotations
+    chameleon_annotations_t* ann = chameleon_get_task_annotations_opaque(task);
+    chameleon_set_annotation_int(ann, "TID", (int)internal_task_id);
     
     // access data containers for current rank and current thread
     cham_t_data_t * rank_data       = cham_t_get_rank_data();
@@ -309,9 +313,88 @@ on_cham_t_callback_select_tasks_for_migration(
     cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
     printf("on_cham_t_callback_select_tasks_for_migration ==> comm_rank=%d;comm_size=%d;load_info_per_rank=" DPxMOD ";task_ids_local=" DPxMOD ";num_ids_local=%d\n", r_info->comm_rank, r_info->comm_size, DPxPTR(load_info_per_rank), DPxPTR(task_ids_local), num_ids_local);
 
-    // cham_t_migration_tupel_t* task_migration_tuples = malloc(20*sizeof(cham_t_migration_tupel_t));
+    if(num_ids_local > 0) {
+        TYPE_TASK_ID tmp_id = task_ids_local[0];
+
+        // query/access task tool data
+        cham_t_data_t *tmp_task_data = cham_t_get_task_data(tmp_id);
+        // task is still present if valid pointer returns here
+        if(tmp_task_data) {
+            my_task_data_t* my_data = (my_task_data_t*)tmp_task_data->ptr;
+            assert(tmp_id == my_data->task_id);
+        }
+
+        // query/access annotations
+        chameleon_annotations_t* ann = chameleon_get_task_annotations(tmp_id);
+        int tmp_validation_id;
+        int found = chameleon_get_annotation_int(ann, "TID", &tmp_validation_id);
+        assert(found == 1 && tmp_validation_id == (int)tmp_id);
+    }
+
     cham_t_migration_tupel_t* task_migration_tuples = NULL;
-    num_tuples = 0;
+    *num_tuples = 0;
+
+    if(num_ids_local > 0) {
+        task_migration_tuples = malloc(sizeof(cham_t_migration_tupel_t));
+    
+        // Sort rank loads and keep track of indices
+        int tmp_sorted_array[r_info->comm_size][2];
+        int i;
+        for (i = 0; i < r_info->comm_size; i++)
+        {
+            tmp_sorted_array[i][0] = load_info_per_rank[i];
+            tmp_sorted_array[i][1] = i;
+        }
+
+        // for(i = 0; i < r_info->comm_size;++i)
+        //     printf("%2d, %2d\n", tmp_sorted_array[i][0], tmp_sorted_array[i][1]);
+
+        qsort(tmp_sorted_array, r_info->comm_size, sizeof tmp_sorted_array[0], compare);
+
+        // for(i = 0; i < r_info->comm_size;++i)
+        //     printf("%2d, %2d\n", tmp_sorted_array[i][0], tmp_sorted_array[i][1]);
+
+        int min_val = load_info_per_rank[tmp_sorted_array[0][1]];
+        int max_val = load_info_per_rank[tmp_sorted_array[r_info->comm_size-1][1]];
+        
+        int load_this_rank = load_info_per_rank[r_info->comm_rank];
+        
+        if(max_val > min_val) {
+            int pos = 0;
+            for(i = 0; i < r_info->comm_size; i++) {
+                if(tmp_sorted_array[i][1] == r_info->comm_rank) {
+                    pos = i;
+                    break;
+                }
+            }
+
+            // only offload if on the upper side
+            if((pos+1) >= ((double)r_info->comm_size/2.0))
+            {
+                int other_pos = r_info->comm_size-pos;
+                // need to adapt in case of even number
+                if(r_info->comm_size % 2 == 0)
+                    other_pos--;
+                int other_idx = tmp_sorted_array[other_pos][1];
+                int other_val = load_info_per_rank[other_idx];
+
+                // calculate ration between those two and just move if over a certain threshold
+                double ratio = (double)(load_this_rank-other_val) / (double)load_this_rank;
+                if(other_val < load_this_rank && ratio > 0.5) {
+                    
+                    task_migration_tuples[0].task_id = task_ids_local[0];
+                    task_migration_tuples[0].rank_id = other_idx;
+                    *num_tuples = 1;
+                }
+            }
+        }
+
+        if(*num_tuples <= 0)
+        {
+            free(task_migration_tuples);
+            task_migration_tuples = NULL;
+        }
+    }
     return task_migration_tuples;
 }
 
@@ -380,8 +463,11 @@ int cham_t_initialize(
     register_callback(cham_t_callback_decode_task_tool_data);
     register_callback(cham_t_callback_sync_region);
     register_callback(cham_t_callback_determine_local_load);
-    register_callback(cham_t_callback_select_num_tasks_to_offload);
+
+    // Priority is cham_t_callback_select_tasks_for_migration (fine-grained)
+    // if not registered cham_t_callback_select_num_tasks_to_offload is used (coarse-grained)
     register_callback(cham_t_callback_select_tasks_for_migration);
+    register_callback(cham_t_callback_select_num_tasks_to_offload);
 
     cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
     cham_t_data_t * r_data      = cham_t_get_rank_data();
