@@ -129,6 +129,12 @@ on_cham_t_callback_task_schedule(
     cham_t_task_flag_t_value(task_flag, val_task_flag);
     cham_t_task_flag_t_value(prior_task_flag, val_prior_task_flag);
 
+    // validate that every task (also migrated tasks) keeps annotations
+    chameleon_annotations_t* ann = chameleon_get_task_annotations_opaque(task);
+    int tmp_validation_id;
+    int found = chameleon_get_annotation_int(ann, "TID", &tmp_validation_id);
+    assert(found == 1 && tmp_validation_id == (int)internal_task_id);
+
     if(prior_task_data) {
         TYPE_TASK_ID prior_internal_task_id    = chameleon_get_task_id(prior_task);
         printf("on_cham_t_callback_task_schedule ==> schedule_type=%s;task_id=%" PRIu64 ";task_flag=%s;task_data=" DPxMOD ";prior_task_id=%" PRIu64 ";prior_task_flag=%s;prior_task_data=" DPxMOD "\n", cham_t_task_schedule_type_t_values[schedule_type], internal_task_id, val_task_flag, DPxPTR(task_data->ptr), prior_internal_task_id, val_prior_task_flag, DPxPTR(prior_task_data->ptr));
