@@ -5,11 +5,15 @@
 
 void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, double *C[nt], int *block_rank)
 {
-#ifdef CHAMELEON
+#if defined(CHAMELEON) || defined(CHAMELEON_MANUAL)
     #pragma omp parallel
     {
     chameleon_thread_init();
     }
+#ifdef CHAMELEON_MANUAL
+    // necessary to be aware of binary base addresses to calculate offset for target entry functions
+    chameleon_determine_base_addresses((void *)&cholesky_mpi);
+#endif
 #endif
 
 #ifdef USE_TIMING
@@ -73,6 +77,8 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
             }
         }
 
+        void* literal_ts            = *(void**)(&ts);
+
         // temporary pointers to be able to define slices for offloading
         #pragma omp for nowait
         for (int i = k + 1; i < nt; i++) {
@@ -86,6 +92,14 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                         // printf("In Task: AKK = " DPxMOD ", AKI = " DPxMOD "\n", DPxPTR(tmp_a_k_k), DPxPTR(tmp_a_k_i));
                         omp_trsm(tmp_a_k_k, tmp_a_k_i, ts, ts);
                     }
+#elif CHAMELEON_MANUAL
+                    chameleon_map_data_entry_t* args = (chameleon_map_data_entry_t*) malloc(4*sizeof(chameleon_map_data_entry_t));
+                    args[0] = chameleon_map_data_entry_create(tmp_a_k_k, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                    args[1] = chameleon_map_data_entry_create(tmp_a_k_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
+                    args[2] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                    args[3] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                    int32_t res = chameleon_add_task_manual((void *)&omp_trsm, 4, args);
+                    free(args);
 #else
                     #pragma omp task
                     {
@@ -102,6 +116,14 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                         // printf("In Task: B = " DPxMOD ", AKI = " DPxMOD "\n", DPxPTR(B), DPxPTR(tmp_a_k_i));
                         omp_trsm(B, tmp_a_k_i, ts, ts);
                     }
+#elif CHAMELEON_MANUAL
+                    chameleon_map_data_entry_t* args = (chameleon_map_data_entry_t*) malloc(4*sizeof(chameleon_map_data_entry_t));
+                    args[0] = chameleon_map_data_entry_create(B, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                    args[1] = chameleon_map_data_entry_create(tmp_a_k_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
+                    args[2] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                    args[3] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                    int32_t res = chameleon_add_task_manual((void *)&omp_trsm, 4, args);
+                    free(args);
 #else
                     #pragma omp task
                     {
@@ -181,7 +203,7 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
 #if PRINT_DEBUG
                 my_print("Iteration [%03d][%03d]\tR#%d T#%d (OS_TID:%ld): --> 3 Comm finished\n", k, i,mype, omp_get_thread_num(), syscall(SYS_gettid));
 #endif
-#ifdef CHAMELEON
+#if defined(CHAMELEON) || defined(CHAMELEON_MANUAL)
                 // temporary pointers to be able to define slices for offloading
                 double * SPEC_RESTRICT tmp_a_k_i   = A[k][i];
                 double * SPEC_RESTRICT tmp_a_i_i   = A[i][i];
@@ -190,7 +212,7 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                 {
                 START_TIMING(TIME_CREATE);
                 for (int j = k + 1; j < i; j++) {
-#ifdef CHAMELEON
+#if defined(CHAMELEON) || defined(CHAMELEON_MANUAL)
                     // temporary pointers to be able to define slices for offloading
                     double *tmp_a_k_j   = A[k][j];
                     double *tmp_a_j_i   = A[j][i];
@@ -203,6 +225,15 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                             {
                                 omp_gemm(tmp_a_k_i, tmp_a_k_j, tmp_a_j_i, ts, ts);
                             }
+#elif CHAMELEON_MANUAL
+                            chameleon_map_data_entry_t* args = (chameleon_map_data_entry_t*) malloc(5*sizeof(chameleon_map_data_entry_t));
+                            args[0] = chameleon_map_data_entry_create(tmp_a_k_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                            args[1] = chameleon_map_data_entry_create(tmp_a_k_j, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                            args[2] = chameleon_map_data_entry_create(tmp_a_j_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
+                            args[3] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                            args[4] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                            int32_t res = chameleon_add_task_manual((void *)&omp_gemm, 5, args);
+                            free(args);
 #else
                             #pragma omp task
                             {
@@ -215,6 +246,15 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                             {
                                 omp_gemm(tmp_c_i, tmp_a_k_j, tmp_a_j_i, ts, ts);
                             }
+#elif CHAMELEON_MANUAL
+                            chameleon_map_data_entry_t* args = (chameleon_map_data_entry_t*) malloc(5*sizeof(chameleon_map_data_entry_t));
+                            args[0] = chameleon_map_data_entry_create(tmp_c_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                            args[1] = chameleon_map_data_entry_create(tmp_a_k_j, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                            args[2] = chameleon_map_data_entry_create(tmp_a_j_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
+                            args[3] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                            args[4] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                            int32_t res = chameleon_add_task_manual((void *)&omp_gemm, 5, args);
+                            free(args);
 #else
                             #pragma omp task
                             {
@@ -227,6 +267,15 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                             {
                                 omp_gemm(tmp_a_k_i, tmp_c_j, tmp_a_j_i, ts, ts);
                             }
+#elif CHAMELEON_MANUAL
+                            chameleon_map_data_entry_t* args = (chameleon_map_data_entry_t*) malloc(5*sizeof(chameleon_map_data_entry_t));
+                            args[0] = chameleon_map_data_entry_create(tmp_a_k_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                            args[1] = chameleon_map_data_entry_create(tmp_c_j, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                            args[2] = chameleon_map_data_entry_create(tmp_a_j_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
+                            args[3] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                            args[4] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                            int32_t res = chameleon_add_task_manual((void *)&omp_gemm, 5, args);
+                            free(args);
 #else
                             #pragma omp task
                             {
@@ -239,6 +288,15 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                             {
                                 omp_gemm(tmp_c_i, tmp_c_j, tmp_a_j_i, ts, ts);
                             }
+#elif CHAMELEON_MANUAL
+                            chameleon_map_data_entry_t* args = (chameleon_map_data_entry_t*) malloc(5*sizeof(chameleon_map_data_entry_t));
+                            args[0] = chameleon_map_data_entry_create(tmp_c_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                            args[1] = chameleon_map_data_entry_create(tmp_c_j, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                            args[2] = chameleon_map_data_entry_create(tmp_a_j_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
+                            args[3] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                            args[4] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                            int32_t res = chameleon_add_task_manual((void *)&omp_gemm, 5, args);
+                            free(args);
 #else
                             #pragma omp task
                             {
@@ -251,7 +309,6 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
 #if PRINT_DEBUG
                 my_print("Iteration [%03d][%03d]\tR#%d T#%d (OS_TID:%ld): --> 4 Gemm Tasks created\n", k, i,mype, omp_get_thread_num(), syscall(SYS_gettid));
 #endif
-
                 if (block_rank[i*nt+i] == mype) {
                     if (block_rank[k*nt+i] == mype) {
 #ifdef CHAMELEON
@@ -259,6 +316,14 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                         {
                             omp_syrk(tmp_a_k_i, tmp_a_i_i, ts, ts);
                         }
+#elif CHAMELEON_MANUAL
+                        chameleon_map_data_entry_t* args = (chameleon_map_data_entry_t*) malloc(4*sizeof(chameleon_map_data_entry_t));
+                        args[0] = chameleon_map_data_entry_create(tmp_a_k_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
+                        args[1] = chameleon_map_data_entry_create(tmp_a_i_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                        args[2] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                        args[3] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                        int32_t res = chameleon_add_task_manual((void *)&omp_syrk, 4, args);
+                        free(args);
 #else
                         #pragma omp task
                         {
@@ -271,6 +336,14 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                         {
                             omp_syrk(tmp_c_i, tmp_a_i_i, ts, ts);
                         }
+#elif CHAMELEON_MANUAL
+                        chameleon_map_data_entry_t* args = (chameleon_map_data_entry_t*) malloc(4*sizeof(chameleon_map_data_entry_t));
+                        args[0] = chameleon_map_data_entry_create(tmp_c_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
+                        args[1] = chameleon_map_data_entry_create(tmp_a_i_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                        args[2] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                        args[3] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                        int32_t res = chameleon_add_task_manual((void *)&omp_syrk, 4, args);
+                        free(args);
 #else
                         #pragma omp task
                         {
@@ -289,13 +362,20 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
 #if PRINT_DEBUG
         my_print("Iteration [%03d][998]\tR#%d T#%d (OS_TID:%ld): --> 6 Proceeding to chameleon_distributed_taskwait(...)/barrier\n", k, mype, omp_get_thread_num(), syscall(SYS_gettid));
 #endif
-#ifdef CHAMELEON
+#if defined(CHAMELEON) || defined(CHAMELEON_MANUAL)
         chameleon_distributed_taskwait(0);
 #else
         #pragma omp barrier
 #endif
 #if PRINT_DEBUG
         my_print("Iteration [%03d][999]\tR#%d T#%d (OS_TID:%ld): --> 7 Finished chameleon_distributed_taskwait(...)/barrier\n", k, mype, omp_get_thread_num(), syscall(SYS_gettid));
+#endif
+#if !defined(CHAMELEON) && !defined(CHAMELEON_MANUAL)
+        #pragma omp master
+        {
+        PRINT_INTERMEDIATE_TIMINGS(omp_get_num_threads());
+        }
+        #pragma omp barrier
 #endif
     }
 } /* end omp parallel */
@@ -307,10 +387,9 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
 
 	FREE_TIMING();
 
-#ifdef CHAMELEON
+#if defined(CHAMELEON) || defined(CHAMELEON_MANUAL)
     chameleon_finalize();
 #endif
-
     free(send_flags);
 }
 

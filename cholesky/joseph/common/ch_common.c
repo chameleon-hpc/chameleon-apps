@@ -19,14 +19,14 @@ static void get_block_rank(int *block_rank, int nt);
 #endif
 void omp_potrf(double * SPEC_RESTRICT const A, int ts, int ld)
 {
-#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON)
+#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON) && !defined(CHAMELEON_MANUAL)
     cnt_pdotrf++;
     START_TIMING(TIME_POTRF);
 #endif
     static int INFO;
     static const char L = 'L';
     dpotrf_(&L, &ts, A, &ld, &INFO);
-#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON)
+#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON) && !defined(CHAMELEON_MANUAL)
     END_TIMING(TIME_POTRF);
 #endif
 }
@@ -36,14 +36,14 @@ void omp_potrf(double * SPEC_RESTRICT const A, int ts, int ld)
 #endif
 void omp_trsm(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, int ts, int ld)
 {
-#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON)
+#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON) && !defined(CHAMELEON_MANUAL)
     cnt_trsm++;
     START_TIMING(TIME_TRSM);
 #endif
     static char LO = 'L', TR = 'T', NU = 'N', RI = 'R';
     static double DONE = 1.0;
     dtrsm_(&RI, &LO, &TR, &NU, &ts, &ts, &DONE, A, &ld, B, &ld );
-#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON)
+#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON) && !defined(CHAMELEON_MANUAL)
     END_TIMING(TIME_TRSM);
 #endif
 }
@@ -53,14 +53,14 @@ void omp_trsm(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, int ts, int ld
 #endif
 void omp_gemm(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, double * SPEC_RESTRICT C, int ts, int ld)
 {
-#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON)
+#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON) && !defined(CHAMELEON_MANUAL)
     cnt_gemm++;
     START_TIMING(TIME_GEMM);
 #endif
     static const char TR = 'T', NT = 'N';
     static double DONE = 1.0, DMONE = -1.0;
     dgemm_(&NT, &TR, &ts, &ts, &ts, &DMONE, A, &ld, B, &ld, &DONE, C, &ld);
-#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON)
+#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON) && !defined(CHAMELEON_MANUAL)
     END_TIMING(TIME_GEMM);
 #endif
 }
@@ -70,14 +70,14 @@ void omp_gemm(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, double * SPEC_
 #endif
 void omp_syrk(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, int ts, int ld)
 {
-#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON)
+#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON) && !defined(CHAMELEON_MANUAL)
     cnt_syrk++;
     START_TIMING(TIME_SYRK);
 #endif
     static char LO = 'L', NT = 'N';
     static double DONE = 1.0, DMONE = -1.0;
     dsyrk_(&LO, &NT, &ts, &ts, &DMONE, A, &ld, &DONE, B, &ld );
-#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON)
+#if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON) && !defined(CHAMELEON_MANUAL)
     END_TIMING(TIME_SYRK);
 #endif
 }
@@ -139,7 +139,7 @@ inline void wait(MPI_Request *comm_req)
 
     MPI_Test(comm_req, &comm_comp, MPI_STATUS_IGNORE);
     while (!comm_comp) {
-#ifdef CHAMELEON
+#if defined(CHAMELEON) || defined(CHAMELEON_MANUAL)
     int32_t res = chameleon_taskyield();
 #else
 #pragma omp taskyield

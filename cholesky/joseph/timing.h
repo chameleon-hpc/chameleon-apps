@@ -44,6 +44,23 @@ perthread_timing_t *__timing;
     printf("[%d] potrf:%f:trsm:%f:gemm:%f:syrk:%f:comm:%f:create:%f:total:%f:wall:%f\n", mype, acc_timings.ts[TIME_POTRF], acc_timings.ts[TIME_TRSM],acc_timings.ts[TIME_GEMM],acc_timings.ts[TIME_SYRK],acc_timings.ts[TIME_COMM],acc_timings.ts[TIME_CREATE],acc_timings.ts[TIME_TOTAL], acc_timings.ts[TIME_TOTAL]*nthreads); \
   } while(0)
 
+#define PRINT_INTERMEDIATE_TIMINGS(nthreads) do { \
+    perthread_timing_t acc_timings; \
+    ACCUMULATE_TIMINGS(nthreads, acc_timings); \
+    double exec_time = acc_timings.ts[TIME_POTRF] + acc_timings.ts[TIME_TRSM] + acc_timings.ts[TIME_GEMM] + acc_timings.ts[TIME_SYRK]; \
+    double *rec_buffer; \
+    if (mype==0) rec_buffer = (double*) malloc(sizeof(double)*np); \
+    /*else         MPI_Reduce(acc_timings.ts, NULL, TIME_CNT, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);*/ \
+    MPI_Gather(&exec_time, 1, MPI_DOUBLE, rec_buffer, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD); \
+    if (mype==0) { \
+    printf("Intermediate Timings:\t"); \
+    int i; \
+    for(i = 0; i < np; i++) { printf("%f\t", rec_buffer[i]); } \
+    printf("\n"); \
+    free(rec_buffer); \
+    } \
+  } while(0)
+
 #define FREE_TIMING() free(__timing)
 
 #define THREAD_NUM omp_get_thread_num()
@@ -64,6 +81,7 @@ static double timestamp(){
 #define ACCUMULATE_TIMINGS(nthreads, dst)
 #define RESET_TIMINGS(nthreads)
 #define PRINT_TIMINGS(nthreads)
+#define PRINT_INTERMEDIATE_TIMINGS(nthreads)
 #endif
 
 #endif // _BENCH_CHOLESKY_TIMING_
