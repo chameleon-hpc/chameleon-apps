@@ -20,6 +20,6 @@ do
 
   # make corresponding targets
   TARGET=${target} make -C pure-parallel clean all
-  TARGET=${target} make -C singlecom-deps clean all
-  TARGET=${target} make -C fine-deps clean all
+  #TARGET=${target} make -C singlecom-deps clean all
+  #TARGET=${target} make -C fine-deps clean all
 done
