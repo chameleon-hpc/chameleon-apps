@@ -79,8 +79,7 @@ inline static void waitall(MPI_Request *comm_req, int n)
     MPI_Testall(n, comm_req, &flag, MPI_STATUSES_IGNORE);
     if (flag) break;
     (void)flag; // <-- make the Cray compiler happy
-
-#ifdef CHAMELEON
+#if defined(CHAMELEON) || defined(CHAMELEON_MANUAL)
     int32_t res = chameleon_taskyield();
 #else
 #pragma omp taskyield
