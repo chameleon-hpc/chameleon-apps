@@ -6,7 +6,10 @@
 void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, double *C[nt], int *block_rank)
 {
 #ifdef CHAMELEON
-    chameleon_init();
+    #pragma omp parallel
+    {
+    chameleon_thread_init();
+    }
 #endif
 
 #ifdef USE_TIMING
@@ -77,15 +80,12 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                 if (block_rank[k*nt+k] == mype) {
                     double * SPEC_RESTRICT tmp_a_k_k = A[k][k];
                     double * SPEC_RESTRICT tmp_a_k_i = A[k][i];
-                    // printf("R#%d T#%d (OS_TID:%ld): --> Before Task: AKK = " DPxMOD ", AKI = " DPxMOD "\n", mype, omp_get_thread_num(), syscall(SYS_gettid), DPxPTR(tmp_a_k_k), DPxPTR(tmp_a_k_i));
 #ifdef CHAMELEON
                     #pragma omp target map(to: tmp_a_k_k[0:ts*ts]) map(tofrom: tmp_a_k_i[0:ts*ts]) device(1002)
                     {
                         // printf("In Task: AKK = " DPxMOD ", AKI = " DPxMOD "\n", DPxPTR(tmp_a_k_k), DPxPTR(tmp_a_k_i));
                         omp_trsm(tmp_a_k_k, tmp_a_k_i, ts, ts);
                     }
-#elif CHAMELEON_MANUAL
-                    
 #else
                     #pragma omp task
                     {
@@ -286,14 +286,16 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                 }
             }
         }
-#ifdef CHAMELEON
 #if PRINT_DEBUG
-        my_print("Iteration [%03d][998]\tR#%d T#%d (OS_TID:%ld): --> 6 Proceeding to chameleon_distributed_taskwait(...)\n", k, mype, omp_get_thread_num(), syscall(SYS_gettid));
+        my_print("Iteration [%03d][998]\tR#%d T#%d (OS_TID:%ld): --> 6 Proceeding to chameleon_distributed_taskwait(...)/barrier\n", k, mype, omp_get_thread_num(), syscall(SYS_gettid));
 #endif
+#ifdef CHAMELEON
         chameleon_distributed_taskwait(0);
-#if PRINT_DEBUG        
-        my_print("Iteration [%03d][999]\tR#%d T#%d (OS_TID:%ld): --> 7 Finished chameleon_distributed_taskwait(...)\n", k, mype, omp_get_thread_num(), syscall(SYS_gettid));
+#else
+        #pragma omp barrier
 #endif
+#if PRINT_DEBUG
+        my_print("Iteration [%03d][999]\tR#%d T#%d (OS_TID:%ld): --> 7 Finished chameleon_distributed_taskwait(...)/barrier\n", k, mype, omp_get_thread_num(), syscall(SYS_gettid));
 #endif
     }
 } /* end omp parallel */

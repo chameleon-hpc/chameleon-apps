@@ -255,12 +255,15 @@ int main(int argc, char *argv[])
     for (int j = 0; j < nt; j++) {
 #pragma omp task depend(out: A[i][j]) shared(Ans, A)
 {
+      int error;
       if (check) {
-        MPI_Alloc_mem(ts * ts * sizeof(double), MPI_INFO_NULL, &Ans[i][j]);
+        error = MPI_Alloc_mem(ts * ts * sizeof(double), MPI_INFO_NULL, &Ans[i][j]);
+        assert(error == MPI_SUCCESS);
         initialize_tile(ts, Ans[i][j]);
       }
       if (block_rank[i*nt+j] == mype) {
-        MPI_Alloc_mem(ts * ts * sizeof(double), MPI_INFO_NULL, &A[i][j]);
+        error = MPI_Alloc_mem(ts * ts * sizeof(double), MPI_INFO_NULL, &A[i][j]);
+        assert(error == MPI_SUCCESS);
         if (!check) {
           initialize_tile(ts, A[i][j]);
         } else {
