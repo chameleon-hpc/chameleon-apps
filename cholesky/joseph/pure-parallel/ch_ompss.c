@@ -23,7 +23,9 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
 #pragma omp parallel
 {
     for (int k = 0; k < nt; k++) {
+#if PRINT_DEBUG
         my_print("Iteration [%03d][000]\tR#%d T#%d (OS_TID:%ld): --> 0 Starting new loop iter\n", k, mype, omp_get_thread_num(), syscall(SYS_gettid));
+#endif
         if (block_rank[k*nt+k] == mype) {
             #pragma omp single 
             {
@@ -69,58 +71,64 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
         }
 
         // temporary pointers to be able to define slices for offloading
-        #pragma omp for
+        #pragma omp for nowait
         for (int i = k + 1; i < nt; i++) {
             if (block_rank[k*nt+i] == mype) {
                 if (block_rank[k*nt+k] == mype) {
-                    double *tmp_a_k_k = A[k][k];
-                    double *tmp_a_k_i = A[k][i];
+                    double * SPEC_RESTRICT tmp_a_k_k = A[k][k];
+                    double * SPEC_RESTRICT tmp_a_k_i = A[k][i];
                     // printf("R#%d T#%d (OS_TID:%ld): --> Before Task: AKK = " DPxMOD ", AKI = " DPxMOD "\n", mype, omp_get_thread_num(), syscall(SYS_gettid), DPxPTR(tmp_a_k_k), DPxPTR(tmp_a_k_i));
-// #ifdef CHAMELEON
-//                     #pragma omp target map(to: tmp_a_k_k[0:ts*ts]) map(tofrom: tmp_a_k_i[0:ts*ts]) device(1002)
-//                     {
-//                         // printf("In Task: AKK = " DPxMOD ", AKI = " DPxMOD "\n", DPxPTR(tmp_a_k_k), DPxPTR(tmp_a_k_i));
-//                         omp_trsm(tmp_a_k_k, tmp_a_k_i, ts, ts);
-//                     }
-// #else
+#ifdef CHAMELEON
+                    #pragma omp target map(to: tmp_a_k_k[0:ts*ts]) map(tofrom: tmp_a_k_i[0:ts*ts]) device(1002)
+                    {
+                        // printf("In Task: AKK = " DPxMOD ", AKI = " DPxMOD "\n", DPxPTR(tmp_a_k_k), DPxPTR(tmp_a_k_i));
+                        omp_trsm(tmp_a_k_k, tmp_a_k_i, ts, ts);
+                    }
+#elif CHAMELEON_MANUAL
+                    
+#else
                     #pragma omp task
                     {
                         // printf("R#%d T#%d (OS_TID:%ld): --> In Task: AKK = " DPxMOD ", AKI = " DPxMOD "\n", mype, omp_get_thread_num(), syscall(SYS_gettid), DPxPTR(tmp_a_k_k), DPxPTR(tmp_a_k_i));
                         omp_trsm(tmp_a_k_k, tmp_a_k_i, ts, ts);
                     }
-// #endif
+#endif
                 } else {
-                    double *tmp_a_k_i   = A[k][i];
+                    double * SPEC_RESTRICT tmp_a_k_i   = A[k][i];
                     // printf("R#%d T#%d (OS_TID:%ld): --> Before Task: B = " DPxMOD ", AKI = " DPxMOD "\n", mype, omp_get_thread_num(), syscall(SYS_gettid), DPxPTR(B), DPxPTR(tmp_a_k_i));
-// #ifdef CHAMELEON
-//                     #pragma omp target map(to: B[0:ts*ts]) map(tofrom: tmp_a_k_i[0:ts*ts]) device(1002)
-//                     {
-//                         // printf("In Task: B = " DPxMOD ", AKI = " DPxMOD "\n", DPxPTR(B), DPxPTR(tmp_a_k_i));
-//                         omp_trsm(B, tmp_a_k_i, ts, ts);
-//                     }
-// #else
+#ifdef CHAMELEON
+                    #pragma omp target map(to: B[0:ts*ts]) map(tofrom: tmp_a_k_i[0:ts*ts]) device(1002)
+                    {
+                        // printf("In Task: B = " DPxMOD ", AKI = " DPxMOD "\n", DPxPTR(B), DPxPTR(tmp_a_k_i));
+                        omp_trsm(B, tmp_a_k_i, ts, ts);
+                    }
+#else
                     #pragma omp task
                     {
                         // printf("R#%d T#%d (OS_TID:%ld): --> In Task: B = " DPxMOD ", AKI = " DPxMOD "\n", mype, omp_get_thread_num(), syscall(SYS_gettid), DPxPTR(B), DPxPTR(tmp_a_k_i));
                         omp_trsm(B, tmp_a_k_i, ts, ts);
                     }
-// #endif
+#endif
                 }
             }
         }
 
-// #ifdef CHAMELEON
-//         chameleon_distributed_taskwait(1);
-// #endif
+#if defined(CHAMELEON) || defined(CHAMELEON_MANUAL)
+        chameleon_distributed_taskwait(0);
+#else
+        #pragma omp barrier
+#endif
 
-        #pragma omp single
+        #pragma omp single nowait
         {
-// #ifdef CHAMELEON
-//             // chameleon call to start/wake up communication threads
-//             chameleon_wake_up_comm_threads();
-// #endif
+#if defined(CHAMELEON) || defined(CHAMELEON_MANUAL)
+            // chameleon call to start/wake up communication threads
+            chameleon_wake_up_comm_threads();
+#endif
             for (int i = k + 1; i < nt; i++) {
+#if PRINT_DEBUG
                 my_print("Iteration [%03d][%03d]\tR#%d T#%d (OS_TID:%ld): --> 0 Begin\n", k, i, mype, omp_get_thread_num(), syscall(SYS_gettid));
+#endif
                 if (block_rank[k*nt+i] != mype) {
                     START_TIMING(TIME_COMM);
                     recv_flag = 0;
@@ -129,10 +137,15 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                     get_recv_flag(&recv_flag, block_rank, i, i, i, i, nt);
 
                     if (recv_flag) {
+#if PRINT_DEBUG
                         my_print("Iteration [%03d][%03d]\tR#%d T#%d (OS_TID:%ld): --> 1 Recieving from R#%d - Start\n", k, i,mype, omp_get_thread_num(), syscall(SYS_gettid), block_rank[k*nt+i]);
+#endif
+
                         MPI_Irecv(C[i], ts*ts, MPI_DOUBLE, block_rank[k*nt+i], k*nt+i, MPI_COMM_WORLD, &recv_req);
                         wait(&recv_req);
+#if PRINT_DEBUG
                         my_print("Iteration [%03d][%03d]\tR#%d T#%d (OS_TID:%ld): --> 2 Recieving from R#%d - zComplete\n", k, i,mype, omp_get_thread_num(), syscall(SYS_gettid), block_rank[k*nt+i]);
+#endif
                     }
                     END_TIMING(TIME_COMM);
                 } else {
@@ -148,7 +161,9 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                         int exec_wait = 0;
                         for (int dst = 0; dst < np; dst++) {
                             if (send_flags[dst] && dst != mype) {
+#if PRINT_DEBUG
                                 my_print("Iteration [%03d][%03d]\tR#%d T#%d (OS_TID:%ld): --> 1 Sending to R#%d - Start\n", k, i,mype, omp_get_thread_num(), syscall(SYS_gettid), dst);
+#endif                                
                                 exec_wait = 1;
                                 MPI_Isend(A[k][i], ts*ts, MPI_DOUBLE, dst, k*nt+i,
                                         MPI_COMM_WORLD, &send_reqs[send_cnt++]);
@@ -156,17 +171,21 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                         }
                         if(exec_wait) {
                             waitall(send_reqs, send_cnt);
+#if PRINT_DEBUG
                             my_print("Iteration [%03d][%03d]\tR#%d T#%d (OS_TID:%ld): --> 2 Sending zComplete\n", k, i,mype, omp_get_thread_num(), syscall(SYS_gettid));
+#endif
                         }
                     }
                     END_TIMING(TIME_COMM);
                 }
+#if PRINT_DEBUG
                 my_print("Iteration [%03d][%03d]\tR#%d T#%d (OS_TID:%ld): --> 3 Comm finished\n", k, i,mype, omp_get_thread_num(), syscall(SYS_gettid));
+#endif
 #ifdef CHAMELEON
                 // temporary pointers to be able to define slices for offloading
-                double *tmp_a_k_i   = A[k][i];
-                double *tmp_a_i_i   = A[i][i];
-                double *tmp_c_i     = C[i];
+                double * SPEC_RESTRICT tmp_a_k_i   = A[k][i];
+                double * SPEC_RESTRICT tmp_a_i_i   = A[i][i];
+                double * SPEC_RESTRICT tmp_c_i     = C[i];
 #endif
                 {
                 START_TIMING(TIME_CREATE);
@@ -229,8 +248,9 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                         }
                     }
                 }
-
+#if PRINT_DEBUG
                 my_print("Iteration [%03d][%03d]\tR#%d T#%d (OS_TID:%ld): --> 4 Gemm Tasks created\n", k, i,mype, omp_get_thread_num(), syscall(SYS_gettid));
+#endif
 
                 if (block_rank[i*nt+i] == mype) {
                     if (block_rank[k*nt+i] == mype) {
@@ -259,16 +279,21 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
 #endif
                     }
                 }
-
+#if PRINT_DEBUG
                 my_print("Iteration [%03d][%03d]\tR#%d T#%d (OS_TID:%ld): --> 5 Syrk Tasks created\n", k, i,mype, omp_get_thread_num(), syscall(SYS_gettid));
+#endif
                 END_TIMING(TIME_CREATE);
                 }
             }
         }
 #ifdef CHAMELEON
+#if PRINT_DEBUG
         my_print("Iteration [%03d][998]\tR#%d T#%d (OS_TID:%ld): --> 6 Proceeding to chameleon_distributed_taskwait(...)\n", k, mype, omp_get_thread_num(), syscall(SYS_gettid));
-        chameleon_distributed_taskwait(1);
+#endif
+        chameleon_distributed_taskwait(0);
+#if PRINT_DEBUG        
         my_print("Iteration [%03d][999]\tR#%d T#%d (OS_TID:%ld): --> 7 Finished chameleon_distributed_taskwait(...)\n", k, mype, omp_get_thread_num(), syscall(SYS_gettid));
+#endif
 #endif
     }
 } /* end omp parallel */

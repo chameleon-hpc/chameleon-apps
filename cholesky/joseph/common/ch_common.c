@@ -17,7 +17,7 @@ static void get_block_rank(int *block_rank, int nt);
 #ifdef CHAMELEON
 #pragma omp declare target
 #endif
-void omp_potrf(double * const A, int ts, int ld)
+void omp_potrf(double * SPEC_RESTRICT const A, int ts, int ld)
 {
 #if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON)
     cnt_pdotrf++;
@@ -34,7 +34,7 @@ void omp_potrf(double * const A, int ts, int ld)
 #pragma omp end declare target
 #pragma omp declare target
 #endif
-void omp_trsm(double *A, double *B, int ts, int ld)
+void omp_trsm(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, int ts, int ld)
 {
 #if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON)
     cnt_trsm++;
@@ -51,7 +51,7 @@ void omp_trsm(double *A, double *B, int ts, int ld)
 #pragma omp end declare target
 #pragma omp declare target
 #endif
-void omp_gemm(double *A, double *B, double *C, int ts, int ld)
+void omp_gemm(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, double * SPEC_RESTRICT C, int ts, int ld)
 {
 #if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON)
     cnt_gemm++;
@@ -68,7 +68,7 @@ void omp_gemm(double *A, double *B, double *C, int ts, int ld)
 #pragma omp end declare target
 #pragma omp declare target
 #endif
-void omp_syrk(double *A, double *B, int ts, int ld)
+void omp_syrk(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, int ts, int ld)
 {
 #if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON)
     cnt_syrk++;
