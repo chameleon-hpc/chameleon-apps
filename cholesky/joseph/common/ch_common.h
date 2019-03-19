@@ -18,7 +18,9 @@
 #include <mpi.h>
 #include <omp.h>
 
-#ifdef CHAMELEON
+#define SPEC_RESTRICT __restrict__
+
+#if defined(CHAMELEON) || defined(CHAMELEON_MANUAL)
 #include "chameleon.h"
 #ifndef my_print
 #define my_print(...) chameleon_print(0, "Cholesky", mype, __VA_ARGS__);
@@ -35,6 +37,10 @@
 
 #ifndef DPxPTR
 #define DPxPTR(ptr) ((int)(2*sizeof(uintptr_t))), ((uintptr_t) (ptr))
+#endif
+
+#ifndef PRINT_DEBUG
+#define PRINT_DEBUG 0
 #endif
 
 #ifdef _USE_HBW
@@ -54,9 +60,9 @@ void cholesky_single(const int ts, const int nt, double* A[nt][nt]);
 void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, double *C[nt], int *block_rank);
 
 void omp_potrf(double * const A, int ts, int ld);
-void omp_trsm(double *A, double *B, int ts, int ld);
-void omp_gemm(double *A, double *B, double *C, int ts, int ld);
-void omp_syrk(double *A, double *B, int ts, int ld);
+void omp_trsm(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, int ts, int ld);
+void omp_gemm(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, double * SPEC_RESTRICT C, int ts, int ld);
+void omp_syrk(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, int ts, int ld);
 
 int get_send_flags(char *send_flags, int *block_rank, int itr1_str, int itr1_end, int itr2_str, int itr2_end, int n);
 void get_recv_flag(char *recv_flag, int *block_rank, int itr1_str, int itr1_end, int itr2_str, int itr2_end, int n);
