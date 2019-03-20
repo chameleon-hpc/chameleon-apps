@@ -18,6 +18,10 @@
 #include <mpi.h>
 #include <omp.h>
 
+#ifdef TRACE
+#include "VT.h"
+#endif
+
 #define SPEC_RESTRICT __restrict__
 
 #if defined(CHAMELEON) || defined(CHAMELEON_MANUAL)
@@ -71,6 +75,15 @@ void wait(MPI_Request *comm_req);
 
 inline static void waitall(MPI_Request *comm_req, int n)
 {
+// #ifdef TRACE
+//     static int event_waitall = -1;
+//     char* event_name = "waitall";
+//     if(event_waitall == -1) {
+//         int ierr;
+//         ierr = VT_funcdef(event_name, VT_NOCLASS, &event_waitall);
+//     }
+//     VT_begin(event_waitall);
+// #endif
 #ifdef DISABLE_TASKYIELD
   MPI_Waitall(n, comm_req, MPI_STATUSES_IGNORE);
 #else
@@ -86,6 +99,9 @@ inline static void waitall(MPI_Request *comm_req, int n)
 #endif
   }
 #endif
+// #ifdef TRACE
+//     VT_end(event_waitall);
+// #endif
 }
 void reset_send_flags(char *send_flags);
 

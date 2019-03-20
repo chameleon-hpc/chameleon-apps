@@ -14,8 +14,8 @@ PROG_EXE        ?= ch_$(TARGET)_par
 MATRIX_SIZE     ?= 15360
 BLOCK_SIZE      ?= 512
 BOOL_CHECK      ?= 0
-# CFLAGS          += -DDEBUG
-# LDFLAGS         += -DDEBUG
+# CFLAGS          += -DDEBUG -DTRACE -I$(VT_ROOT)/include
+# LDFLAGS         += -DDEBUG -trace
 
 all : ch_$(TARGET)_par
 

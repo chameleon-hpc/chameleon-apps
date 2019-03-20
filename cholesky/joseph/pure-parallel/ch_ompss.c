@@ -26,6 +26,15 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
     char recv_flag = 0, *send_flags = malloc(sizeof(char) * np);
     MPI_Request recv_req, *send_reqs = malloc(sizeof(MPI_Request) * np);
 
+#ifdef TRACE
+    static int event_communication = -1;
+    char* event_name = "communication";
+    if(event_communication == -1) {
+        int ierr;
+        ierr = VT_funcdef(event_name, VT_NOCLASS, &event_communication);
+    }
+#endif
+
     START_TIMING(TIME_TOTAL);
 #pragma omp parallel
 {
@@ -47,6 +56,9 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                 reset_send_flags(send_flags);
                 send_cnt = get_send_flags(send_flags, block_rank, k, k, k+1, nt-1, nt);
                 if (send_cnt != 0) {
+#ifdef TRACE
+                    VT_begin(event_communication);
+#endif
                     int exec_wait = 0;
                     send_cnt = 0;
                     for (int dst = 0; dst < np; dst++) {
@@ -56,6 +68,9 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                                     &send_reqs[send_cnt++]);
                         }
                     }
+#ifdef TRACE
+                    VT_end(event_communication);
+#endif
                     if(exec_wait)
                         waitall(send_reqs, send_cnt);
                 }
@@ -69,8 +84,14 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                 get_recv_flag(&recv_flag, block_rank, k, k, k+1, nt-1, nt);
 
                 if (recv_flag) {
+// #ifdef TRACE
+//                     VT_begin(event_communication);
+// #endif
                     MPI_Irecv(B, ts*ts, MPI_DOUBLE, block_rank[k*nt+k], k*nt+k, MPI_COMM_WORLD,
                             &recv_req);
+// #ifdef TRACE
+//                     VT_end(event_communication);
+// #endif
                     wait(&recv_req);
                 }
                 END_TIMING(TIME_COMM);
@@ -143,10 +164,6 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
 
         #pragma omp single nowait
         {
-#if defined(CHAMELEON) || defined(CHAMELEON_MANUAL)
-            // chameleon call to start/wake up communication threads
-            chameleon_wake_up_comm_threads();
-#endif
             for (int i = k + 1; i < nt; i++) {
 #if PRINT_DEBUG
                 my_print("Iteration [%03d][%03d]\tR#%d T#%d (OS_TID:%ld): --> 0 Begin\n", k, i, mype, omp_get_thread_num(), syscall(SYS_gettid));
