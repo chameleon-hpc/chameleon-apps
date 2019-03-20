@@ -19,6 +19,15 @@ static void get_block_rank(int *block_rank, int nt);
 #endif
 void omp_potrf(double * SPEC_RESTRICT const A, int ts, int ld)
 {
+#ifdef TRACE
+    static int event_potrf = -1;
+    char* event_name = "potrf";
+    if(event_potrf == -1) {
+        int ierr;
+        ierr = VT_funcdef(event_name, VT_NOCLASS, &event_potrf);
+    }
+    VT_begin(event_potrf);
+#endif
 #if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON) && !defined(CHAMELEON_MANUAL)
     cnt_pdotrf++;
     START_TIMING(TIME_POTRF);
@@ -29,6 +38,9 @@ void omp_potrf(double * SPEC_RESTRICT const A, int ts, int ld)
 #if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON) && !defined(CHAMELEON_MANUAL)
     END_TIMING(TIME_POTRF);
 #endif
+#ifdef TRACE
+    VT_end(event_potrf);
+#endif
 }
 #ifdef CHAMELEON
 #pragma omp end declare target
@@ -36,6 +48,15 @@ void omp_potrf(double * SPEC_RESTRICT const A, int ts, int ld)
 #endif
 void omp_trsm(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, int ts, int ld)
 {
+#ifdef TRACE
+    static int event_trsm = -1;
+    char* event_name = "trsm";
+    if(event_trsm == -1) {
+        int ierr;
+        ierr = VT_funcdef(event_name, VT_NOCLASS, &event_trsm);
+    }
+    VT_begin(event_trsm);
+#endif
 #if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON) && !defined(CHAMELEON_MANUAL)
     cnt_trsm++;
     START_TIMING(TIME_TRSM);
@@ -46,6 +67,9 @@ void omp_trsm(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, int ts, int ld
 #if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON) && !defined(CHAMELEON_MANUAL)
     END_TIMING(TIME_TRSM);
 #endif
+#ifdef TRACE
+    VT_end(event_trsm);
+#endif
 }
 #ifdef CHAMELEON
 #pragma omp end declare target
@@ -53,6 +77,15 @@ void omp_trsm(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, int ts, int ld
 #endif
 void omp_gemm(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, double * SPEC_RESTRICT C, int ts, int ld)
 {
+#ifdef TRACE
+    static int event_gemm = -1;
+    char* event_name = "gemm";
+    if(event_gemm == -1) {
+        int ierr;
+        ierr = VT_funcdef(event_name, VT_NOCLASS, &event_gemm);
+    }
+    VT_begin(event_gemm);
+#endif
 #if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON) && !defined(CHAMELEON_MANUAL)
     cnt_gemm++;
     START_TIMING(TIME_GEMM);
@@ -63,6 +96,9 @@ void omp_gemm(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, double * SPEC_
 #if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON) && !defined(CHAMELEON_MANUAL)
     END_TIMING(TIME_GEMM);
 #endif
+#ifdef TRACE
+    VT_end(event_gemm);
+#endif
 }
 #ifdef CHAMELEON
 #pragma omp end declare target
@@ -70,6 +106,15 @@ void omp_gemm(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, double * SPEC_
 #endif
 void omp_syrk(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, int ts, int ld)
 {
+#ifdef TRACE
+    static int event_syrk = -1;
+    char* event_name = "syrk";
+    if(event_syrk == -1) {
+        int ierr;
+        ierr = VT_funcdef(event_name, VT_NOCLASS, &event_syrk);
+    }
+    VT_begin(event_syrk);
+#endif
 #if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON) && !defined(CHAMELEON_MANUAL)
     cnt_syrk++;
     START_TIMING(TIME_SYRK);
@@ -79,6 +124,9 @@ void omp_syrk(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, int ts, int ld
     dsyrk_(&LO, &NT, &ts, &ts, &DMONE, A, &ld, &DONE, B, &ld );
 #if (defined(DEBUG) || defined(USE_TIMING)) && !defined(CHAMELEON) && !defined(CHAMELEON_MANUAL)
     END_TIMING(TIME_SYRK);
+#endif
+#ifdef TRACE
+    VT_end(event_syrk);
 #endif
 }
 #ifdef CHAMELEON
@@ -135,6 +183,15 @@ void cholesky_single(const int ts, const int nt, double* A[nt][nt])
 
 inline void wait(MPI_Request *comm_req)
 {
+// #ifdef TRACE
+//     static int event_wait = -1;
+//     char* event_name = "wait";
+//     if(event_wait == -1) {
+//         int ierr; 
+//         ierr = VT_funcdef(event_name, VT_NOCLASS, &event_wait);
+//     }
+//     VT_begin(event_wait);
+// #endif
     int comm_comp = 0;
 
     MPI_Test(comm_req, &comm_comp, MPI_STATUS_IGNORE);
@@ -147,6 +204,9 @@ inline void wait(MPI_Request *comm_req)
         MPI_Test(comm_req, &comm_comp, MPI_STATUS_IGNORE);
     }
 //    MPI_Wait(comm_req, MPI_STATUS_IGNORE);
+// #ifdef TRACE
+//     VT_end(event_wait);
+// #endif
 }
 
 inline void reset_send_flags(char *send_flags)
