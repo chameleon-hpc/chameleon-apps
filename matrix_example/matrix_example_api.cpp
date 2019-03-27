@@ -135,13 +135,21 @@ void printHelpMessage() {
     std::cout<<"If the number of tasks is not specified for every process, the application will generate an initial task distribution"<<std::endl; 
 }
 
+void printArray(int rank, double * SPEC_RESTRICT array, char* arr_name, int n) {
+    printf("#R%d (OS_TID:%ld): %s[0-%d] at (" DPxMOD "): ", rank, syscall(SYS_gettid), arr_name, n, DPxPTR(&array[0]));
+    for(int i = 0; i < n; i++) {
+        printf("%f ", array[i]);
+    }
+    printf("\n");
+}
+
 void matrixMatrixKernel(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, double * SPEC_RESTRICT C, int matrixSize, int i) {
 #if VERY_VERBOSE
     int iMyRank2;
     MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank2);
-    printf("#R%d (OS_TID:%ld): A[%d] at (" DPxMOD ")\n", iMyRank2, syscall(SYS_gettid), i, DPxPTR(&A[0]));
-    printf("#R%d (OS_TID:%ld): B[%d] at (" DPxMOD ")\n", iMyRank2, syscall(SYS_gettid), i, DPxPTR(&B[0]));
-    printf("#R%d (OS_TID:%ld): C[%d] at (" DPxMOD ")\n", iMyRank2, syscall(SYS_gettid), i, DPxPTR(&C[0]));
+    printArray(iMyRank2, A, "A", 10);
+    printArray(iMyRank2, B, "B", 10);
+    printArray(iMyRank2, C, "C", 10);
 #endif
 
 #if SIMULATE_CONST_WORK
@@ -232,9 +240,9 @@ int main(int argc, char **argv)
     		initialize_matrix_zero(matrices_c[i], matrixSize);
     	}
 #if VERY_VERBOSE
-        printf("#R%d (OS_TID:%ld): Master A[%d] at (" DPxMOD ")\n", iMyRank, syscall(SYS_gettid), i, DPxPTR(&matrices_a[i][0]));
-        printf("#R%d (OS_TID:%ld): Master B[%d] at (" DPxMOD ")\n", iMyRank, syscall(SYS_gettid), i, DPxPTR(&matrices_b[i][0]));
-        printf("#R%d (OS_TID:%ld): Master C[%d] at (" DPxMOD ")\n", iMyRank, syscall(SYS_gettid), i, DPxPTR(&matrices_c[i][0]));
+        printArray(iMyRank, matrices_a[i], "A", 10);
+        printArray(iMyRank, matrices_b[i], "B", 10);
+        printArray(iMyRank, matrices_c[i], "C", 10);
 #endif
     }
 
@@ -249,10 +257,10 @@ int main(int argc, char **argv)
 				double * SPEC_RESTRICT A = matrices_a[i];
 		        double * SPEC_RESTRICT B = matrices_b[i];
 		        double * SPEC_RESTRICT C = matrices_c[i];
-#if VERY_VERBOSE
-                printf("#R%d (OS_TID:%ld): Itermediate A[%d] at (" DPxMOD ")\n", iMyRank, syscall(SYS_gettid), i, DPxPTR(&A[0]));
-                printf("#R%d (OS_TID:%ld): Itermediate B[%d] at (" DPxMOD ")\n", iMyRank, syscall(SYS_gettid), i, DPxPTR(&B[0]));
-                printf("#R%d (OS_TID:%ld): Itermediate C[%d] at (" DPxMOD ")\n", iMyRank, syscall(SYS_gettid), i, DPxPTR(&C[0]));	
+#if VERY_VERBOSE	
+                printArray(iMyRank, A, "A", 10);
+                printArray(iMyRank, B, "B", 10);
+                printArray(iMyRank, C, "C", 10);
 #endif
                 // here we need to call library function to add task entry point and parameters by hand
                 void* literal_matrix_size   = *(void**)(&matrixSize);
