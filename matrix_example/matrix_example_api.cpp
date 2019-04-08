@@ -28,7 +28,15 @@
 #endif
 
 #ifndef USE_TASK_ANNOTATIONS
-#define USE_TASK_ANNOTATIONS 1
+#define USE_TASK_ANNOTATIONS 0
+#endif
+
+#ifndef ITERATIVE_VERSION
+#define ITERATIVE_VERSION 1
+#endif
+
+#ifndef NUM_ITERATIONS
+#define NUM_ITERATIONS 10
 #endif
 
 //#define LOG(rank, str) fprintf(stderr, "#R%d: %s\n", rank, str)
@@ -183,7 +191,7 @@ int main(int argc, char **argv)
     #pragma omp parallel
     {
         chameleon_thread_init();
-    }	
+    }
     // necessary to be aware of binary base addresses to calculate offset for target entry functions
     chameleon_determine_base_addresses((void *)&main);
 
@@ -251,6 +259,13 @@ int main(int argc, char **argv)
 
     #pragma omp parallel
     {
+#if ITERATIVE_VERSION
+        for(int iter = 0; iter < NUM_ITERATIONS; iter++) {
+            if(iMyRank == 0) {
+                #pragma omp master
+                printf("Executing iteration %d ...\n", iter);
+            }
+#endif
     	// if(iMyRank==0) {
 		#pragma omp for
     		for(int i=0; i<numberOfTasks; i++) {
@@ -321,9 +336,10 @@ int main(int argc, char **argv)
         }
         #pragma omp barrier
 #endif
-    	//LOG(iMyRank, "entering taskwait");
     	int res = chameleon_distributed_taskwait(0);
-    	//LOG(iMyRank, "leaving taskwait");
+#if ITERATIVE_VERSION
+        }
+#endif
     }
     MPI_Barrier(MPI_COMM_WORLD);
 
@@ -356,16 +372,29 @@ int main(int argc, char **argv)
     fTimeStart=MPI_Wtime();
     #pragma omp parallel
     {
+#if ITERATIVE_VERSION
+        for(int iter = 0; iter < NUM_ITERATIONS; iter++) {
+            if(iMyRank == 0) {
+                #pragma omp master
+                printf("Executing iteration %d ...\n", iter);
+            }
+#endif
 		#pragma omp for
         for(int i=0; i<numberOfTasks; i++) {
             double *A = matrices_a[i];
             double *B = matrices_b[i];
-            double *C = matrices_c[i];	
-            #pragma omp target map(tofrom: C[0:matrixSize*matrixSize]) map(to:matrixSize, A[0:matrixSize*matrixSize], B[0:matrixSize*matrixSize]) device(1001)
+            double *C = matrices_c[i];
+            // somehow target offloading is very slow when performaing more that one iteration
+            // #pragma omp target map(from: C[0:matrixSize*matrixSize]) map(to:matrixSize, A[0:matrixSize*matrixSize], B[0:matrixSize*matrixSize]) device(1001)
+            // uses normal tasks to have a fair comparison
+            #pragma omp task default(shared) firstprivate(A,B,C)
             {
                 compute_matrix_matrix(A, B, C, matrixSize);
             }
         }
+#if ITERATIVE_VERSION
+        }
+#endif
     }
     MPI_Barrier(MPI_COMM_WORLD);
     fTimeEnd=MPI_Wtime();
