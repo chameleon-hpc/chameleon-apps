@@ -32,6 +32,14 @@
 #define CALC_SPEEDUP 1
 #endif
 
+#ifndef ITERATIVE_VERSION
+#define ITERATIVE_VERSION 1
+#endif
+
+#ifndef NUM_ITERATIONS
+#define NUM_ITERATIONS 10
+#endif
+
 #ifndef DEV_NR
 #define DEV_NR 1002 // CHAMELEON_MPI
 #endif
@@ -228,7 +236,13 @@ int main(int argc, char **argv)
 
     #pragma omp parallel
     {
-    	// if(iMyRank==0) {
+#if ITERATIVE_VERSION
+        for(int iter = 0; iter < NUM_ITERATIONS; iter++) {
+            if(iMyRank == 0) {
+                #pragma omp master
+                printf("Executing iteration %d ...\n", iter);
+            }
+#endif
 		#pragma omp for
     		for(int i=0; i<numberOfTasks; i++) {
 				double * SPEC_RESTRICT A = matrices_a[i];
@@ -241,9 +255,6 @@ int main(int argc, char **argv)
 #endif
                 #pragma omp target map(tofrom: C[0:matrixSize*matrixSize]) map(to: A[0:matrixSize*matrixSize], B[0:matrixSize*matrixSize]) device(DEV_NR)
 				{
-					//check_test_matrix(A, 1);
-					//check_test_matrix(B, 1);
-					//check_test_matrix(C, 0);
 #if VERY_VERBOSE
                     int iMyRank2;
 	                MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank2);
@@ -281,10 +292,10 @@ int main(int argc, char **argv)
         }
         #pragma omp barrier
 #endif
-
-    	//LOG(iMyRank, "entering taskwait");
     	int res = chameleon_distributed_taskwait(0);
-    	//LOG(iMyRank, "leaving taskwait");
+#if ITERATIVE_VERSION
+        }
+#endif
     }
     MPI_Barrier(MPI_COMM_WORLD);
 
@@ -317,22 +328,29 @@ int main(int argc, char **argv)
     fTimeStart=MPI_Wtime();
     #pragma omp parallel
     {
-    	// if(iMyRank==0) {
+#if ITERATIVE_VERSION
+        for(int iter = 0; iter < NUM_ITERATIONS; iter++) {
+            if(iMyRank == 0) {
+                #pragma omp master
+                printf("Executing iteration %d ...\n", iter);
+            }
+#endif
 		#pragma omp for
-    		for(int i=0; i<numberOfTasks; i++) {
-				double *A = matrices_a[i];
-		        double *B = matrices_b[i];
-		        double *C = matrices_c[i];	
-                #pragma omp target map(tofrom: C[0:matrixSize*matrixSize]) map(to:matrixSize, A[0:matrixSize*matrixSize], B[0:matrixSize*matrixSize]) device(1001)
-				{
-					//check_test_matrix(A, 1, matrixSize);
-					//check_test_matrix(B, 1, matrixSize);
-					//check_test_matrix(C, 0, matrixSize);
-					compute_matrix_matrix(A, B, C, matrixSize);
-					//check_test_matrix(C, MATRIX_SIZE);
-				}
-				//LOG(iMyRank, "offloading to chameleon");
-    		}
+        for(int i=0; i<numberOfTasks; i++) {
+            double *A = matrices_a[i];
+            double *B = matrices_b[i];
+            double *C = matrices_c[i];	
+            // somehow target offloading is very slow when performaing more that one iteration
+            // #pragma omp target map(from: C[0:matrixSize*matrixSize]) map(to:matrixSize, A[0:matrixSize*matrixSize], B[0:matrixSize*matrixSize]) device(1001)
+            // uses normal tasks to have a fair comparison
+            #pragma omp task default(shared) firstprivate(A,B,C)
+            {
+                compute_matrix_matrix(A, B, C, matrixSize);
+            }
+        }
+#if ITERATIVE_VERSION
+        }
+#endif
     }
     MPI_Barrier(MPI_COMM_WORLD);
     fTimeEnd=MPI_Wtime();
@@ -342,6 +360,7 @@ int main(int argc, char **argv)
         printf("#R%d: This corresponds to a speedup of %.2f!\n", iMyRank, wTimeHost/wTimeCham);
     }
     LOG(iMyRank, "Validation:");
+    pass = true;
     if(numberOfTasks>0) {
         for(int t=0; t<numberOfTasks; t++) {
             pass &= check_test_matrix(matrices_c[t], matrixSize, matrixSize);
