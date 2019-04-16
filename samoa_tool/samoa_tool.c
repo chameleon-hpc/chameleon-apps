@@ -57,7 +57,7 @@ on_cham_t_callback_determine_local_load(
         }        
     }
     cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
-    printf("R#%d\ton_cham_t_callback_determine_local_load ==> num_ids_local=%d;num_ids_stolen=%d;num_cells=%d\n", r_info->comm_rank, num_ids_local, num_ids_stolen, sum);
+    //printf("R#%d\ton_cham_t_callback_determine_local_load ==> num_ids_local=%d;num_ids_stolen=%d;num_cells=%d\n", r_info->comm_rank, num_ids_local, num_ids_stolen, sum);
     return sum;
 }
 
