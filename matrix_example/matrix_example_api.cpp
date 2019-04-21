@@ -23,8 +23,12 @@
 #define SIMULATE_CONST_WORK 0
 #endif
 
-#ifndef CALC_SPEEDUP
-#define CALC_SPEEDUP 1
+#ifndef COMPILE_CHAMELEON
+#define COMPILE_CHAMELEON 1
+#endif
+
+#ifndef COMPILE_TASKING
+#define COMPILE_TASKING 1
 #endif
 
 #ifndef USE_TASK_ANNOTATIONS
@@ -36,7 +40,7 @@
 #endif
 
 #ifndef NUM_ITERATIONS
-#define NUM_ITERATIONS 10
+#define NUM_ITERATIONS 1
 #endif
 
 //#define LOG(rank, str) fprintf(stderr, "#R%d: %s\n", rank, str)
@@ -187,6 +191,8 @@ int main(int argc, char **argv)
     std::mutex mtx_t_ids;
     std::list<int32_t> t_ids;
 #endif
+
+#if COMPILE_CHAMELEON
     // chameleon_init();
     #pragma omp parallel
     {
@@ -194,6 +200,7 @@ int main(int argc, char **argv)
     }
     // necessary to be aware of binary base addresses to calculate offset for target entry functions
     chameleon_determine_base_addresses((void *)&main);
+#endif /* COMPILE_CHAMELEON */
 
     if(argc==2) {
             matrixSize = atoi( argv[1] );
@@ -232,7 +239,7 @@ int main(int argc, char **argv)
 	matrices_c = new double*[numberOfTasks];
 
 	//allocate and initialize matrices
-    #pragma omp parallel for
+    //#pragma omp parallel for
 	for(int i=0; i<numberOfTasks; i++) {
  		matrices_a[i] = new double[(long)matrixSize*matrixSize];
     	matrices_b[i] = new double[(long)matrixSize*matrixSize];
@@ -255,8 +262,9 @@ int main(int argc, char **argv)
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
-    fTimeStart=MPI_Wtime();
 
+#if COMPILE_CHAMELEON
+    fTimeStart=MPI_Wtime();
     #pragma omp parallel
     {
 #if ITERATIVE_VERSION
@@ -353,7 +361,7 @@ int main(int argc, char **argv)
     fTimeEnd=MPI_Wtime();
     wTimeCham = fTimeEnd-fTimeStart;
     if( iMyRank==0 ) {
-        printf("#R%d: Computations with chameleon offloading took %.2f\n", iMyRank, wTimeCham);
+        printf("#R%d: Computations with chameleon took %.2f\n", iMyRank, wTimeCham);
     }
     LOG(iMyRank, "Validation:");
     if(numberOfTasks>0) {
@@ -365,10 +373,11 @@ int main(int argc, char **argv)
         else
             LOG(iMyRank, "TEST FAILED");
     }
+#endif /* COMPILE_CHAMELEON */
 
     MPI_Barrier(MPI_COMM_WORLD);
 
-#if CALC_SPEEDUP
+#if COMPILE_TASKING
     fTimeStart=MPI_Wtime();
     #pragma omp parallel
     {
@@ -399,10 +408,11 @@ int main(int argc, char **argv)
     MPI_Barrier(MPI_COMM_WORLD);
     fTimeEnd=MPI_Wtime();
     wTimeHost = fTimeEnd-fTimeStart;
+
     if( iMyRank==0 ) {
-        printf("#R%d: Computations with host offloading took %.2f\n", iMyRank, wTimeHost);
-        printf("#R%d: This corresponds to a speedup of %.2f!\n", iMyRank, wTimeHost/wTimeCham);
+        printf("#R%d: Computations with normal tasking took %.2f\n", iMyRank, wTimeHost);
     }
+
     LOG(iMyRank, "Validation:");
     pass = true;
     if(numberOfTasks>0) {
@@ -414,7 +424,13 @@ int main(int argc, char **argv)
         else
             LOG(iMyRank, "TEST FAILED");
     }
-#endif
+#endif /* COMPILE_TASKING */
+
+#if COMPILE_TASKING && COMPILE_CHAMELEON
+    if( iMyRank==0 ) {
+        printf("#R%d: This corresponds to a speedup of %.2f!\n", iMyRank, wTimeHost/wTimeCham);
+    }
+#endif /* COMPILE_TASKING && COMPILE_CHAMELEON */  
 
     //deallocate matrices
     for(int i=0; i<numberOfTasks; i++) {
@@ -428,11 +444,13 @@ int main(int argc, char **argv)
     delete[] matrices_c;
 
     MPI_Barrier(MPI_COMM_WORLD);
+#if COMPILE_CHAMELEON
     #pragma omp parallel
     {
         chameleon_thread_finalize();
     }
     chameleon_finalize();
+#endif
     MPI_Finalize();
     return 0;
 }
