@@ -11,6 +11,10 @@
 #define RANDOMDIST 1
 #endif
 
+#ifndef PARALLEL_INIT
+#define PARALLEL_INIT 1
+#endif
+
 #ifndef VERY_VERBOSE
 #define VERY_VERBOSE 0
 #endif
@@ -203,30 +207,27 @@ int main(int argc, char **argv)
 #endif /* COMPILE_CHAMELEON */
 
     if(argc==2) {
-            matrixSize = atoi( argv[1] );
-            if(RANDOMDIST) {
-                int *dist = new int[iNumProcs];
-            	if( iMyRank==0 ) {
- 			        compute_random_task_distribution(dist, iNumProcs);
-		        }
-                MPI_Bcast(dist, iNumProcs, MPI_INTEGER, 0, MPI_COMM_WORLD);
-                numberOfTasks = dist[iMyRank];
-                delete[] dist;
+        matrixSize = atoi( argv[1] );
+        if(RANDOMDIST) {
+            int *dist = new int[iNumProcs];
+            if( iMyRank==0 ) {
+                compute_random_task_distribution(dist, iNumProcs);
             }
-            else {
-		        numberOfTasks = NR_TASKS;
-            }
-    }
-    else if(argc==iNumProcs+2) {
-            if(iMyRank==0) {
-    			LOG(iMyRank, "using user-defined initial load distribution...");    
-    		} 
-            matrixSize = atoi( argv[1] ); 
-            numberOfTasks = atoi( argv[iMyRank+2] ); 
-    }
-    else{ 
-            printHelpMessage();
-            return 0;     
+            MPI_Bcast(dist, iNumProcs, MPI_INTEGER, 0, MPI_COMM_WORLD);
+            numberOfTasks = dist[iMyRank];
+            delete[] dist;
+        } else {
+            numberOfTasks = NR_TASKS;
+        }
+    } else if(argc==iNumProcs+2) {
+        if(iMyRank==0) {
+            LOG(iMyRank, "using user-defined initial load distribution...");    
+        } 
+        matrixSize = atoi( argv[1] ); 
+        numberOfTasks = atoi( argv[iMyRank+2] ); 
+    } else { 
+        printHelpMessage();
+        return 0;     
     }
 	
     std::string msg = "will create "+std::to_string(numberOfTasks)+" tasks";
@@ -239,7 +240,12 @@ int main(int argc, char **argv)
 	matrices_c = new double*[numberOfTasks];
 
 	//allocate and initialize matrices
-    //#pragma omp parallel for
+#if PARALLEL_INIT
+    if(iMyRank == 0) {
+        printf("Executing parallel init\n");
+    }
+    #pragma omp parallel for
+#endif
 	for(int i=0; i<numberOfTasks; i++) {
  		matrices_a[i] = new double[(long)matrixSize*matrixSize];
     	matrices_b[i] = new double[(long)matrixSize*matrixSize];
