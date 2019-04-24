@@ -233,12 +233,12 @@ on_cham_t_callback_sync_region(
 static int32_t 
 on_cham_t_callback_determine_local_load(
     TYPE_TASK_ID* task_ids_local,
-    int32_t num_ids_local,
+    int32_t num_tasks_local,
     TYPE_TASK_ID* task_ids_stolen,
-    int32_t num_ids_stolen)
+    int32_t num_tasks_stolen)
 {
-    printf("on_cham_t_callback_determine_local_load ==> task_ids_local=" DPxMOD ";num_ids_local=%d;task_ids_stolen=" DPxMOD ";num_ids_stolen=%d\n", DPxPTR(task_ids_local), num_ids_local, DPxPTR(task_ids_stolen), num_ids_stolen);
-    return (num_ids_local+num_ids_stolen);
+    printf("on_cham_t_callback_determine_local_load ==> task_ids_local=" DPxMOD ";num_tasks_local=%d;task_ids_stolen=" DPxMOD ";num_tasks_stolen=%d\n", DPxPTR(task_ids_local), num_tasks_local, DPxPTR(task_ids_stolen), num_tasks_stolen);
+    return (num_tasks_local+num_tasks_stolen);
 }
 
 int compare( const void *pa, const void *pb )
@@ -254,10 +254,12 @@ int compare( const void *pa, const void *pb )
 static void
 on_cham_t_callback_select_num_tasks_to_offload(
     int32_t* num_tasks_to_offload_per_rank,
-    const int32_t* load_info_per_rank)
+    const int32_t* load_info_per_rank,
+    int32_t num_tasks_local,
+    int32_t num_tasks_stolen)
 {
     cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
-    printf("on_cham_t_callback_select_num_tasks_to_offload ==> comm_rank=%d;comm_size=%d;num_tasks_to_offload_per_rank=" DPxMOD ";load_info_per_rank=" DPxMOD "\n", r_info->comm_rank, r_info->comm_size, DPxPTR(num_tasks_to_offload_per_rank), DPxPTR(load_info_per_rank));
+    printf("on_cham_t_callback_select_num_tasks_to_offload ==> comm_rank=%d;comm_size=%d;num_tasks_to_offload_per_rank=" DPxMOD ";load_info_per_rank=" DPxMOD ";num_tasks_local=%d;num_tasks_stolen=%d\n", r_info->comm_rank, r_info->comm_size, DPxPTR(num_tasks_to_offload_per_rank), DPxPTR(load_info_per_rank), num_tasks_local, num_tasks_stolen);
 
     // Sort rank loads and keep track of indices
     int tmp_sorted_array[r_info->comm_size][2];
@@ -313,13 +315,14 @@ static cham_t_migration_tupel_t*
 on_cham_t_callback_select_tasks_for_migration(
     const int32_t* load_info_per_rank,
     TYPE_TASK_ID* task_ids_local,
-    int32_t num_ids_local,
+    int32_t num_tasks_local,
+    int32_t num_tasks_stolen,
     int32_t* num_tuples)
 {
     cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
-    printf("on_cham_t_callback_select_tasks_for_migration ==> comm_rank=%d;comm_size=%d;load_info_per_rank=" DPxMOD ";task_ids_local=" DPxMOD ";num_ids_local=%d\n", r_info->comm_rank, r_info->comm_size, DPxPTR(load_info_per_rank), DPxPTR(task_ids_local), num_ids_local);
+    printf("on_cham_t_callback_select_tasks_for_migration ==> comm_rank=%d;comm_size=%d;load_info_per_rank=" DPxMOD ";task_ids_local=" DPxMOD ";num_tasks_local=%d;num_tasks_stolen=%d\n", r_info->comm_rank, r_info->comm_size, DPxPTR(load_info_per_rank), DPxPTR(task_ids_local), num_tasks_local, num_tasks_stolen);
 
-    if(num_ids_local > 0) {
+    if(num_tasks_local > 0) {
         TYPE_TASK_ID tmp_id = task_ids_local[0];
 
         // query/access task tool data
@@ -340,7 +343,7 @@ on_cham_t_callback_select_tasks_for_migration(
     cham_t_migration_tupel_t* task_migration_tuples = NULL;
     *num_tuples = 0;
 
-    if(num_ids_local > 0) {
+    if(num_tasks_local > 0) {
         task_migration_tuples = malloc(sizeof(cham_t_migration_tupel_t));
     
         // Sort rank loads and keep track of indices
