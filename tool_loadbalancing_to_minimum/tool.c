@@ -25,42 +25,6 @@ static cham_t_get_thread_data_t cham_t_get_thread_data;
 static cham_t_get_rank_info_t cham_t_get_rank_info;
 static cham_t_get_task_data_t cham_t_get_task_data;
 
-static int32_t 
-on_cham_t_callback_determine_local_load(
-    TYPE_TASK_ID* task_ids_local,
-    int32_t num_tasks_local,
-    TYPE_TASK_ID* task_ids_stolen,
-    int32_t num_tasks_stolen)
-{
-    int i;
-    int sum = 0;
-    for(i = 0; i < num_tasks_local; i++)
-    {
-        chameleon_annotations_t* ann = chameleon_get_task_annotations(task_ids_local[i]);
-        if(ann) {
-            int num_cells;
-            int found = chameleon_get_annotation_int(ann, "num_cells", &num_cells);
-            if(found) {
-                sum += num_cells;
-            }
-        }        
-    }
-    for(i = 0; i < num_tasks_stolen; i++)
-    {
-        chameleon_annotations_t* ann = chameleon_get_task_annotations(task_ids_stolen[i]);
-        if(ann) {
-            int num_cells;
-            int found = chameleon_get_annotation_int(ann, "num_cells", &num_cells);
-            if(found) {
-                sum += num_cells;
-            }
-        }        
-    }
-    cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
-    //printf("R#%d\ton_cham_t_callback_determine_local_load ==> num_tasks_local=%d;num_tasks_stolen=%d;num_cells=%d\n", r_info->comm_rank, num_tasks_local, num_tasks_stolen, sum);
-    return sum;
-}
-
 int compare( const void *pa, const void *pb )
 {
     const int *a = pa;
@@ -94,12 +58,12 @@ on_cham_t_callback_select_num_tasks_to_offload(
     double min_val      = (double) load_info_per_rank[tmp_sorted_array[0][1]];
     double max_val      = (double) load_info_per_rank[tmp_sorted_array[r_info->comm_size-1][1]];
     double ratio_lb     = 0.0;
-    double threshold    = 0.05;
+    double threshold    = 0.1;
     if(max_val > 0) {
         ratio_lb = (max_val - min_val) / max_val;
     }
     
-    int load_this_rank = load_info_per_rank[r_info->comm_rank];
+    double load_this_rank = (double) load_info_per_rank[r_info->comm_rank];
     
     if(ratio_lb > threshold) {
         int pos = 0;
@@ -113,17 +77,11 @@ on_cham_t_callback_select_num_tasks_to_offload(
         // only offload if on the upper side
         if((pos+1) >= ((double)r_info->comm_size/2.0))
         {
-            int other_pos = r_info->comm_size-pos;
-            // need to adapt in case of even number
-            if(r_info->comm_size % 2 == 0)
-                other_pos--;
-            int other_idx = tmp_sorted_array[other_pos][1];
-            int other_val = load_info_per_rank[other_idx];
-
-            // calculate ration between those two and just move if over a certain threshold
-            double ratio = (double)(load_this_rank-other_val) / (double)load_this_rank;
-            if(other_val < load_this_rank && ratio > threshold) {
-                num_tasks_to_offload_per_rank[other_idx] = 2;
+            // select min rank
+            double ratio_to_min = (load_this_rank - min_val) / load_this_rank;
+            if(ratio_to_min > threshold) {
+                int target_rank = tmp_sorted_array[0][1];
+                num_tasks_to_offload_per_rank[target_rank] = 1;
             }
         }
     }
@@ -142,19 +100,18 @@ int cham_t_initialize(
     cham_t_function_lookup_t lookup,
     cham_t_data_t *tool_data)
 {
-    cham_t_set_callback     = (cham_t_set_callback_t) lookup("cham_t_set_callback");
-    cham_t_get_callback     = (cham_t_get_callback_t) lookup("cham_t_get_callback");
-    cham_t_get_rank_data    = (cham_t_get_rank_data_t) lookup("cham_t_get_rank_data");
-    cham_t_get_thread_data  = (cham_t_get_thread_data_t) lookup("cham_t_get_thread_data");
-    cham_t_get_rank_info    = (cham_t_get_rank_info_t) lookup("cham_t_get_rank_info");
-    cham_t_get_task_data    = (cham_t_get_task_data_t) lookup("cham_t_get_task_data");
+    cham_t_set_callback = (cham_t_set_callback_t) lookup("cham_t_set_callback");
+    cham_t_get_callback = (cham_t_get_callback_t) lookup("cham_t_get_callback");
+    cham_t_get_rank_data = (cham_t_get_rank_data_t) lookup("cham_t_get_rank_data");
+    cham_t_get_thread_data = (cham_t_get_thread_data_t) lookup("cham_t_get_thread_data");
+    cham_t_get_rank_info = (cham_t_get_rank_info_t) lookup("cham_t_get_rank_info");
+    cham_t_get_task_data = (cham_t_get_task_data_t) lookup("cham_t_get_task_data");
 
-    register_callback(cham_t_callback_determine_local_load);
     register_callback(cham_t_callback_select_num_tasks_to_offload);
 
-    // cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
-    // cham_t_data_t * r_data      = cham_t_get_rank_data();
-    // r_data->value               = r_info->comm_rank;
+    cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
+    cham_t_data_t * r_data      = cham_t_get_rank_data();
+    r_data->value               = r_info->comm_rank;
 
     return 1; //success
 }
