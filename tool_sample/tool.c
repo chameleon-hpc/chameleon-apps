@@ -261,6 +261,31 @@ on_cham_t_callback_select_num_tasks_to_offload(
     cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
     printf("on_cham_t_callback_select_num_tasks_to_offload ==> comm_rank=%d;comm_size=%d;num_tasks_to_offload_per_rank=" DPxMOD ";load_info_per_rank=" DPxMOD ";num_tasks_local=%d;num_tasks_stolen=%d\n", r_info->comm_rank, r_info->comm_size, DPxPTR(num_tasks_to_offload_per_rank), DPxPTR(load_info_per_rank), num_tasks_local, num_tasks_stolen);
 
+    static double min_abs_imbalance_before_migration = -1;
+    if(min_abs_imbalance_before_migration == -1) {
+        // try to load it once
+        char *min_abs_balance = getenv("MIN_ABS_LOAD_IMBALANCE_BEFORE_MIGRATION");
+        if(min_abs_balance) {
+            min_abs_imbalance_before_migration = atof(min_abs_balance);
+        } else {
+            min_abs_imbalance_before_migration = 2;
+        }
+        printf("R#%d MIN_ABS_LOAD_IMBALANCE_BEFORE_MIGRATION=%f\n", r_info->comm_rank, min_abs_imbalance_before_migration);
+    }
+
+    static double min_rel_imbalance_before_migration = -1;
+    if(min_rel_imbalance_before_migration == -1) {
+        // try to load it once
+        char *min_rel_balance = getenv("MIN_REL_LOAD_IMBALANCE_BEFORE_MIGRATION");
+        if(min_rel_balance) {
+            min_rel_imbalance_before_migration = atof(min_rel_balance);
+        } else {
+            // default relative threshold
+            min_rel_imbalance_before_migration = 0.0;
+        }
+        printf("R#%d MIN_REL_LOAD_IMBALANCE_BEFORE_MIGRATION=%f\n", r_info->comm_rank, min_rel_imbalance_before_migration);
+    }
+
     // Sort rank loads and keep track of indices
     int tmp_sorted_array[r_info->comm_size][2];
     int i;
@@ -270,20 +295,21 @@ on_cham_t_callback_select_num_tasks_to_offload(
         tmp_sorted_array[i][1] = i;
     }
 
-    // for(i = 0; i < r_info->comm_size;++i)
-    //     printf("%2d, %2d\n", tmp_sorted_array[i][0], tmp_sorted_array[i][1]);
-
     qsort(tmp_sorted_array, r_info->comm_size, sizeof tmp_sorted_array[0], compare);
 
-    // for(i = 0; i < r_info->comm_size;++i)
-    //     printf("%2d, %2d\n", tmp_sorted_array[i][0], tmp_sorted_array[i][1]);
+    double min_val      = (double) load_info_per_rank[tmp_sorted_array[0][1]];
+    double max_val      = (double) load_info_per_rank[tmp_sorted_array[r_info->comm_size-1][1]];
+    double cur_load     = (double) load_info_per_rank[r_info->comm_rank];
 
-    int min_val = load_info_per_rank[tmp_sorted_array[0][1]];
-    int max_val = load_info_per_rank[tmp_sorted_array[r_info->comm_size-1][1]];
+    double ratio_lb                 = 0.0; // 1 = high imbalance, 0 = no imbalance
+    if (max_val > 0) {
+        ratio_lb = (double)(max_val-min_val) / (double)max_val;
+    }
+
+    if((cur_load-min_val) < min_abs_imbalance_before_migration)
+        return;
     
-    int load_this_rank = load_info_per_rank[r_info->comm_rank];
-    
-    if(max_val > min_val) {
+    if(ratio_lb >= min_rel_imbalance_before_migration) {
         int pos = 0;
         for(i = 0; i < r_info->comm_size; i++) {
             if(tmp_sorted_array[i][1] == r_info->comm_rank) {
@@ -300,112 +326,116 @@ on_cham_t_callback_select_num_tasks_to_offload(
             if(r_info->comm_size % 2 == 0)
                 other_pos--;
             int other_idx = tmp_sorted_array[other_pos][1];
-            int other_val = load_info_per_rank[other_idx];
+            double other_val = (double) load_info_per_rank[other_idx];
 
-            // calculate ration between those two and just move if over a certain threshold
-            double ratio = (double)(load_this_rank-other_val) / (double)load_this_rank;
-            if(other_val < load_this_rank && ratio > 0.5) {
+            double cur_diff = cur_load-other_val;
+            // check absolute condition
+            if(cur_diff < min_abs_imbalance_before_migration)
+                return;
+            double ratio = cur_diff / (double)cur_load;
+            if(other_val < cur_load && ratio >= min_rel_imbalance_before_migration) {
+                printf("R#%d Migrating\t%d\ttasks to rank:\t%d\tload:\t%f\tload_victim:\t%f\tratio:\t%f\tdiff:\t%f\n", r_info->comm_rank, 1, other_idx, cur_load, other_val, ratio, cur_diff);
                 num_tasks_to_offload_per_rank[other_idx] = 1;
             }
         }
     }
 }
 
-static cham_t_migration_tupel_t*
-on_cham_t_callback_select_tasks_for_migration(
-    const int32_t* load_info_per_rank,
-    TYPE_TASK_ID* task_ids_local,
-    int32_t num_tasks_local,
-    int32_t num_tasks_stolen,
-    int32_t* num_tuples)
-{
-    cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
-    printf("on_cham_t_callback_select_tasks_for_migration ==> comm_rank=%d;comm_size=%d;load_info_per_rank=" DPxMOD ";task_ids_local=" DPxMOD ";num_tasks_local=%d;num_tasks_stolen=%d\n", r_info->comm_rank, r_info->comm_size, DPxPTR(load_info_per_rank), DPxPTR(task_ids_local), num_tasks_local, num_tasks_stolen);
+// static cham_t_migration_tupel_t*
+// on_cham_t_callback_select_tasks_for_migration(
+//     const int32_t* load_info_per_rank,
+//     TYPE_TASK_ID* task_ids_local,
+//     int32_t num_tasks_local,
+//     int32_t num_tasks_stolen,
+//     int32_t* num_tuples)
+// {
+//     cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
+//     printf("on_cham_t_callback_select_tasks_for_migration ==> comm_rank=%d;comm_size=%d;load_info_per_rank=" DPxMOD ";task_ids_local=" DPxMOD ";num_tasks_local=%d;num_tasks_stolen=%d\n", r_info->comm_rank, r_info->comm_size, DPxPTR(load_info_per_rank), DPxPTR(task_ids_local), num_tasks_local, num_tasks_stolen);
 
-    if(num_tasks_local > 0) {
-        TYPE_TASK_ID tmp_id = task_ids_local[0];
+//     if(num_tasks_local > 0) {
+//         TYPE_TASK_ID tmp_id = task_ids_local[0];
 
-        // query/access task tool data
-        cham_t_data_t *tmp_task_data = cham_t_get_task_data(tmp_id);
-        // task is still present if valid pointer returns here
-        if(tmp_task_data) {
-            my_task_data_t* my_data = (my_task_data_t*)tmp_task_data->ptr;
-            assert(tmp_id == my_data->task_id);
-        }
+//         // query/access task tool data
+//         cham_t_data_t *tmp_task_data = cham_t_get_task_data(tmp_id);
+//         // task is still present if valid pointer returns here
+//         if(tmp_task_data) {
+//             my_task_data_t* my_data = (my_task_data_t*)tmp_task_data->ptr;
+//             assert(tmp_id == my_data->task_id);
+//         }
 
-        // query/access annotations
-        chameleon_annotations_t* ann = chameleon_get_task_annotations(tmp_id);
-        int tmp_validation_id;
-        int found = chameleon_get_annotation_int(ann, "TID", &tmp_validation_id);
-        assert(found == 1 && tmp_validation_id == (int)tmp_id);
-    }
+//         // query/access annotations
+//         chameleon_annotations_t* ann = chameleon_get_task_annotations(tmp_id);
+//         int tmp_validation_id;
+//         int found = chameleon_get_annotation_int(ann, "TID", &tmp_validation_id);
+//         assert(found == 1 && tmp_validation_id == (int)tmp_id);
+//     }
 
-    cham_t_migration_tupel_t* task_migration_tuples = NULL;
-    *num_tuples = 0;
+//     cham_t_migration_tupel_t* task_migration_tuples = NULL;
+//     *num_tuples = 0;
 
-    if(num_tasks_local > 0) {
-        task_migration_tuples = malloc(sizeof(cham_t_migration_tupel_t));
+//     if(num_tasks_local > 0) {
+//         task_migration_tuples = malloc(sizeof(cham_t_migration_tupel_t));
     
-        // Sort rank loads and keep track of indices
-        int tmp_sorted_array[r_info->comm_size][2];
-        int i;
-        for (i = 0; i < r_info->comm_size; i++)
-        {
-            tmp_sorted_array[i][0] = load_info_per_rank[i];
-            tmp_sorted_array[i][1] = i;
-        }
+//         // Sort rank loads and keep track of indices
+//         int tmp_sorted_array[r_info->comm_size][2];
+//         int i;
+//         for (i = 0; i < r_info->comm_size; i++)
+//         {
+//             tmp_sorted_array[i][0] = load_info_per_rank[i];
+//             tmp_sorted_array[i][1] = i;
+//         }
 
-        // for(i = 0; i < r_info->comm_size;++i)
-        //     printf("%2d, %2d\n", tmp_sorted_array[i][0], tmp_sorted_array[i][1]);
+//         // for(i = 0; i < r_info->comm_size;++i)
+//         //     printf("%2d, %2d\n", tmp_sorted_array[i][0], tmp_sorted_array[i][1]);
 
-        qsort(tmp_sorted_array, r_info->comm_size, sizeof tmp_sorted_array[0], compare);
+//         qsort(tmp_sorted_array, r_info->comm_size, sizeof tmp_sorted_array[0], compare);
 
-        // for(i = 0; i < r_info->comm_size;++i)
-        //     printf("%2d, %2d\n", tmp_sorted_array[i][0], tmp_sorted_array[i][1]);
+//         // for(i = 0; i < r_info->comm_size;++i)
+//         //     printf("%2d, %2d\n", tmp_sorted_array[i][0], tmp_sorted_array[i][1]);
 
-        int min_val = load_info_per_rank[tmp_sorted_array[0][1]];
-        int max_val = load_info_per_rank[tmp_sorted_array[r_info->comm_size-1][1]];
+//         int min_val = load_info_per_rank[tmp_sorted_array[0][1]];
+//         int max_val = load_info_per_rank[tmp_sorted_array[r_info->comm_size-1][1]];
         
-        int load_this_rank = load_info_per_rank[r_info->comm_rank];
+//         int load_this_rank = load_info_per_rank[r_info->comm_rank];
         
-        if(max_val > min_val) {
-            int pos = 0;
-            for(i = 0; i < r_info->comm_size; i++) {
-                if(tmp_sorted_array[i][1] == r_info->comm_rank) {
-                    pos = i;
-                    break;
-                }
-            }
+//         if(max_val > min_val) {
+//             int pos = 0;
+//             for(i = 0; i < r_info->comm_size; i++) {
+//                 if(tmp_sorted_array[i][1] == r_info->comm_rank) {
+//                     pos = i;
+//                     break;
+//                 }
+//             }
 
-            // only offload if on the upper side
-            if((pos+1) >= ((double)r_info->comm_size/2.0))
-            {
-                int other_pos = r_info->comm_size-pos;
-                // need to adapt in case of even number
-                if(r_info->comm_size % 2 == 0)
-                    other_pos--;
-                int other_idx = tmp_sorted_array[other_pos][1];
-                int other_val = load_info_per_rank[other_idx];
+//             // only offload if on the upper side
+//             if((pos+1) >= ((double)r_info->comm_size/2.0))
+//             {
+//                 int other_pos = r_info->comm_size-pos;
+//                 // need to adapt in case of even number
+//                 if(r_info->comm_size % 2 == 0)
+//                     other_pos--;
+//                 int other_idx = tmp_sorted_array[other_pos][1];
+//                 int other_val = load_info_per_rank[other_idx];
 
-                // calculate ration between those two and just move if over a certain threshold
-                double ratio = (double)(load_this_rank-other_val) / (double)load_this_rank;
-                if(other_val < load_this_rank && ratio > 0.5) {
+//                 // calculate ration between those two and just move if over a certain threshold
+//                 double ratio = (double)(load_this_rank-other_val) / (double)load_this_rank;
+//                 if(other_val < load_this_rank && ratio > 0.5) {
                     
-                    task_migration_tuples[0].task_id = task_ids_local[0];
-                    task_migration_tuples[0].rank_id = other_idx;
-                    *num_tuples = 1;
-                }
-            }
-        }
+//                     task_migration_tuples[0].task_id = task_ids_local[0];
+//                     task_migration_tuples[0].rank_id = other_idx;
+//                     *num_tuples = 1;
+//                 }
+//             }
+//         }
 
-        if(*num_tuples <= 0)
-        {
-            free(task_migration_tuples);
-            task_migration_tuples = NULL;
-        }
-    }
-    return task_migration_tuples;
-}
+//         if(*num_tuples <= 0)
+//         {
+//             free(task_migration_tuples);
+//             task_migration_tuples = NULL;
+//         }
+//     }
+//     return task_migration_tuples;
+// }
 
 #define register_callback_t(name, type)                                         \
 do{                                                                             \
@@ -442,28 +472,6 @@ int cham_t_initialize(
     // cham_t_enumerate_states = (cham_t_enumerate_states_t) lookup("cham_t_enumerate_states");
     // cham_t_enumerate_mutex_impls = (cham_t_enumerate_mutex_impls_t) lookup("cham_t_enumerate_mutex_impls");
 
-//   register_callback(cham_t_callback_mutex_acquire);
-//   register_callback_t(cham_t_callback_mutex_acquired, cham_t_callback_mutex_t);
-//   register_callback_t(cham_t_callback_mutex_released, cham_t_callback_mutex_t);
-//   register_callback(cham_t_callback_nest_lock);
-//   register_callback(cham_t_callback_sync_region);
-//   register_callback_t(cham_t_callback_sync_region_wait, cham_t_callback_sync_region_t);
-//   register_callback(cham_t_callback_control_tool);
-//   register_callback(cham_t_callback_flush);
-//   register_callback(cham_t_callback_cancel);
-//   register_callback(cham_t_callback_implicit_task);
-//   register_callback_t(cham_t_callback_lock_init, cham_t_callback_mutex_acquire_t);
-//   register_callback_t(cham_t_callback_lock_destroy, cham_t_callback_mutex_t);
-//   register_callback(cham_t_callback_work);
-//   register_callback(cham_t_callback_master);
-//   register_callback(cham_t_callback_parallel_begin);
-//   register_callback(cham_t_callback_parallel_end);
-//   register_callback(cham_t_callback_task_create);
-//   register_callback(cham_t_callback_task_schedule);
-//   register_callback(cham_t_callback_dependences);
-//   register_callback(cham_t_callback_task_dependence);
-//   register_callback(cham_t_callback_thread_begin);
-
     register_callback(cham_t_callback_thread_init);
     register_callback(cham_t_callback_thread_finalize);
     register_callback(cham_t_callback_task_create);
@@ -475,7 +483,7 @@ int cham_t_initialize(
 
     // Priority is cham_t_callback_select_tasks_for_migration (fine-grained)
     // if not registered cham_t_callback_select_num_tasks_to_offload is used (coarse-grained)
-    register_callback(cham_t_callback_select_tasks_for_migration);
+    // register_callback(cham_t_callback_select_tasks_for_migration);
     register_callback(cham_t_callback_select_num_tasks_to_offload);
 
     cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
