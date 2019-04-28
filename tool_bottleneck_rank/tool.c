@@ -114,50 +114,53 @@ on_cham_t_callback_select_num_tasks_to_offload(
 
     qsort(tmp_sorted_array, r_info->comm_size, sizeof tmp_sorted_array[0], compare);
 
+    // only bottleneck rank should proceed with offloading here
+    if(tmp_sorted_array[r_info->comm_size-1][1] != r_info->comm_rank) {
+        return;
+    }
+
     double min_val      = (double) load_info_per_rank[tmp_sorted_array[0][1]];
-    double max_val      = (double) load_info_per_rank[tmp_sorted_array[r_info->comm_size-1][1]];
     double cur_load     = (double) load_info_per_rank[r_info->comm_rank];
 
     double ratio_lb     = 0.0;
-    if(max_val > 0) {
-        ratio_lb = (max_val - min_val) / max_val;
+    if(cur_load > 0) {
+        ratio_lb = (cur_load - min_val) / cur_load;
     }
 
     double avg_size_section_local = cur_load / (double) (num_tasks_local+num_tasks_stolen);
+    double min_abs_imbalance_before_migration = avg_size_section_local*1.2;
 
-    if((cur_load-min_val) < avg_size_section_local*2)
+    if((cur_load-min_val) < min_abs_imbalance_before_migration)
         return;
     
     if(ratio_lb >= min_rel_imbalance_before_migration) {
-        int pos = 0;
-        for(i = 0; i < r_info->comm_size; i++) {
-            if(tmp_sorted_array[i][1] == r_info->comm_rank) {
-                pos = i;
+
+        // int num_t_migrated = 0;
+
+        // Start migrationg a task to rank with min load.
+        // Then proceed in order until threshold reached
+        for(i = 0; i < r_info->comm_size-1; i++) {
+            int tmp_target_rank     = tmp_sorted_array[i][1];
+            double tmp_load         = (double) load_info_per_rank[tmp_target_rank];
+
+            double tmp_diff         = cur_load-tmp_load;
+            double tmp_ratio        = tmp_diff / cur_load;
+            
+            if(tmp_diff < min_abs_imbalance_before_migration)
                 break;
-            }
+            
+            if(tmp_ratio < min_rel_imbalance_before_migration)
+                break;
+
+            // offload a task to that rank
+            num_tasks_to_offload_per_rank[tmp_target_rank] = 1;
+            // num_t_migrated++;
+            // chameleon_print(1, "ChameleonLib", r_info->comm_rank, "Migrating\t%d\ttasks to rank:\t%d\tload:\t%f\tload_victim:\t%f\tratio:\t%f\tdiff:\t%f\tmin_abs_threshold:\t%f\tnum_tasks:\t%d\n", 1, tmp_target_rank, cur_load, tmp_load, tmp_ratio, tmp_diff, min_abs_imbalance_before_migration, (num_tasks_local+num_tasks_stolen));
+            // decrement load by section avg
+            cur_load = cur_load - avg_size_section_local;
         }
 
-        // only offload if on the upper side
-        if((pos+1) >= ((double)r_info->comm_size/2.0))
-        {
-            int other_pos = r_info->comm_size-pos;
-            // need to adapt in case of even number
-            if(r_info->comm_size % 2 == 0)
-                other_pos--;
-            int other_idx = tmp_sorted_array[other_pos][1];
-            double other_val = (double) load_info_per_rank[other_idx];
-
-            double cur_diff = cur_load-other_val;
-            // check absolute condition
-            if(cur_diff < avg_size_section_local*2)
-                return;
-            double ratio = cur_diff / (double)cur_load;
-            if(other_val < cur_load && ratio >= min_rel_imbalance_before_migration) {
-                // printf("R#%d Migrating\t%d\ttasks to rank:\t%d\tload:\t%f\tload_victim:\t%f\tratio:\t%f\tdiff:\t%f\tmin_abs_threshold:\t%f\tnum_tasks:\t%d\n", r_info->comm_rank, 1, other_idx, cur_load, other_val, ratio, cur_diff, (avg_size_section_local*2), (num_tasks_local+num_tasks_stolen));
-                // chameleon_print(1, "ChameleonLib", r_info->comm_rank, "Migrating\t%d\ttasks to rank:\t%d\tload:\t%f\tload_victim:\t%f\tratio:\t%f\tdiff:\t%f\tmin_abs_threshold:\t%f\tnum_tasks:\t%d\n", 1, other_idx, cur_load, other_val, ratio, cur_diff, (avg_size_section_local*2), (num_tasks_local+num_tasks_stolen));
-                num_tasks_to_offload_per_rank[other_idx] = 1;
-            }
-        }
+        // chameleon_print(1, "ChameleonLib", r_info->comm_rank, "Num tasks migrated:\t%d\n", num_t_migrated);
     }
 }
 
