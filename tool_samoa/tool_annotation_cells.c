@@ -80,6 +80,31 @@ on_cham_t_callback_select_num_tasks_to_offload(
 {
     cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
 
+    // static double min_abs_imbalance_before_migration = -1;
+    // if(min_abs_imbalance_before_migration == -1) {
+    //     // try to load it once
+    //     char *min_abs_balance = getenv("MIN_ABS_LOAD_IMBALANCE_BEFORE_MIGRATION");
+    //     if(min_abs_balance) {
+    //         min_abs_imbalance_before_migration = atof(min_abs_balance);
+    //     } else {
+    //         min_abs_imbalance_before_migration = 2;
+    //     }
+    //     printf("R#%d MIN_ABS_LOAD_IMBALANCE_BEFORE_MIGRATION=%f\n", r_info->comm_rank, min_abs_imbalance_before_migration);
+    // }
+
+    static double min_rel_imbalance_before_migration = -1;
+    if(min_rel_imbalance_before_migration == -1) {
+        // try to load it once
+        char *min_rel_balance = getenv("MIN_REL_LOAD_IMBALANCE_BEFORE_MIGRATION");
+        if(min_rel_balance) {
+            min_rel_imbalance_before_migration = atof(min_rel_balance);
+        } else {
+            // default relative threshold
+            min_rel_imbalance_before_migration = 0.0;
+        }
+        printf("R#%d MIN_REL_LOAD_IMBALANCE_BEFORE_MIGRATION=%f\n", r_info->comm_rank, min_rel_imbalance_before_migration);
+    }
+
     // Sort rank loads and keep track of indices
     int tmp_sorted_array[r_info->comm_size][2];
     int i;
@@ -93,15 +118,20 @@ on_cham_t_callback_select_num_tasks_to_offload(
 
     double min_val      = (double) load_info_per_rank[tmp_sorted_array[0][1]];
     double max_val      = (double) load_info_per_rank[tmp_sorted_array[r_info->comm_size-1][1]];
+    double cur_load     = (double) load_info_per_rank[r_info->comm_rank];
+
     double ratio_lb     = 0.0;
     double threshold    = 0.05;
     if(max_val > 0) {
         ratio_lb = (max_val - min_val) / max_val;
     }
+
+    double avg_size_section_local = cur_load / (double) (num_tasks_local+num_tasks_stolen);
+
+    if((cur_load-min_val) < avg_size_section_local*2)
+        return;
     
-    int load_this_rank = load_info_per_rank[r_info->comm_rank];
-    
-    if(ratio_lb > threshold) {
+    if(ratio_lb >= min_rel_imbalance_before_migration) {
         int pos = 0;
         for(i = 0; i < r_info->comm_size; i++) {
             if(tmp_sorted_array[i][1] == r_info->comm_rank) {
@@ -118,11 +148,16 @@ on_cham_t_callback_select_num_tasks_to_offload(
             if(r_info->comm_size % 2 == 0)
                 other_pos--;
             int other_idx = tmp_sorted_array[other_pos][1];
-            int other_val = load_info_per_rank[other_idx];
+            double other_val = (double) load_info_per_rank[other_idx];
 
-            // calculate ration between those two and just move if over a certain threshold
-            double ratio = (double)(load_this_rank-other_val) / (double)load_this_rank;
-            if(other_val < load_this_rank && ratio > threshold) {
+            double cur_diff = cur_load-other_val;
+            // check absolute condition
+            if(cur_diff < avg_size_section_local*2)
+                return;
+            double ratio = cur_diff / (double)cur_load;
+            if(other_val < cur_load && ratio >= min_rel_imbalance_before_migration) {
+                // printf("R#%d Migrating\t%d\ttasks to rank:\t%d\tload:\t%f\tload_victim:\t%f\tratio:\t%f\tdiff:\t%f\tmin_abs_threshold:\t%f\tnum_tasks:\t%d\n", r_info->comm_rank, 1, other_idx, cur_load, other_val, ratio, cur_diff, (avg_size_section_local*2), (num_tasks_local+num_tasks_stolen));
+                // chameleon_print(1, "ChameleonLib", r_info->comm_rank, "Migrating\t%d\ttasks to rank:\t%d\tload:\t%f\tload_victim:\t%f\tratio:\t%f\tdiff:\t%f\tmin_abs_threshold:\t%f\tnum_tasks:\t%d\n", 1, other_idx, cur_load, other_val, ratio, cur_diff, (avg_size_section_local*2), (num_tasks_local+num_tasks_stolen));
                 num_tasks_to_offload_per_rank[other_idx] = 2;
             }
         }
