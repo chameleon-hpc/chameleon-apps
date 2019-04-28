@@ -16,8 +16,6 @@
 #include <inttypes.h>
 #include <assert.h>
 
-#define TASK_TOOL_SAMPLE_DATA_SIZE 10
-
 static cham_t_set_callback_t cham_t_set_callback;
 static cham_t_get_callback_t cham_t_get_callback;
 static cham_t_get_rank_data_t cham_t_get_rank_data;
@@ -44,6 +42,31 @@ on_cham_t_callback_select_num_tasks_to_offload(
 {
     cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
 
+    static double min_abs_imbalance_before_migration = -1;
+    if(min_abs_imbalance_before_migration == -1) {
+        // try to load it once
+        char *min_abs_balance = getenv("MIN_ABS_LOAD_IMBALANCE_BEFORE_MIGRATION");
+        if(min_abs_balance) {
+            min_abs_imbalance_before_migration = atof(min_abs_balance);
+        } else {
+            min_abs_imbalance_before_migration = 2;
+        }
+        fprintf(stderr, "R#%d MIN_ABS_LOAD_IMBALANCE_BEFORE_MIGRATION=%f\n", r_info->comm_rank, min_abs_imbalance_before_migration);
+    }
+
+    static double min_rel_imbalance_before_migration = -1;
+    if(min_rel_imbalance_before_migration == -1) {
+        // try to load it once
+        char *min_rel_balance = getenv("MIN_REL_LOAD_IMBALANCE_BEFORE_MIGRATION");
+        if(min_rel_balance) {
+            min_rel_imbalance_before_migration = atof(min_rel_balance);
+        } else {
+            // default relative threshold
+            min_rel_imbalance_before_migration = 0.0;
+        }
+        fprintf(stderr, "R#%d MIN_REL_LOAD_IMBALANCE_BEFORE_MIGRATION=%f\n", r_info->comm_rank, min_rel_imbalance_before_migration);
+    }
+
     // Sort rank loads and keep track of indices
     int tmp_sorted_array[r_info->comm_size][2];
     int i;
@@ -57,15 +80,17 @@ on_cham_t_callback_select_num_tasks_to_offload(
 
     double min_val      = (double) load_info_per_rank[tmp_sorted_array[0][1]];
     double max_val      = (double) load_info_per_rank[tmp_sorted_array[r_info->comm_size-1][1]];
-    double ratio_lb     = 0.0;
-    double threshold    = 0.1;
-    if(max_val > 0) {
-        ratio_lb = (max_val - min_val) / max_val;
+    double cur_load     = (double) load_info_per_rank[r_info->comm_rank];
+
+    double ratio_lb                 = 0.0; // 1 = high imbalance, 0 = no imbalance
+    if (max_val > 0) {
+        ratio_lb = (double)(max_val-min_val) / (double)max_val;
     }
+
+    if((cur_load-min_val) < min_abs_imbalance_before_migration)
+        return;
     
-    double load_this_rank = (double) load_info_per_rank[r_info->comm_rank];
-    
-    if(ratio_lb > threshold) {
+    if(ratio_lb >= min_rel_imbalance_before_migration) {
         int pos = 0;
         for(i = 0; i < r_info->comm_size; i++) {
             if(tmp_sorted_array[i][1] == r_info->comm_rank) {
@@ -78,9 +103,15 @@ on_cham_t_callback_select_num_tasks_to_offload(
         if((pos+1) >= ((double)r_info->comm_size/2.0))
         {
             // select min rank
-            double ratio_to_min = (load_this_rank - min_val) / load_this_rank;
-            if(ratio_to_min > threshold) {
+            double cur_diff = cur_load-min_val;
+            // check absolute condition
+            if(cur_diff < min_abs_imbalance_before_migration)
+                return;
+
+            double ratio = cur_diff / (double)cur_load;
+            if(min_val < cur_load && ratio >= min_rel_imbalance_before_migration) {
                 int target_rank = tmp_sorted_array[0][1];
+                printf("R#%d Migrating\t%d\ttasks to rank:\t%d\tload:\t%f\tload_victim:\t%f\tratio:\t%f\tdiff:\t%f\n", r_info->comm_rank, 1, target_rank, cur_load, min_val, ratio, cur_diff);
                 num_tasks_to_offload_per_rank[target_rank] = 1;
             }
         }
