@@ -367,7 +367,7 @@ int main(int argc, char **argv)
     fTimeEnd=MPI_Wtime();
     wTimeCham = fTimeEnd-fTimeStart;
     if( iMyRank==0 ) {
-        printf("#R%d: Computations with chameleon took %.2f\n", iMyRank, wTimeCham);
+        printf("#R%d: Computations with chameleon took %.5f\n", iMyRank, wTimeCham);
     }
     LOG(iMyRank, "Validation:");
     if(numberOfTasks>0) {
@@ -416,7 +416,7 @@ int main(int argc, char **argv)
     wTimeHost = fTimeEnd-fTimeStart;
 
     if( iMyRank==0 ) {
-        printf("#R%d: Computations with normal tasking took %.2f\n", iMyRank, wTimeHost);
+        printf("#R%d: Computations with normal tasking took %.5f\n", iMyRank, wTimeHost);
     }
 
     LOG(iMyRank, "Validation:");
@@ -434,7 +434,7 @@ int main(int argc, char **argv)
 
 #if COMPILE_TASKING && COMPILE_CHAMELEON
     if( iMyRank==0 ) {
-        printf("#R%d: This corresponds to a speedup of %.2f!\n", iMyRank, wTimeHost/wTimeCham);
+        printf("#R%d: This corresponds to a speedup of %.5f!\n", iMyRank, wTimeHost/wTimeCham);
     }
 #endif /* COMPILE_TASKING && COMPILE_CHAMELEON */  
 
