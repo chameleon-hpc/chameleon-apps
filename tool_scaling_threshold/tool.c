@@ -162,12 +162,9 @@ on_cham_t_callback_select_num_tasks_to_offload(
         }
 
         // only offload if on the upper side
-        if((pos+1) >= ((double)r_info->comm_size/2.0))
+        if((pos) >= ((double)r_info->comm_size/2.0))
         {
-            int other_pos = r_info->comm_size-pos;
-            // need to adapt in case of even number
-            if(r_info->comm_size % 2 == 0)
-                other_pos--;
+            int other_pos = r_info->comm_size-pos-1;
             int other_idx = tmp_sorted_array[other_pos][1];
             double other_val = (double) load_info_per_rank[other_idx];
 
