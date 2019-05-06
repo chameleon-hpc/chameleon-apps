@@ -100,7 +100,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
         }
 
         // only offload if on the upper side
-        if((pos+1) >= ((double)r_info->comm_size/2.0))
+        if((pos) >= ((double)r_info->comm_size/2.0))
         {
             // select min rank
             double cur_diff = cur_load-min_val;

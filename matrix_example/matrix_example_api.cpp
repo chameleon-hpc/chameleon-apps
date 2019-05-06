@@ -47,6 +47,10 @@
 #define NUM_ITERATIONS 1
 #endif
 
+#ifndef NUM_REPETITIONS
+#define NUM_REPETITIONS 1
+#endif
+
 //#define LOG(rank, str) fprintf(stderr, "#R%d: %s\n", rank, str)
 #define LOG(rank, str) printf("#R%d: %s\n", rank, str)
 
@@ -97,14 +101,17 @@ void initialize_matrix_test_A(double *mat, int matrixSize) {
 }
 
 void compute_matrix_matrix(double * SPEC_RESTRICT a, double * SPEC_RESTRICT b, double * SPEC_RESTRICT c, int matrixSize) {
-	for(int i=0;i<matrixSize;i++) {
-		for(int j=0;j<matrixSize;j++) {
-			c[i*matrixSize+j]=0;
-			for(int k=0;k<matrixSize;k++) {
-				c[i*matrixSize+j] += a[i*matrixSize+k] * b[k*matrixSize+j];
-			}
-		}
-	}
+    // make the tasks more computational expensive by repeating this operation several times to better see effects 
+    for(int iter=0;iter<NUM_REPETITIONS;iter++) {
+        for(int i=0;i<matrixSize;i++) {
+            for(int j=0;j<matrixSize;j++) {
+                c[i*matrixSize+j]=0;
+                for(int k=0;k<matrixSize;k++) {
+                    c[i*matrixSize+j] += a[i*matrixSize+k] * b[k*matrixSize+j];
+                }
+            }
+        }
+    }
 }
 
 bool check_test_matrix(double *c, double val, int matrixSize) {
@@ -396,15 +403,16 @@ int main(int argc, char **argv)
 #endif
 		#pragma omp for
         for(int i=0; i<numberOfTasks; i++) {
-            double *A = matrices_a[i];
-            double *B = matrices_b[i];
-            double *C = matrices_c[i];
+            // double *A = matrices_a[i];
+            // double *B = matrices_b[i];
+            // double *C = matrices_c[i];
             // somehow target offloading is very slow when performaing more that one iteration
             // #pragma omp target map(from: C[0:matrixSize*matrixSize]) map(to:matrixSize, A[0:matrixSize*matrixSize], B[0:matrixSize*matrixSize]) device(1001)
             // uses normal tasks to have a fair comparison
-            #pragma omp task default(shared) firstprivate(A,B,C)
+            // #pragma omp task default(shared) firstprivate(A,B,C)
+            #pragma omp task default(shared) firstprivate(i)
             {
-                compute_matrix_matrix(A, B, C, matrixSize);
+                compute_matrix_matrix(matrices_a[i], matrices_b[i], matrices_c[i], matrixSize);
             }
         }
 #if ITERATIVE_VERSION
