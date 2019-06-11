@@ -15,6 +15,7 @@ include ../../flags_$(TARGET).def
 else
 include ../../flags_claix_intel.def
 endif
+include ../flags_replace.def
 
 NUM_TASKS ?= $(shell echo $$(( $(OMP_NUM_THREADS) * 100 )))
 
