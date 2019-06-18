@@ -39,6 +39,10 @@
 #define USE_TASK_ANNOTATIONS 0
 #endif
 
+#ifndef USE_REPLICATION
+#define USE_REPLICATION 0
+#endif
+
 #ifndef ITERATIVE_VERSION
 #define ITERATIVE_VERSION 1
 #endif
@@ -314,9 +318,39 @@ int main(int argc, char **argv)
                 chameleon_set_annotation_int(annotations, "Int", 42);
                 chameleon_set_annotation_double(annotations, "Dbl", 42.1345);
                 chameleon_set_annotation_string(annotations, "Str", "Test123");
-                int32_t res = chameleon_add_task_manual_w_annotations((void *)&matrixMatrixKernel, 5, args, annotations);
+  #if USE_REPLICATION
+                int num_replicating;
+                int *replicating_ranks;
+                if(iMyRank==0) {
+                  num_replicating = 1;
+                  replicating_ranks = new int[num_replicating];
+                  replicating_ranks[0] = 1;
+                }
+                else {
+                  num_replicating = 0;
+                  replicating_ranks = nullptr;
+                }
+                int32_t res = chameleon_add_replicated_task_manual_w_annotations((void *)&matrixMatrixKernel, 5, args, annotations, num_replicating, replicating_ranks);
+  #else
+                int32_t res = chameleon_add_task_manual_w_annotations((void *)&matrixMatrixKernel, 5, args, annotations,);
+  #endif
 #else
+  #if USE_REPLICATION
+                int num_replicating;
+                int *replicating_ranks;
+                if(iMyRank==0) {
+                  num_replicating = 1;
+                  replicating_ranks = new int[num_replicating];
+                  replicating_ranks[0] = 1;
+                }
+                else {
+                  num_replicating = 0;
+                  replicating_ranks = nullptr;
+                }
+                int32_t res = chameleon_add_replicated_task_manual((void *)&matrixMatrixKernel, 5, args, num_replicating, replicating_ranks);
+  #else
                 int32_t res = chameleon_add_task_manual((void *)&matrixMatrixKernel, 5, args);
+  #endif
 #endif
                 // clean up again
                 delete[] args;
