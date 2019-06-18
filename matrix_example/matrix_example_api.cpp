@@ -322,9 +322,10 @@ int main(int argc, char **argv)
                 int num_replicating;
                 int *replicating_ranks;
                 if(iMyRank==0) {
-                  num_replicating = 1;
+                  num_replicating = 2;
                   replicating_ranks = new int[num_replicating];
                   replicating_ranks[0] = 1;
+                  replicating_ranks[1] = 2;
                 }
                 else {
                   num_replicating = 0;
@@ -339,9 +340,10 @@ int main(int argc, char **argv)
                 int num_replicating;
                 int *replicating_ranks;
                 if(iMyRank==0) {
-                  num_replicating = 1;
+                  num_replicating = 2;
                   replicating_ranks = new int[num_replicating];
                   replicating_ranks[0] = 1;
+                  replicating_ranks[1] = 2;
                 }
                 else {
                   num_replicating = 0;
