@@ -71,6 +71,7 @@
 #include <cmath>
 #include <unistd.h>
 #include <sys/syscall.h>
+#include <atomic>
 
 #if CHECK_GENERATED_TASK_ID
 #include <mutex>
@@ -292,6 +293,9 @@ int main(int argc, char **argv)
             }
 #endif
     	// if(iMyRank==0) {
+#if USE_REPLICATION
+        std::atomic<int> replicated_cnt = 0;
+#endif
 		#pragma omp for
     		for(int i=0; i<numberOfTasks; i++) {
 				double * SPEC_RESTRICT A = matrices_a[i];
@@ -322,10 +326,10 @@ int main(int argc, char **argv)
                 int num_replicating;
                 int *replicating_ranks;
                 if(iMyRank==0) {
-                  num_replicating = 2;
+                  num_replicating = 1;
                   replicating_ranks = new int[num_replicating];
                   replicating_ranks[0] = 1;
-                  replicating_ranks[1] = 2;
+                  //replicating_ranks[1] = 2;
                 }
                 else {
                   num_replicating = 0;
@@ -337,19 +341,24 @@ int main(int argc, char **argv)
   #endif
 #else
   #if USE_REPLICATION
+         
+                int num_to_replicate = 10;
                 int num_replicating;
                 int *replicating_ranks;
                 if(iMyRank==0) {
-                  num_replicating = 2;
+                  num_replicating = 1;
                   replicating_ranks = new int[num_replicating];
                   replicating_ranks[0] = 1;
-                  replicating_ranks[1] = 2;
+                 // replicating_ranks[1] = 2;
                 }
                 else {
                   num_replicating = 0;
                   replicating_ranks = nullptr;
                 }
-                int32_t res = chameleon_add_replicated_task_manual((void *)&matrixMatrixKernel, 5, args, num_replicating, replicating_ranks);
+                if(replicated_cnt++<num_to_replicate)
+                  int32_t res = chameleon_add_replicated_task_manual((void *)&matrixMatrixKernel, 5, args, num_replicating, replicating_ranks);
+                else
+                  int32_t res = chameleon_add_task_manual((void *)&matrixMatrixKernel, 5, args);
   #else
                 int32_t res = chameleon_add_task_manual((void *)&matrixMatrixKernel, 5, args);
   #endif
