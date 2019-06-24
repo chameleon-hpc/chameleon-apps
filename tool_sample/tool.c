@@ -234,11 +234,15 @@ static int32_t
 on_cham_t_callback_determine_local_load(
     TYPE_TASK_ID* task_ids_local,
     int32_t num_tasks_local,
+    TYPE_TASK_ID* task_ids_local_rep,
+    int32_t num_tasks_local_rep,
     TYPE_TASK_ID* task_ids_stolen,
-    int32_t num_tasks_stolen)
+    int32_t num_tasks_stolen,
+    TYPE_TASK_ID* task_ids_stolen_rep,
+    int32_t num_tasks_stolen_rep)
 {
     printf("on_cham_t_callback_determine_local_load ==> task_ids_local=" DPxMOD ";num_tasks_local=%d;task_ids_stolen=" DPxMOD ";num_tasks_stolen=%d\n", DPxPTR(task_ids_local), num_tasks_local, DPxPTR(task_ids_stolen), num_tasks_stolen);
-    return (num_tasks_local+num_tasks_stolen);
+    return (num_tasks_local+num_tasks_local_rep+num_tasks_stolen);
 }
 
 int compare( const void *pa, const void *pb )
@@ -336,6 +340,43 @@ on_cham_t_callback_select_num_tasks_to_offload(
             }
         }
     }
+}
+
+static cham_replication_info_t*
+on_cham_t_callback_select_num_tasks_to_replicate(
+    const int32_t* load_info_per_rank,
+    int32_t num_tasks_local,
+    int32_t *num_replication_infos)
+{
+    double alpha = 0.1;
+    cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
+    int myLeft = r_info->comm_rank-1;
+    int myRight = r_info->comm_rank+1;
+
+    int neighbours = 0;
+
+    if(myLeft>0) neighbours++;
+    if(myRight<r_info->comm_size) neighbours++;
+
+    cham_replication_info_t *replication_infos = (cham_replication_info_t*) malloc(sizeof(cham_replication_info_t)*neighbours);
+    int32_t cnt = 0;
+
+    if(myLeft>0) {
+        int num_tasks = num_tasks_local*alpha;
+        int *replicating_ranks = (int*) malloc(sizeof(int)*1);
+	replicating_ranks[0] = myLeft;
+	cham_replication_info_t info = cham_replication_info_create(num_tasks, 1, replicating_ranks);
+	replication_infos[cnt++] = info;
+    }
+    if(myRight<r_info->comm_size) {
+	int num_tasks = num_tasks_local*alpha;
+	int *replicating_ranks = (int*) malloc(sizeof(int)*1);
+	replicating_ranks[0] = myRight;
+	cham_replication_info_t info = cham_replication_info_create(num_tasks, 1, replicating_ranks);
+	replication_infos[cnt++] = info;
+    }
+    *num_replication_infos = cnt;
+    return replication_infos;
 }
 
 // static cham_t_migration_tupel_t*
@@ -482,6 +523,8 @@ int cham_t_initialize(
     // if not registered cham_t_callback_select_num_tasks_to_offload is used (coarse-grained)
     // register_callback(cham_t_callback_select_tasks_for_migration);
     register_callback(cham_t_callback_select_num_tasks_to_offload);
+ 
+    register_callback(cham_t_callback_select_num_tasks_to_replicate);
 
     cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
     cham_t_data_t * r_data      = cham_t_get_rank_data();
