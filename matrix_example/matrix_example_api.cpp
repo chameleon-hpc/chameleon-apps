@@ -295,6 +295,7 @@ int main(int argc, char **argv)
     	// if(iMyRank==0) {
 #if USE_REPLICATION
         std::atomic<int> replicated_cnt = 0;
+        int num_to_replicate            = 10;
 #endif
 		#pragma omp for
     		for(int i=0; i<numberOfTasks; i++) {
@@ -317,58 +318,31 @@ int main(int argc, char **argv)
                 args[3] = chameleon_map_data_entry_create(literal_matrix_size, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
                 args[4] = chameleon_map_data_entry_create(literal_i, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
 
+                // create opaque task here
+                cham_migratable_task_t *cur_task = chameleon_create_task((void *)&matrixMatrixKernel, 5, args);
 #if USE_TASK_ANNOTATIONS
                 chameleon_annotations_t* annotations = chameleon_create_annotation_container();
                 chameleon_set_annotation_int(annotations, "Int", 42);
                 chameleon_set_annotation_double(annotations, "Dbl", 42.1345);
                 chameleon_set_annotation_string(annotations, "Str", "Test123");
-  #if USE_REPLICATION
-                int num_replicating;
-                int *replicating_ranks;
-                if(iMyRank==0) {
-                  num_replicating = 1;
-                  replicating_ranks = new int[num_replicating];
-                  replicating_ranks[0] = 1;
-                  //replicating_ranks[1] = 2;
-                }
-                else {
-                  num_replicating = 0;
-                  replicating_ranks = nullptr;
-                }
-                int32_t res = chameleon_add_replicated_task_manual_w_annotations((void *)&matrixMatrixKernel, 5, args, annotations, num_replicating, replicating_ranks);
-  #else
-                int32_t res = chameleon_add_task_manual_w_annotations((void *)&matrixMatrixKernel, 5, args, annotations,);
-  #endif
-#else
-  #if USE_REPLICATION
-         
-                int num_to_replicate = 10;
-                int num_replicating;
-                int *replicating_ranks;
-                if(iMyRank==0) {
-                  num_replicating = 1;
-                  replicating_ranks = new int[num_replicating];
-                  replicating_ranks[0] = 1;
-                 // replicating_ranks[1] = 2;
-                }
-                else {
-                  num_replicating = 0;
-                  replicating_ranks = nullptr;
-                }
-                if(replicated_cnt++<num_to_replicate)
-                  int32_t res = chameleon_add_replicated_task_manual((void *)&matrixMatrixKernel, 5, args, num_replicating, replicating_ranks);
-                else
-                  int32_t res = chameleon_add_task_manual((void *)&matrixMatrixKernel, 5, args);
-  #else
-                int32_t res = chameleon_add_task_manual((void *)&matrixMatrixKernel, 5, args);
-  #endif
+                chameleon_set_task_annotations(cur_task, annotations);
 #endif
+#if USE_REPLICATION
+                if(iMyRank==0) {
+                    if(replicated_cnt++<num_to_replicate) {
+                        int num_replication = 1;
+                        int *replication_ranks = new int[num_replication];
+                        replication_ranks[0] = 1;
+                        chameleon_set_task_replication_info(cur_task, num_replication, replication_ranks);
+                        delete[] replication_ranks;
+                    }
+                }
+#endif
+                int32_t res = chameleon_add_task(cur_task);
                 // clean up again
                 delete[] args;
-
                 // get the id of the last task added
                 TYPE_TASK_ID last_t_id = chameleon_get_last_local_task_id_added();
-                
 #if CHECK_GENERATED_TASK_ID
                 printf("#R%d (OS_TID:%ld): last task that has been created: %ld\n", iMyRank, syscall(SYS_gettid), last_t_id);
                 mtx_t_ids.lock();
@@ -451,7 +425,7 @@ int main(int argc, char **argv)
             // double *A = matrices_a[i];
             // double *B = matrices_b[i];
             // double *C = matrices_c[i];
-            // somehow target offloading is very slow when performaing more that one iteration
+            // somehow target offloading is very slow when performing more that one iteration
             // #pragma omp target map(from: C[0:matrixSize*matrixSize]) map(to:matrixSize, A[0:matrixSize*matrixSize], B[0:matrixSize*matrixSize]) device(1001)
             // uses normal tasks to have a fair comparison
             // #pragma omp task default(shared) firstprivate(A,B,C)
