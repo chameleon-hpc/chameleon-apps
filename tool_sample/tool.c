@@ -363,16 +363,16 @@ on_cham_t_callback_select_num_tasks_to_replicate(
 
     if(myLeft>0) {
         int num_tasks = num_tasks_local*alpha;
-        int *replicating_ranks = (int*) malloc(sizeof(int)*1);
-	replicating_ranks[0] = myLeft;
-	cham_replication_info_t info = cham_replication_info_create(num_tasks, 1, replicating_ranks);
+        int *replication_ranks = (int*) malloc(sizeof(int)*1);
+	replication_ranks[0] = myLeft;
+	cham_replication_info_t info = cham_replication_info_create(num_tasks, 1, replication_ranks);
 	replication_infos[cnt++] = info;
     }
     if(myRight<r_info->comm_size) {
 	int num_tasks = num_tasks_local*alpha;
-	int *replicating_ranks = (int*) malloc(sizeof(int)*1);
-	replicating_ranks[0] = myRight;
-	cham_replication_info_t info = cham_replication_info_create(num_tasks, 1, replicating_ranks);
+	int *replication_ranks = (int*) malloc(sizeof(int)*1);
+	replication_ranks[0] = myRight;
+	cham_replication_info_t info = cham_replication_info_create(num_tasks, 1, replication_ranks);
 	replication_infos[cnt++] = info;
     }
     *num_replication_infos = cnt;
