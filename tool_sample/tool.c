@@ -342,7 +342,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
     }
 }
 
-static cham_replication_info_t*
+static cham_t_replication_info_t*
 on_cham_t_callback_select_num_tasks_to_replicate(
     const int32_t* load_info_per_rank,
     int32_t num_tasks_local,
@@ -358,21 +358,21 @@ on_cham_t_callback_select_num_tasks_to_replicate(
     if(myLeft>0) neighbours++;
     if(myRight<r_info->comm_size) neighbours++;
 
-    cham_replication_info_t *replication_infos = (cham_replication_info_t*) malloc(sizeof(cham_replication_info_t)*neighbours);
+    cham_t_replication_info_t *replication_infos = (cham_t_replication_info_t*) malloc(sizeof(cham_t_replication_info_t)*neighbours);
     int32_t cnt = 0;
 
     if(myLeft>0) {
         int num_tasks = num_tasks_local*alpha;
         int *replication_ranks = (int*) malloc(sizeof(int)*1);
 	replication_ranks[0] = myLeft;
-	cham_replication_info_t info = cham_replication_info_create(num_tasks, 1, replication_ranks);
+	cham_t_replication_info_t info = cham_t_replication_info_create(num_tasks, 1, replication_ranks);
 	replication_infos[cnt++] = info;
     }
     if(myRight<r_info->comm_size) {
 	int num_tasks = num_tasks_local*alpha;
 	int *replication_ranks = (int*) malloc(sizeof(int)*1);
 	replication_ranks[0] = myRight;
-	cham_replication_info_t info = cham_replication_info_create(num_tasks, 1, replication_ranks);
+	cham_t_replication_info_t info = cham_t_replication_info_create(num_tasks, 1, replication_ranks);
 	replication_infos[cnt++] = info;
     }
     *num_replication_infos = cnt;
