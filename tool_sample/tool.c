@@ -355,13 +355,13 @@ on_cham_t_callback_select_num_tasks_to_replicate(
 
     int neighbours = 0;
 
-    if(myLeft>0) neighbours++;
+    if(myLeft>=0) neighbours++;
     if(myRight<r_info->comm_size) neighbours++;
 
     cham_t_replication_info_t *replication_infos = (cham_t_replication_info_t*) malloc(sizeof(cham_t_replication_info_t)*neighbours);
     int32_t cnt = 0;
 
-    if(myLeft>0) {
+    if(myLeft>=0) {
         int num_tasks = num_tasks_local*alpha;
         int *replication_ranks = (int*) malloc(sizeof(int)*1);
 	replication_ranks[0] = myLeft;
