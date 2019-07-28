@@ -314,7 +314,7 @@ int main(int argc, char **argv)
                 chameleon_map_data_entry_t* args = new chameleon_map_data_entry_t[5];
                 args[0] = chameleon_map_data_entry_create(A, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
                 args[1] = chameleon_map_data_entry_create(B, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
-                args[2] = chameleon_map_data_entry_create(C, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
+                args[2] = chameleon_map_data_entry_create(C, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_FROM);
                 args[3] = chameleon_map_data_entry_create(literal_matrix_size, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
                 args[4] = chameleon_map_data_entry_create(literal_i, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
 
