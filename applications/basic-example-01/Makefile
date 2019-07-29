@@ -7,7 +7,7 @@ ADD_ARGS=-g -O0
 #ADD_ARGS=-g -O0 -rdynamic
 
 default: # MPI+Offloading
-	$(MPICXX) -I../../src -L../../src -fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu -DUSE_MPI=1 $(ADD_ARGS) -o $(PROG).exe $(PROG).cpp -lm -lchameleon
+	$(MPICXX) -I../../../src -L../../../src -fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu -DUSE_MPI=1 $(ADD_ARGS) -o $(PROG).exe $(PROG).cpp -lm -lchameleon
 
 plain:
 	clang -fopenmp -fopenmp-targets=x86_64-unknown-linux-gnu -DUSE_MPI=0 $(ADD_ARGS) -o $(PROG).exe $(PROG).cpp -lm -lstdc++

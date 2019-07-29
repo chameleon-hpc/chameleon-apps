@@ -12,11 +12,11 @@ COMPILE_TASKING ?= 1
 USE_REPLICATION ?= 0
 
 ifneq ($(TARGET),)
-include ../../flags_$(TARGET).def
+include ../../../flags_$(TARGET).def
 else
-include ../../flags_claix_intel.def
+include ../../../flags_claix_intel.def
 endif
-include ../../flags_replace.def
+include ../../../flags_replace.def
 
 NUM_TASKS ?= $(shell echo $$(( $(OMP_NUM_THREADS) * 100 )))
 
