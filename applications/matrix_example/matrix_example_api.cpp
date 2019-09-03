@@ -377,6 +377,9 @@ int main(int argc, char **argv)
         #pragma omp barrier
 #endif
     	int res = chameleon_distributed_taskwait(0);
+
+        #pragma omp single
+        MPI_Barrier(MPI_COMM_WORLD);
 #if ITERATIVE_VERSION
         }
 #endif
@@ -434,6 +437,9 @@ int main(int argc, char **argv)
                 compute_matrix_matrix(matrices_a[i], matrices_b[i], matrices_c[i], matrixSize);
             }
         }
+
+        #pragma omp single
+        MPI_Barrier(MPI_COMM_WORLD);
 #if ITERATIVE_VERSION
         }
 #endif
