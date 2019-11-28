@@ -428,10 +428,11 @@ int main(int argc, char **argv)
             // double *A = matrices_a[i];
             // double *B = matrices_b[i];
             // double *C = matrices_c[i];
+            
             // somehow target offloading is very slow when performing more that one iteration
             // #pragma omp target map(from: C[0:matrixSize*matrixSize]) map(to:matrixSize, A[0:matrixSize*matrixSize], B[0:matrixSize*matrixSize]) device(1001)
+            
             // uses normal tasks to have a fair comparison
-            // #pragma omp task default(shared) firstprivate(A,B,C)
             #pragma omp task default(shared) firstprivate(i)
             {
                 compute_matrix_matrix(matrices_a[i], matrices_b[i], matrices_c[i], matrixSize);
