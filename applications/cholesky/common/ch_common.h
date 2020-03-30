@@ -69,7 +69,7 @@ void dsyrk_ (char *uplo, char *trans, int *n, int *k, double *alpha, double *a, 
 void cholesky_single(const int ts, const int nt, double* A[nt][nt]);
 void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, double *C[nt], int *block_rank);
 
-void omp_potrf(double * const A, int ts, int ld);
+void omp_potrf(double * SPEC_RESTRICT const A, int ts, int ld);
 void omp_trsm(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, int ts, int ld);
 void omp_gemm(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, double * SPEC_RESTRICT C, int ts, int ld);
 void omp_syrk(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, int ts, int ld);
