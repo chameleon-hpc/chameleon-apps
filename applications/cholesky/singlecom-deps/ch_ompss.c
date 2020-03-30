@@ -3,7 +3,7 @@
 #include "../timing.h"
 // #include "../timing_override.h"
 
-void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, double *C[nt], int *block_rank)
+void cholesky_mpi(const int ts, const int nt, double * SPEC_RESTRICT A[nt][nt], double * SPEC_RESTRICT B, double * SPEC_RESTRICT C[nt], int *block_rank)
 {
 
     #if defined(CHAMELEON) || defined(CHAMELEON_TARGET)
@@ -15,21 +15,43 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
     chameleon_determine_base_addresses((void *)&cholesky_mpi);
     #endif
 
+    void* literal_ts            = *(void**)(&ts);
+
+#pragma omp parallel
+#pragma omp master
+    INIT_TIMING(omp_get_num_threads());
+
+    START_TIMING(TIME_TOTAL);
+
 #pragma omp parallel
 {
-#pragma omp single
+#pragma omp single nowait
 {
-    INIT_TIMING(omp_get_num_threads());
-    START_TIMING(TIME_TOTAL);
     {
     START_TIMING(TIME_CREATE);
     
     for (int k = 0; k < nt; k++) {
+        double * SPEC_RESTRICT tmp_a_k_k = A[k][k];
+
         if (block_rank[k*nt+k] == mype) {
             #pragma omp task depend(out: A[k][k]) firstprivate(k)
             {
-                //printf("Computing potrf in k=%d\n", k);
-                omp_potrf(A[k][k], ts, ts);
+#if CHAMELEON
+                chameleon_map_data_entry_t* args = (chameleon_map_data_entry_t*) malloc(3*sizeof(chameleon_map_data_entry_t));
+                args[0] = chameleon_map_data_entry_create(tmp_a_k_k, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
+                args[1] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                args[2] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                cham_migratable_task_t *cur_task = chameleon_create_task((void *)&omp_potrf, 3, args);
+                int32_t res = chameleon_add_task(cur_task);
+                free(args);
+                TYPE_TASK_ID tmp_id = chameleon_get_last_local_task_id_added();
+                
+                while(!chameleon_local_task_has_finished(tmp_id)) {
+                    chameleon_taskyield();
+                }
+#else
+                omp_potrf(tmp_a_k_k, ts, ts);
+#endif
             }
         }
 
@@ -89,16 +111,50 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
         }
 
         for (int i = k + 1; i < nt; i++) {
+            double * SPEC_RESTRICT tmp_a_k_i = A[k][i];
+
             if (block_rank[k*nt+i] == mype) {
                 if (block_rank[k*nt+k] == mype) {
                     #pragma omp task depend(in: A[k][k], comm_sentinel) depend(out: A[k][i]) firstprivate(k, i)
                     {
-                        omp_trsm(A[k][k], A[k][i], ts, ts);
+#if CHAMELEON
+                        chameleon_map_data_entry_t* args = (chameleon_map_data_entry_t*) malloc(4*sizeof(chameleon_map_data_entry_t));
+                        args[0] = chameleon_map_data_entry_create(tmp_a_k_k, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                        args[1] = chameleon_map_data_entry_create(tmp_a_k_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
+                        args[2] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                        args[3] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                        cham_migratable_task_t *cur_task = chameleon_create_task((void *)&omp_trsm, 4, args);
+                        int32_t res = chameleon_add_task(cur_task);
+                        free(args);
+                        TYPE_TASK_ID tmp_id = chameleon_get_last_local_task_id_added();
+                        
+                        while(!chameleon_local_task_has_finished(tmp_id)) {
+                            chameleon_taskyield();
+                        }
+#else
+                        omp_trsm(tmp_a_k_k, tmp_a_k_i, ts, ts);
+#endif
                     }
                 } else {
                     #pragma omp task depend(in: B, comm_sentinel) depend(out: A[k][i]) firstprivate(k, i)
                     {
-                        omp_trsm(B, A[k][i], ts, ts);
+#if CHAMELEON
+                        chameleon_map_data_entry_t* args = (chameleon_map_data_entry_t*) malloc(4*sizeof(chameleon_map_data_entry_t));
+                        args[0] = chameleon_map_data_entry_create(B, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                        args[1] = chameleon_map_data_entry_create(tmp_a_k_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
+                        args[2] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                        args[3] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                        cham_migratable_task_t *cur_task = chameleon_create_task((void *)&omp_trsm, 4, args);
+                        int32_t res = chameleon_add_task(cur_task);
+                        free(args);
+                        TYPE_TASK_ID tmp_id = chameleon_get_last_local_task_id_added();
+                        
+                        while(!chameleon_local_task_has_finished(tmp_id)) {
+                            chameleon_taskyield();
+                        }
+#else
+                        omp_trsm(B, tmp_a_k_i, ts, ts);
+#endif
                     }
                 }
             }
@@ -159,27 +215,103 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
         }
 
         for (int i = k + 1; i < nt; i++) {
+            double * SPEC_RESTRICT tmp_a_k_i = A[k][i];
+            double * SPEC_RESTRICT tmp_a_i_i = A[i][i];
+            double * SPEC_RESTRICT tmp_c_i   = C[i];
+
             for (int j = k + 1; j < i; j++) {
+                double * SPEC_RESTRICT tmp_a_k_j = A[k][j];
+                double * SPEC_RESTRICT tmp_a_j_i = A[j][i];
+                double * SPEC_RESTRICT tmp_c_j   = C[j];
+
                 if (block_rank[j*nt+i] == mype) {
                     if (block_rank[k*nt+i] == mype && block_rank[k*nt+j] == mype) {
                         #pragma omp task depend(in: A[k][i], A[k][j]) depend(out: A[j][i]) firstprivate(k, j, i)
                         {
-                            omp_gemm(A[k][i], A[k][j], A[j][i], ts, ts);
+#if CHAMELEON
+                        chameleon_map_data_entry_t* args = (chameleon_map_data_entry_t*) malloc(5*sizeof(chameleon_map_data_entry_t));
+                        args[0] = chameleon_map_data_entry_create(tmp_a_k_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                        args[1] = chameleon_map_data_entry_create(tmp_a_k_j, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                        args[2] = chameleon_map_data_entry_create(tmp_a_j_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
+                        args[3] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                        args[4] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                        cham_migratable_task_t *cur_task = chameleon_create_task((void *)&omp_gemm, 5, args);
+                        int32_t res = chameleon_add_task(cur_task);
+                        free(args);
+                        TYPE_TASK_ID tmp_id = chameleon_get_last_local_task_id_added();
+                        
+                        while(!chameleon_local_task_has_finished(tmp_id)) {
+                            chameleon_taskyield();
+                        }
+#else
+                            omp_gemm(tmp_a_k_i, tmp_a_k_j, tmp_a_j_i, ts, ts);
+#endif
                         }
                     } else if (block_rank[k*nt+i] != mype && block_rank[k*nt+j] == mype) {
                         #pragma omp task depend(in: A[k][j], comm_sentinel) depend(out: A[j][i]) firstprivate(k, j, i)
                         {
-                            omp_gemm(C[i], A[k][j], A[j][i], ts, ts);
+#if CHAMELEON
+                            chameleon_map_data_entry_t* args = (chameleon_map_data_entry_t*) malloc(5*sizeof(chameleon_map_data_entry_t));
+                            args[0] = chameleon_map_data_entry_create(tmp_c_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                            args[1] = chameleon_map_data_entry_create(tmp_a_k_j, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                            args[2] = chameleon_map_data_entry_create(tmp_a_j_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
+                            args[3] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                            args[4] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                            cham_migratable_task_t *cur_task = chameleon_create_task((void *)&omp_gemm, 5, args);
+                            int32_t res = chameleon_add_task(cur_task);
+                            free(args);
+                            TYPE_TASK_ID tmp_id = chameleon_get_last_local_task_id_added();
+                            
+                            while(!chameleon_local_task_has_finished(tmp_id)) {
+                                chameleon_taskyield();
+                            }
+#else
+                            omp_gemm(tmp_c_i, tmp_a_k_j, tmp_a_j_i, ts, ts);
+#endif
                         }
                     } else if (block_rank[k*nt+i] == mype && block_rank[k*nt+j] != mype) {
                         #pragma omp task depend(in: A[k][i], comm_sentinel) depend(out: A[j][i]) firstprivate(k, j, i)
                         {
-                            omp_gemm(A[k][i], C[j], A[j][i], ts, ts);
+#if CHAMELEON
+                            chameleon_map_data_entry_t* args = (chameleon_map_data_entry_t*) malloc(5*sizeof(chameleon_map_data_entry_t));
+                            args[0] = chameleon_map_data_entry_create(tmp_a_k_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                            args[1] = chameleon_map_data_entry_create(tmp_c_j, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                            args[2] = chameleon_map_data_entry_create(tmp_a_j_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
+                            args[3] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                            args[4] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                            cham_migratable_task_t *cur_task = chameleon_create_task((void *)&omp_gemm, 5, args);
+                            int32_t res = chameleon_add_task(cur_task);
+                            free(args);
+                            TYPE_TASK_ID tmp_id = chameleon_get_last_local_task_id_added();
+                            
+                            while(!chameleon_local_task_has_finished(tmp_id)) {
+                                chameleon_taskyield();
+                            }
+#else
+                            omp_gemm(tmp_a_k_i, tmp_c_j, tmp_a_j_i, ts, ts);
+#endif
                         }
                     } else {
                         #pragma omp task depend(in: comm_sentinel) depend(out: A[j][i]) firstprivate(k, j, i)
                         {
-                            omp_gemm(C[i], C[j], A[j][i], ts, ts);
+#if CHAMELEON
+                            chameleon_map_data_entry_t* args = (chameleon_map_data_entry_t*) malloc(5*sizeof(chameleon_map_data_entry_t));
+                            args[0] = chameleon_map_data_entry_create(tmp_c_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                            args[1] = chameleon_map_data_entry_create(tmp_c_j, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                            args[2] = chameleon_map_data_entry_create(tmp_a_j_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
+                            args[3] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                            args[4] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                            cham_migratable_task_t *cur_task = chameleon_create_task((void *)&omp_gemm, 5, args);
+                            int32_t res = chameleon_add_task(cur_task);
+                            free(args);
+                            TYPE_TASK_ID tmp_id = chameleon_get_last_local_task_id_added();
+                            
+                            while(!chameleon_local_task_has_finished(tmp_id)) {
+                                chameleon_taskyield();
+                            }
+#else
+                            omp_gemm(tmp_c_i, tmp_c_j, tmp_a_j_i, ts, ts);
+#endif
                         }
                     }
                 }
@@ -189,12 +321,44 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                 if (block_rank[k*nt+i] == mype) {
                     #pragma omp task depend(in: A[k][i]) depend(out: A[i][i]) firstprivate(k, i)
                     {
-                        omp_syrk(A[k][i], A[i][i], ts, ts);
+#if CHAMELEON
+                        chameleon_map_data_entry_t* args = (chameleon_map_data_entry_t*) malloc(4*sizeof(chameleon_map_data_entry_t));
+                        args[0] = chameleon_map_data_entry_create(tmp_a_k_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                        args[1] = chameleon_map_data_entry_create(tmp_a_i_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
+                        args[2] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                        args[3] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                        cham_migratable_task_t *cur_task = chameleon_create_task((void *)&omp_syrk, 4, args);
+                        int32_t res = chameleon_add_task(cur_task);
+                        free(args);
+                        TYPE_TASK_ID tmp_id = chameleon_get_last_local_task_id_added();
+                        
+                        while(!chameleon_local_task_has_finished(tmp_id)) {
+                            chameleon_taskyield();
+                        }
+#else
+                        omp_syrk(tmp_a_k_i, tmp_a_i_i, ts, ts);
+#endif
                     }
                 } else {
                     #pragma omp task depend(in: comm_sentinel) depend(out: A[i][i]) firstprivate(k, i)
                     {
-                        omp_syrk(C[i], A[i][i], ts, ts);
+#if CHAMELEON
+                        chameleon_map_data_entry_t* args = (chameleon_map_data_entry_t*) malloc(4*sizeof(chameleon_map_data_entry_t));
+                        args[0] = chameleon_map_data_entry_create(tmp_c_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                        args[1] = chameleon_map_data_entry_create(tmp_a_i_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
+                        args[2] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                        args[3] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
+                        cham_migratable_task_t *cur_task = chameleon_create_task((void *)&omp_syrk, 4, args);
+                        int32_t res = chameleon_add_task(cur_task);
+                        free(args);
+                        TYPE_TASK_ID tmp_id = chameleon_get_last_local_task_id_added();
+                        
+                        while(!chameleon_local_task_has_finished(tmp_id)) {
+                            chameleon_taskyield();
+                        }
+#else
+                        omp_syrk(tmp_c_i, tmp_a_i_i, ts, ts);
+#endif
                     }
                 }
             }
@@ -202,14 +366,23 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
     }
     END_TIMING(TIME_CREATE);
     }
-    
-    #pragma omp taskwait
-    END_TIMING(TIME_TOTAL);
-    MPI_Barrier(MPI_COMM_WORLD);
-    PRINT_TIMINGS();
-    FREE_TIMING();
 }// pragma omp single
+
+#if defined(CHAMELEON) || defined(CHAMELEON_TARGET)
+    chameleon_distributed_taskwait(0);
+#else
+    #pragma omp barrier
+    MPI_Barrier(MPI_COMM_WORLD);
+#endif
 }// pragma omp parallel
+
+END_TIMING(TIME_TOTAL);
+
+#pragma omp parallel
+#pragma omp master
+    PRINT_TIMINGS(omp_get_num_threads());
+
+FREE_TIMING();
 
 #if defined(CHAMELEON) || defined(CHAMELEON_TARGET)
     chameleon_finalize();
