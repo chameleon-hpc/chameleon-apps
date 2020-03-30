@@ -37,27 +37,29 @@ static void get_block_rank(int *block_rank, int nt);
 #endif
 void omp_potrf(double * SPEC_RESTRICT const A, int ts, int ld)
 {
-#ifdef TRACE
+    #ifdef TRACE
     static int event_potrf = -1;
-    char* event_name = "potrf";
     if(event_potrf == -1) {
+        char* event_name = "potrf";
         int ierr;
         ierr = VT_funcdef(event_name, VT_NOCLASS, &event_potrf);
     }
     VT_begin(event_potrf);
-#endif
-#if (defined(DEBUG) || defined(USE_TIMING))
+    #endif
+    
+    #if (defined(DEBUG) || defined(USE_TIMING))
     START_TIMING(TIME_POTRF);
-#endif
+    #endif
     static int INFO;
     static const char L = 'L';
     dpotrf_(&L, &ts, A, &ld, &INFO);
-#if (defined(DEBUG) || defined(USE_TIMING))
+    #if (defined(DEBUG) || defined(USE_TIMING))
     END_TIMING(TIME_POTRF);
-#endif
-#ifdef TRACE
+    #endif
+    
+    #ifdef TRACE
     VT_end(event_potrf);
-#endif
+    #endif
 }
 #ifdef CHAMELEON_TARGET
 #pragma omp end declare target
@@ -65,27 +67,29 @@ void omp_potrf(double * SPEC_RESTRICT const A, int ts, int ld)
 #endif
 void omp_trsm(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, int ts, int ld)
 {
-#ifdef TRACE
+    #ifdef TRACE
     static int event_trsm = -1;
-    char* event_name = "trsm";
     if(event_trsm == -1) {
+        char* event_name = "trsm";
         int ierr;
         ierr = VT_funcdef(event_name, VT_NOCLASS, &event_trsm);
     }
     VT_begin(event_trsm);
-#endif
-#if (defined(DEBUG) || defined(USE_TIMING))
+    #endif
+
+    #if (defined(DEBUG) || defined(USE_TIMING))
     START_TIMING(TIME_TRSM);
-#endif
+    #endif
     static char LO = 'L', TR = 'T', NU = 'N', RI = 'R';
     static double DONE = 1.0;
     dtrsm_(&RI, &LO, &TR, &NU, &ts, &ts, &DONE, A, &ld, B, &ld );
-#if (defined(DEBUG) || defined(USE_TIMING))
+    #if (defined(DEBUG) || defined(USE_TIMING))
     END_TIMING(TIME_TRSM);
-#endif
-#ifdef TRACE
+    #endif
+
+    #ifdef TRACE
     VT_end(event_trsm);
-#endif
+    #endif
 }
 #ifdef CHAMELEON_TARGET
 #pragma omp end declare target
@@ -93,27 +97,29 @@ void omp_trsm(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, int ts, int ld
 #endif
 void omp_gemm(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, double * SPEC_RESTRICT C, int ts, int ld)
 {
-#ifdef TRACE
+    #ifdef TRACE
     static int event_gemm = -1;
-    char* event_name = "gemm";
     if(event_gemm == -1) {
+        char* event_name = "gemm";
         int ierr;
         ierr = VT_funcdef(event_name, VT_NOCLASS, &event_gemm);
     }
     VT_begin(event_gemm);
-#endif
-#if (defined(DEBUG) || defined(USE_TIMING))
+    #endif
+
+    #if (defined(DEBUG) || defined(USE_TIMING))
     START_TIMING(TIME_GEMM);
-#endif
+    #endif
     static const char TR = 'T', NT = 'N';
     static double DONE = 1.0, DMONE = -1.0;
     dgemm_(&NT, &TR, &ts, &ts, &ts, &DMONE, A, &ld, B, &ld, &DONE, C, &ld);
-#if (defined(DEBUG) || defined(USE_TIMING))
+    #if (defined(DEBUG) || defined(USE_TIMING))
     END_TIMING(TIME_GEMM);
-#endif
-#ifdef TRACE
+    #endif
+
+    #ifdef TRACE
     VT_end(event_gemm);
-#endif
+    #endif
 }
 #ifdef CHAMELEON_TARGET
 #pragma omp end declare target
@@ -121,28 +127,29 @@ void omp_gemm(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, double * SPEC_
 #endif
 void omp_syrk(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, int ts, int ld)
 {
-#ifdef TRACE
+    #ifdef TRACE
     static int event_syrk = -1;
-    char* event_name = "syrk";
     if(event_syrk == -1) {
+        char* event_name = "syrk";
         int ierr;
         ierr = VT_funcdef(event_name, VT_NOCLASS, &event_syrk);
     }
     VT_begin(event_syrk);
-#endif
-#if (defined(DEBUG) || defined(USE_TIMING))
-    cnt_syrk++;
+    #endif
+
+    #if (defined(DEBUG) || defined(USE_TIMING))
     START_TIMING(TIME_SYRK);
-#endif
+    #endif
     static char LO = 'L', NT = 'N';
     static double DONE = 1.0, DMONE = -1.0;
     dsyrk_(&LO, &NT, &ts, &ts, &DMONE, A, &ld, &DONE, B, &ld );
-#if (defined(DEBUG) || defined(USE_TIMING))
+    #if (defined(DEBUG) || defined(USE_TIMING))
     END_TIMING(TIME_SYRK);
-#endif
-#ifdef TRACE
+    #endif
+
+    #ifdef TRACE
     VT_end(event_syrk);
-#endif
+    #endif
 }
 #ifdef CHAMELEON_TARGET
 #pragma omp end declare target
@@ -198,30 +205,34 @@ void cholesky_single(const int ts, const int nt, double* A[nt][nt])
 
 inline void wait(MPI_Request *comm_req)
 {
-// #ifdef TRACE
-//     static int event_wait = -1;
-//     char* event_name = "wait";
-//     if(event_wait == -1) {
-//         int ierr; 
-//         ierr = VT_funcdef(event_name, VT_NOCLASS, &event_wait);
-//     }
-//     VT_begin(event_wait);
-// #endif
+    #ifdef TRACE
+    static int event_wait = -1;
+    if(event_wait == -1) {
+        char* event_name = "wait";
+        int ierr; 
+        ierr = VT_funcdef(event_name, VT_NOCLASS, &event_wait);
+    }
+    VT_begin(event_wait);
+    #endif
     int comm_comp = 0;
 
+    #ifdef DISABLE_TASKYIELD
+    MPI_Wait(comm_req, MPI_STATUS_IGNORE);
+    #else
     MPI_Test(comm_req, &comm_comp, MPI_STATUS_IGNORE);
     while (!comm_comp) {
-#if defined(CHAMELEON) || defined(CHAMELEON_TARGET)
-    int32_t res = chameleon_taskyield();
-#else
-#pragma omp taskyield
-#endif
+        #if defined(CHAMELEON) || defined(CHAMELEON_TARGET)
+        chameleon_taskyield();
+        #else
+        #pragma omp taskyield
+        #endif
         MPI_Test(comm_req, &comm_comp, MPI_STATUS_IGNORE);
     }
-//    MPI_Wait(comm_req, MPI_STATUS_IGNORE);
-// #ifdef TRACE
-//     VT_end(event_wait);
-// #endif
+    #endif
+
+    #ifdef TRACE
+    VT_end(event_wait);
+    #endif
 }
 
 inline void reset_send_flags(char *send_flags)
@@ -264,7 +275,7 @@ int main(int argc, char *argv[])
 
     MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
     if (provided != MPI_THREAD_MULTIPLE) {
-        printf("This Compiler does not support MPI_THREAD_MULTIPLE\n");
+        fprintf(stderr, "This Compiler does not support MPI_THREAD_MULTIPLE\n");
         exit(0);
     }
 
@@ -291,7 +302,7 @@ int main(int argc, char *argv[])
     int *block_rank = malloc(nt * nt * sizeof(int));
     get_block_rank(block_rank, nt);
 
-#if (defined(DEBUG) || defined(USE_TIMING))
+    #if (defined(DEBUG) || defined(USE_TIMING))
     if (mype == 0) {
         for (int i = 0; i < nt; i++) {
             for (int j = 0; j < nt; j++) {
@@ -300,7 +311,6 @@ int main(int argc, char *argv[])
             printf("\n");
         }
     }
-
     MPI_Barrier(MPI_COMM_WORLD);
 
     // calculate how many tiles are assigned to the speicifc ranks and how many diagonals
@@ -317,14 +327,14 @@ int main(int argc, char *argv[])
         }
     }
     printf("[%d] has %d tiles in total and %d tiles on the diagonal\n", mype, nr_tiles, nr_tiles_diag);
-#endif
+    #endif
 
     double * SPEC_RESTRICT A[nt][nt], * SPEC_RESTRICT B, * SPEC_RESTRICT C[nt], * SPEC_RESTRICT Ans[nt][nt];
 
-#pragma omp parallel
-{
-#pragma omp single
-{
+    #pragma omp parallel
+    {
+    #pragma omp single
+    {
     for (int i = 0; i < nt; i++) {
         for (int j = 0; j < nt; j++) {
             #pragma omp task shared(Ans, A)
@@ -347,8 +357,8 @@ int main(int argc, char *argv[])
             }
         }
     }
-} // omp single
-} // omp parallel
+    } // omp single
+    } // omp parallel
 
     for (int i = 0; i < nt; i++) {
         // add to diagonal
@@ -365,8 +375,8 @@ int main(int argc, char *argv[])
         C[i] = (double*) malloc(ts * ts * sizeof(double));
     }
 
-#pragma omp parallel
-#pragma omp single
+    #pragma omp parallel
+    #pragma omp single
     num_threads = omp_get_num_threads();
 
     INIT_TIMING(num_threads);
@@ -416,9 +426,9 @@ int main(int argc, char *argv[])
     if(mype == 0 || check == 2)
         printf("test:%s-%d-%d-%d:mype:%2d:np:%2d:threads:%2d:result:%s:gflops:%f:time:%f:gflops_ser:%f:time_ser:%f\n", argv[0], n, ts, num_threads, mype, np, num_threads, result[check], gflops_mpi, t2, gflops_ser, t4);
 
-#if (defined(DEBUG) || defined(USE_TIMING))
+    #if (defined(DEBUG) || defined(USE_TIMING))
     printf("[%d] count#pdotrf:%d:count#trsm:%d:count#gemm:%d:count#syrk:%d\n", mype, cnt_pdotrf, cnt_trsm, cnt_gemm, cnt_syrk);
-#endif
+    #endif
     for (int i = 0; i < nt; i++) {
         for (int j = 0; j < nt; j++) {
             if (block_rank[i*nt+j] == mype) {
