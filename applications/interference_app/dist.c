@@ -36,11 +36,11 @@ typedef enum disturbance_mode_t {
 disturbance_mode d_mode     = compute;
 long window_us_comp         = 1000*1000;    // default 1 sec
 long window_us_pause        = 1000*500;     // default 500 ms 
-// long window_us_pause        = -1;          // constant work
+// long window_us_pause        = -1;        // constant work
 long window_us_size_min     = 1000*1000;    // default 1 sec
 long window_us_size_max     = 1000*3000;    // default 3 sesc
 bool use_random             = false;
-int rank_number             = 0;
+int rank_number             = -1;
 int use_multiple_cores      = 1;
 int use_ram                 = 1;
 int seed                    = 0;
@@ -246,12 +246,10 @@ int main(int argc, char *argv[])
         printf("\ncan't catch SIGABRT\n");
 
     int i, k;
-    // int iMyRank, iNumProcs;
-	int provided;
-	int requested = MPI_THREAD_MULTIPLE;
-	MPI_Init_thread(&argc, &argv, requested, &provided);
-	// MPI_Comm_size(MPI_COMM_WORLD, &iNumProcs);
-	// MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank);
+    int iNumProcs;
+    MPI_Init(&argc, &argv);
+	MPI_Comm_size(MPI_COMM_WORLD, &iNumProcs);
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank_number);
 
 #ifdef TRACE
     int ierr;
@@ -265,7 +263,9 @@ int main(int argc, char *argv[])
     
     for (i = 1; i < argc; i++)
     {
+        // DEBUG_PRINT("Param %d: Len=%d - %s\n", i, strlen(argv[i]), argv[i]);
         char **s = split(argv[i], '=', 2);
+        // DEBUG_PRINT("Param %d: s[0]=%s s[1]=%s\n", i, s[0], s[1]);
 
         if(strcmp(s[0], "--type") == 0)
         {
@@ -375,16 +375,18 @@ int main(int argc, char *argv[])
         }
         else if(strcmp(s[0], "--rank_number") == 0)
         {
-            int a = atoi(s[1]);
-            if (a == 0 && s[1] != "0" || a < 0)
-            {
-                fprintf(stderr,space);
-                fprintf(stderr,"--rank_number was not set correctly!\n");
-                fprintf(stderr,"please only use positiv integers!\n");
-                fprintf(stderr,space);
-                continue;
+            if(rank_number == -1) {
+                int a = atoi(s[1]);
+                if (a == 0 && s[1] != "0" || a < 0)
+                {
+                    fprintf(stderr,space);
+                    fprintf(stderr,"--rank_number was not set correctly!\n");
+                    fprintf(stderr,"please only use positiv integers!\n");
+                    fprintf(stderr,space);
+                    continue;
+                }
+                rank_number = a;
             }
-            rank_number = a;
         }
         else if(strcmp(s[0], "--use_ram") == 0)
         {
@@ -473,31 +475,17 @@ char **split(char *str, char div, int num_args)
 {
     char **result = (char**)malloc(sizeof(char)*num_args);
 
-    int i;
-    for (i = 0; i < num_args; i++)
-    {
-        result[i] = (char*)malloc(strlen(str)*sizeof(char));
+    char * token = strtok(str, "=");
+    int count = 0;
+    // loop through the string to extract all other tokens
+    while( token != NULL) {
+        int tmp_size = strlen(token);
+        result[count] = (char*) malloc(sizeof(char)*tmp_size);
+        strcpy(result[count], token);
+        //printf( "%sEND\n", token); //printing each token
+        token = strtok(NULL, "=");
+        count++;
+        if(count >= num_args) break;            
     }
-
-    int j = 0;
-    int k = 0;
-
-    for(i = 0; i < strlen(str); i++)
-    {
-        if (str[i] == div)
-        {
-            j = j + 1;
-            k = 0;
-            if (j >= num_args) {
-               return result;
-            }
-        }
-        else
-        {
-            result[j][k] = str[i];
-            k = k + 1;
-        }
-    }
-
     return result;
 }
