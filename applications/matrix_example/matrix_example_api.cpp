@@ -351,11 +351,14 @@ int main(int argc, char **argv)
                 // create opaque task here
                 cham_migratable_task_t *cur_task = chameleon_create_task((void *)&matrixMatrixKernel, 5, args);
 #if USE_TASK_ANNOTATIONS
-                chameleon_annotations_t* annotations = chameleon_create_annotation_container();
+                chameleon_annotations_t* annotations = chameleon_get_task_annotations_opaque(cur_task);
+                if(!annotations) {
+                    annotations = chameleon_create_annotation_container();
+                    chameleon_set_task_annotations(cur_task, annotations);
+                }
                 chameleon_set_annotation_int(annotations, "Int", 42);
                 chameleon_set_annotation_double(annotations, "Dbl", 42.1345);
                 chameleon_set_annotation_string(annotations, "Str", "Test123");
-                chameleon_set_task_annotations(cur_task, annotations);
 #endif
 #if USE_REPLICATION
                 if(iMyRank==0) {
