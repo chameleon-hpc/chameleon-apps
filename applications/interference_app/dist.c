@@ -1,5 +1,3 @@
-//#include <mpi.h>
-
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
@@ -11,6 +9,12 @@
 #include <stdbool.h>
 #include <sys/time.h>
 #include <omp.h>
+#include <mpi.h>
+#include <signal.h>
+
+#ifdef TRACE
+#include "VT.h"
+#endif
 
 #define MB 1024*1024
 
@@ -31,7 +35,8 @@ typedef enum disturbance_mode_t {
 
 disturbance_mode d_mode     = compute;
 long window_us_comp         = 1000*1000;    // default 1 sec
-long window_us_pause        = 1000*50;      // default 500 ms 
+long window_us_pause        = 1000*500;     // default 500 ms 
+// long window_us_pause        = -1;          // constant work
 long window_us_size_min     = 1000*1000;    // default 1 sec
 long window_us_size_max     = 1000*3000;    // default 3 sesc
 bool use_random             = false;
@@ -39,8 +44,9 @@ int rank_number             = 0;
 int use_multiple_cores      = 1;
 int use_ram                 = 1;
 int seed                    = 0;
+int abort_program           = 0;
 
-#ifdef DEBUB
+#ifdef DEBUG
 static void DEBUG_PRINT(const char * format, ... ) {
     fprintf(stderr, "Disturbance -- R#%02d T#%02d (OS_TID:%06ld): --> ", rank_number, omp_get_thread_num(), syscall(SYS_gettid));
     va_list argptr;
@@ -52,14 +58,23 @@ static void DEBUG_PRINT(const char * format, ... ) {
 static void DEBUG_PRINT(const char * format, ... ) { }
 #endif
 
+void sig_handler(int signo)
+{
+    if (signo == SIGINT || signo == SIGABRT || signo == SIGTERM) {
+        DEBUG_PRINT("received signo=%d\n", signo);
+        abort_program = 1;
+    }
+}
+
 void compute_kernel()
 {
     int volatile i, j;
     int v;
-    volatile int n = 50000000;
+    volatile int n = 5000000;
     const int length = 8;
     float a[length];
     float c[length];
+    int ierr;
 
     for (i = 0; i < length; i++)
     {
@@ -68,8 +83,16 @@ void compute_kernel()
     }
 
     if (window_us_pause <= 0) {
-        long count = 0;
+        // long count = 0;
         double start_time = omp_get_wtime();
+#ifdef TRACE
+        static int event_compute = -1;
+        const char *event_compute_name = "disturbance_compute";
+        if(event_compute == -1) {
+            ierr = VT_funcdef(event_compute_name, VT_NOCLASS, &event_compute);
+        }
+        VT_begin(event_compute);
+#endif
         while(true)
         {
             for (i = 0; i < n; i++) {
@@ -89,13 +112,27 @@ void compute_kernel()
             //         DEBUG_PRINT("Elasped time (sec) = %f\n", elapsed);
             //     }
             // }
-
-            usleep(10); // sleep for 10 us that OS is able to reschedule resources
+#ifdef TRACE
+            VT_end(event_compute);
+#endif
+            if (abort_program) {
+                break;
+            }
+#ifdef TRACE
+            VT_begin(event_compute);
+#endif
         }
     } else {
         double start_time = omp_get_wtime();
         long passed_time = 0;
-        int count = 0;
+#ifdef TRACE
+        static int event_compute = -1;
+        const char *event_compute_name = "disturbance_compute";
+        if(event_compute == -1) {
+            ierr = VT_funcdef(event_compute_name, VT_NOCLASS, &event_compute);
+        }
+        VT_begin(event_compute);
+#endif
         while(true)
         {
             for (i = 0; i < n; i++) {
@@ -106,19 +143,26 @@ void compute_kernel()
                 }
             }
 
-            count++;
-            if(count % 10 == 0) {
-                count = 0;
-                passed_time = (long)((omp_get_wtime()-start_time) * 1e6);
-                if(passed_time > window_us_comp)
+            passed_time = (long)((omp_get_wtime()-start_time) * 1e6);
+            if(passed_time > window_us_comp)
+            {
+#ifdef TRACE
+                VT_end(event_compute);
+#endif
+#ifdef DEBUG
+                #pragma omp master
                 {
-                    #pragma omp master
-                    {
-                        DEBUG_PRINT("passed time: %ld us - going to sleep\n", passed_time);
-                    }                    
-                    usleep(window_us_pause);
-                    start_time = omp_get_wtime();
+                    DEBUG_PRINT("passed time: %ld us - going to sleep\n", passed_time);
                 }
+#endif
+                usleep(window_us_pause);
+                if (abort_program) {
+                    break;
+                }
+                start_time = omp_get_wtime();
+#ifdef TRACE
+                VT_begin(event_compute);
+#endif
             }
         }
     }
@@ -193,14 +237,31 @@ void communication_kernel()
 
 int main(int argc, char *argv[])
 {
-    int i, k;
+    // catch signals to allow controlled way to end application
+    if (signal(SIGINT, sig_handler) == SIG_ERR)
+        printf("\ncan't catch SIGINT\n");
+    if (signal(SIGTERM, sig_handler) == SIG_ERR)
+        printf("\ncan't catch SIGTERM\n");
+    if (signal(SIGABRT, sig_handler) == SIG_ERR)
+        printf("\ncan't catch SIGABRT\n");
 
-    int iMyRank, iNumProcs;
+    int i, k;
+    // int iMyRank, iNumProcs;
 	int provided;
-	/*int requested = MPI_THREAD_MULTIPLE;
+	int requested = MPI_THREAD_MULTIPLE;
 	MPI_Init_thread(&argc, &argv, requested, &provided);
-	MPI_Comm_size(MPI_COMM_WORLD, &iNumProcs);
-	MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank);*/
+	// MPI_Comm_size(MPI_COMM_WORLD, &iNumProcs);
+	// MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank);
+
+#ifdef TRACE
+    int ierr;
+    static int event_main = -1;
+    const char *event_main_name = "disturbance_main";
+    if(event_main == -1) {
+        ierr = VT_funcdef(event_main_name, VT_NOCLASS, &event_main);
+    }
+    VT_begin(event_main);
+#endif
     
     for (i = 1; i < argc; i++)
     {
@@ -388,21 +449,24 @@ int main(int argc, char *argv[])
     // DEBUG_PRINT("started thread: %d\n", omp_get_thread_num());
     switch (d_mode)
     {
-    case compute:
-        compute_kernel();
-        break;
-    case memory:
-        memory_kernel();
-        break;
-    case communication:
-        communication_kernel();
-        break;
-    default:
-        break;
+        case compute:
+            compute_kernel();
+            break;
+        case memory:
+            memory_kernel();
+            break;
+        case communication:
+            communication_kernel();
+            break;
+        default:
+            break;
     }
 }
+#ifdef TRACE
+    VT_end(event_main);
+#endif
 
-    //MPI_Finalize();
+    MPI_Finalize();
 }
 
 char **split(char *str, char div, int num_args)
