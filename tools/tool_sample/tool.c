@@ -16,6 +16,12 @@
 #include <inttypes.h>
 #include <assert.h>
 
+#ifdef TRACE
+#include "VT.h"
+static int event_tool_task_create = -1;
+static int event_tool_task_exec = -1;
+#endif
+
 #define TASK_TOOL_SAMPLE_DATA_SIZE 10
 
 static cham_t_set_callback_t cham_t_set_callback;
@@ -88,6 +94,13 @@ on_cham_t_callback_task_create(
     cham_t_data_t *task_data,
     const void *codeptr_ra)
 {
+#ifdef TRACE
+    if(event_tool_task_create == -1) {
+        const char *event_tool_task_create_name = "tool_task_create";
+        int ierr = VT_funcdef(event_tool_task_create_name, VT_NOCLASS, &event_tool_task_create);
+    }
+    VT_begin(event_tool_task_create);
+#endif
     TYPE_TASK_ID internal_task_id        = chameleon_get_task_id(task);
 
     // create custom data structure and use task_data as pointer
@@ -103,6 +116,10 @@ on_cham_t_callback_task_create(
 
     // late equipment of task with annotations
     chameleon_annotations_t* ann = chameleon_get_task_annotations_opaque(task);
+    if(!ann) {
+        ann = chameleon_create_annotation_container();
+        chameleon_set_task_annotations(task, ann);
+    }
     chameleon_set_annotation_int(ann, "TID", (int)internal_task_id);
     
     // access data containers for current rank and current thread
@@ -110,6 +127,9 @@ on_cham_t_callback_task_create(
     cham_t_data_t * thread_data     = cham_t_get_thread_data();
 
     printf("on_cham_t_callback_task_create ==> task_id=%" PRIu64 ";codeptr_ra=" DPxMOD ";rank_data=%" PRIu64 ";thread_data=%" PRIu64 ";task_data=" DPxMOD "\n", internal_task_id, DPxPTR(codeptr_ra), rank_data->value, thread_data->value, DPxPTR(task_data->ptr));
+#ifdef TRACE
+    VT_end(event_tool_task_create);
+#endif
 }
 
 static void
@@ -122,6 +142,15 @@ on_cham_t_callback_task_schedule(
     cham_t_task_flag_t prior_task_flag,
     cham_t_data_t *prior_task_data)
 {
+#ifdef TRACE
+    if(cham_t_task_start == schedule_type) {
+        if(event_tool_task_exec == -1) {
+            const char *event_tool_task_exec_name = "tool_task_exec";
+            int ierr = VT_funcdef(event_tool_task_exec_name, VT_NOCLASS, &event_tool_task_exec);
+        }
+        VT_begin(event_tool_task_exec);
+    }
+#endif
     TYPE_TASK_ID internal_task_id    = chameleon_get_task_id(task);
 
     char val_task_flag[50];
@@ -155,6 +184,9 @@ on_cham_t_callback_task_schedule(
     if(schedule_type == cham_t_task_end) {
         // dont need tool data any more ==> clean up
         free(task_data->ptr);
+#ifdef TRACE
+        VT_end(event_tool_task_exec);
+#endif
     }
 }
 

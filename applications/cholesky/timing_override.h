@@ -15,7 +15,7 @@ static void wait_impl(MPI_Request *comm_req, double *timer)
     MPI_Test(comm_req, &comm_comp, MPI_STATUS_IGNORE);
     while (!comm_comp) {
         double yield_time = timestamp();
-#pragma omp taskyield
+        #pragma omp taskyield
         *timer -= timestamp() - yield_time;
         MPI_Test(comm_req, &comm_comp, MPI_STATUS_IGNORE);
     }
@@ -28,7 +28,7 @@ static void waitall_impl(MPI_Request *comm_req, int nreq, double *timer)
     MPI_Testall(nreq, comm_req, &comm_comp, MPI_STATUS_IGNORE);
     while (!comm_comp) {
         double yield_time = timestamp();
-#pragma omp taskyield
+        #pragma omp taskyield
         *timer -= timestamp() - yield_time;
         MPI_Testall(nreq, comm_req, &comm_comp, MPI_STATUS_IGNORE);
     }
