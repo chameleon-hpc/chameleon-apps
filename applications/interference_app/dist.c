@@ -62,6 +62,8 @@ int abort_program           = 0;
 
 int iNumProcs;
 
+#define DEBUG 1
+
 #ifdef DEBUG
 static void DEBUG_PRINT(const char * format, ... ) {
     fprintf(stderr, "Disturbance -- R#%02d T#%02d (OS_TID:%06ld): --> ", rank_number, omp_get_thread_num(), syscall(SYS_gettid));
@@ -246,47 +248,58 @@ void memory_kernel()
 
 void communication_kernel()
 {
+    //com size in Bytes
+    int com_size_byte = com_size/8;
+
     if (num_partner < 2) 
         return;
 
     int i ,id;
-    int *data = (int*)malloc(sizeof(int)*com_size*MB);
+    //int *data = (int*)malloc(sizeof(int)*com_size*MB);
+    char data[com_size_byte*MB];
 
     int total_num_partner = num_partner;
 
     for (i = 0; i < num_partner; i++) {
         if (ranks_to_disturb[i] == rank_number)
             id = i;
-
-        
     }
 
-    int previous_rank_id = (i - 1)%2;
-    int target_rank_id = (i + 1)%2;
+    int previous_rank_id = (id - 1)%num_partner;
+    if (id == 0) {
+        previous_rank_id = num_partner - 1;
+    }
+    int target_rank_id = (id + 1)%num_partner;
 
     if (c_mode == pingpong) {
         if (id >= 2)
             return;
         total_num_partner = 2;
         if (previous_rank_id >= 2)
-            previous_rank_id = 0;
+            previous_rank_id = target_rank_id;
     }
+    
+    DEBUG_PRINT("Rank get Com ID: %d\n", id);
+
+    int target_rank = ranks_to_disturb[target_rank_id];
+    int previous_rank = ranks_to_disturb[previous_rank_id];
+    //memset(data, rank_number, com_size*MB);
 
     MPI_Status status;
-
     if (id == 0) {
-        memset(data, rank_number, com_size*MB);
-        MPI_Send(&data,com_size*MB, MPI_INT, ranks_to_disturb[target_rank_id], 1, MPI_COMM_WORLD);
+        DEBUG_PRINT("Starting Communication, sending to RANK:%d\n",target_rank);
+        MPI_Send(data,com_size_byte*MB, MPI_CHAR,target_rank , 1, MPI_COMM_WORLD);
+        DEBUG_PRINT("Message Send\n");
     }
-
     if (window_us_pause == 0) {
         while (true)
         {
-            MPI_Recv(&data,com_size,MPI_INT,ranks_to_disturb[previous_rank_id],1,MPI_COMM_WORLD,&status);
-            memset(data, rank_number, com_size*MB);
-            MPI_Send(&data,com_size*MB, MPI_INT, ranks_to_disturb[target_rank_id], 1, MPI_COMM_WORLD);
-            DEBUG_PRINT("Rank %d\t Recived Message from %d, send to %d", rank_number, ranks_to_disturb[previous_rank_id], ranks_to_disturb[target_rank_id]);
-            
+            char* tmp_data = (char*)malloc(sizeof(char)*com_size_byte*MB + 1);
+            DEBUG_PRINT("Wait for message from RANK:%d\n",previous_rank);
+            MPI_Recv(tmp_data,com_size_byte*MB,MPI_CHAR,previous_rank,1,MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Send(&data,com_size_byte*MB, MPI_CHAR, target_rank, 1, MPI_COMM_WORLD);
+            DEBUG_PRINT("Rank %d\t Recived Message from %d, send to %d\n", rank_number, previous_rank, target_rank);
+            free(tmp_data);
             if (abort_program) {
                 break;
             }
@@ -305,8 +318,10 @@ void communication_kernel()
     while (true)
     {
 
-        MPI_Recv(&data,com_size,MPI_INT,ranks_to_disturb[previous_rank_id],1,MPI_COMM_WORLD,&status);
-        memset(data, rank_number, com_size*MB);
+        DEBUG_PRINT("Wait for message from RANK:%d\n",previous_rank);
+        char* tmp_data = (char*)malloc(sizeof(char)*com_size_byte*MB + 1);
+        DEBUG_PRINT("Wait for message from RANK:%d\n",previous_rank);
+        MPI_Recv(tmp_data,com_size_byte*MB,MPI_CHAR,previous_rank,1,MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
         if (id == 0) {
             passed_time = (long)((omp_get_wtime()-start_time) * 1e6);
@@ -317,8 +332,10 @@ void communication_kernel()
             }
         }
         
-        MPI_Send(&data,com_size*MB, MPI_INT, ranks_to_disturb[target_rank_id], 1, MPI_COMM_WORLD);
-        DEBUG_PRINT("Rank %d\t Recived Message from %d, send to %d", rank_number, ranks_to_disturb[previous_rank_id], ranks_to_disturb[target_rank_id]);
+        MPI_Send(&data,com_size_byte*MB, MPI_CHAR, target_rank, 1, MPI_COMM_WORLD);
+        DEBUG_PRINT("Rank %d\t Recived Message from %d, send to %d\n", rank_number, previous_rank, target_rank);
+        free(tmp_data);
+        DEBUG_PRINT("Rank %d\t Recived Message from %d, send to %d\n", rank_number, previous_rank, target_rank);
         if (abort_program) {
             break;
         }
@@ -428,6 +445,10 @@ int main(int argc, char *argv[])
         {
             use_ram = get_integer(s[1], s[0], use_ram);
         }
+        else if(strcmp(s[0], "--com_size") == 0)
+        {
+            com_size = get_integer(s[1], s[0], com_size);
+        }
         else if(strcmp(s[0], "--ranks_to_disturb") == 0)
         {
             //char* tmp = split(s[1],'(',iNumProcs)[1];
@@ -438,10 +459,13 @@ int main(int argc, char *argv[])
 
             int *tmp_com_partner = (int*)malloc(sizeof(int)*num_partner);
 
-            for (k = 0; k < (*length); k++) {
+            for (k = 0; k < num_partner; k++) {
                 if(strcmp(partner_list[k], "") == 1) {
-                    if(atoi(partner_list[k]) <= num_partner){
+                    if(atoi(partner_list[k]) < iNumProcs){
                         tmp_com_partner[k] = atoi(partner_list[k]);
+                    }
+                    else {
+                        tmp_com_partner[k] = 0;
                     }
                 }
             }
@@ -449,25 +473,15 @@ int main(int argc, char *argv[])
             ranks_to_disturb = (int*)malloc(sizeof(int)*num_partner);
             char* partners = (char*)malloc(sizeof(char)*num_partner*2);
 
-            for (k = 0; k < (*length); k++) {
+            for (k = 0; k < num_partner; k++) {
                 ranks_to_disturb[k] = tmp_com_partner[k];
-                partners[2*k] =  (char)(tmp_com_partner[k] + 48);
-                if(2*k >=  (*length))
+                partners[2*k] = (char)(tmp_com_partner[k] + 48);
+                if(k + 1 <  num_partner)
                     partners[2*k + 1] = ',';
                 else partners[2*k + 1] = 0;
             }
-            
-            if(iNumProcs > 1)
-                for (i = 0; i < num_partner; i++) {
-                    if (ranks_to_disturb[i] >= iNumProcs || ranks_to_disturb[i] < 0) {
-                        printf("--ranks_to_disturb %d is not set correctly\n", i);
-                        printf("please use only available ranks\n");
-                        return 0;
-                    }
-                }
 
-
-            printf("--ranks_to_disturb are set to: %s\t number of ranks to disturb: %d\n", partners, *length);
+            printf("--ranks_to_disturb are set to: (%s)\t number of ranks to disturb: %d\n", partners, *length);
 
             free(tmp_com_partner);
         }
@@ -521,8 +535,9 @@ int main(int argc, char *argv[])
     DEBUG_PRINT("--rank_number is set to: %d\n", rank_number);
     DEBUG_PRINT("--use_ram is set to: %d\n", use_ram);
     DEBUG_PRINT("--com_type is set to: %d\n", c_mode);
-    DEBUG_PRINT("--ranks_to_disturb is set to: %d\n", ranks_to_disturb);
+    //DEBUG_PRINT("--ranks_to_disturb is set to: %d\n", ranks_to_disturb);
     DEBUG_PRINT("--com_size is set to: %d\n", com_size);
+    DEBUG_PRINT("--number of ranks to disturb is set to: %d\n", num_partner);
 
     if (use_random)
     {
@@ -545,7 +560,7 @@ int main(int argc, char *argv[])
 
     printf(space);
     if (not_disturb) {
-        printf("Rank %d will not be disturbed\nExit disturbance", rank_number);
+        printf("Rank %d will not be disturbed\nExit disturbance\n", rank_number);
         printf(space);
         MPI_Finalize();
         return 1;
@@ -618,10 +633,10 @@ char **split(char *str, char *div, int num_args, int *length)
 int get_integer(char *str, char *id, int normal)
 {
     int a = atoi(str);
-    if (a == 0 && str != "0" || a < 0)
+    if (a == 0 && (strcmp(str,"0")) || a < 0)
     {
         printf(space);
-        printf("%s was not set correctly!\n", id);
+        printf("%s was not set correctly! (%s)\n", id, str);
         printf("please only use positiv integers!");
         printf(space);
         return normal;
