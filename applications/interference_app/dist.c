@@ -24,7 +24,10 @@ double omp_get_wtime() {
 	return (double)(currentTime.tv_sec) +  (1.0E-06)*(double)(currentTime.tv_usec);
 }
 
-char **split(char *str, char div, int num_args);
+char **split(char *str, char *div, int num_args, int *length);
+int get_integer(char *str, char* id, int normal);
+void communicate(int* data, int transmitter, int reciver);
+
 char *space = "\n-------------------------------------------------\n";
 
 typedef enum disturbance_mode_t {
@@ -33,7 +36,14 @@ typedef enum disturbance_mode_t {
     communication = 2,
 } disturbance_mode;
 
+typedef enum comunication_mode_t {
+    pingpong = 0,
+    roundtrip = 1,
+} comunication_mode;
+
 disturbance_mode d_mode     = compute;
+comunication_mode c_mode    = roundtrip;
+
 long window_us_comp         = 1000*1000;    // default 1 sec
 long window_us_pause        = 1000*500;     // default 500 ms 
 // long window_us_pause        = -1;        // constant work
@@ -43,8 +53,14 @@ bool use_random             = false;
 int rank_number             = -1;
 int use_multiple_cores      = 1;
 int use_ram                 = 1;
+int *ranks_to_disturb;
+int com_size                = 1000;
+int num_partner             = 0;
 int seed                    = 0;
 int abort_program           = 0;
+
+
+int iNumProcs;
 
 #ifdef DEBUG
 static void DEBUG_PRINT(const char * format, ... ) {
@@ -220,6 +236,7 @@ void memory_kernel()
                 free(p);
                 free(q);
                 usleep(window_us_pause);
+                start_time = omp_get_wtime();
                 p = malloc(size_of_ram_usage*MB);
                 q = malloc(size_of_ram_usage*MB);
             }
@@ -229,10 +246,84 @@ void memory_kernel()
 
 void communication_kernel()
 {
-    while(true)
+    if (num_partner < 2) 
+        return;
+
+    int i ,id;
+    int *data = (int*)malloc(sizeof(int)*com_size*MB);
+
+    int total_num_partner = num_partner;
+
+    for (i = 0; i < num_partner; i++) {
+        if (ranks_to_disturb[i] == rank_number)
+            id = i;
+
+        
+    }
+
+    int previous_rank_id = (i - 1)%2;
+    int target_rank_id = (i + 1)%2;
+
+    if (c_mode == pingpong) {
+        if (id >= 2)
+            return;
+        total_num_partner = 2;
+        if (previous_rank_id >= 2)
+            previous_rank_id = 0;
+    }
+
+    MPI_Status status;
+
+    if (id == 0) {
+        memset(data, rank_number, com_size*MB);
+        MPI_Send(&data,com_size*MB, MPI_INT, ranks_to_disturb[target_rank_id], 1, MPI_COMM_WORLD);
+    }
+
+    if (window_us_pause == 0) {
+        while (true)
+        {
+            MPI_Recv(&data,com_size,MPI_INT,ranks_to_disturb[previous_rank_id],1,MPI_COMM_WORLD,&status);
+            memset(data, rank_number, com_size*MB);
+            MPI_Send(&data,com_size*MB, MPI_INT, ranks_to_disturb[target_rank_id], 1, MPI_COMM_WORLD);
+            DEBUG_PRINT("Rank %d\t Recived Message from %d, send to %d", rank_number, ranks_to_disturb[previous_rank_id], ranks_to_disturb[target_rank_id]);
+            
+            if (abort_program) {
+                break;
+            }
+        }
+        
+        return;
+    }
+    
+    double start_time = 0;
+    long passed_time = 0;
+
+    if (id == 0) {
+        start_time = omp_get_wtime();
+    }
+
+    while (true)
     {
 
+        MPI_Recv(&data,com_size,MPI_INT,ranks_to_disturb[previous_rank_id],1,MPI_COMM_WORLD,&status);
+        memset(data, rank_number, com_size*MB);
+
+        if (id == 0) {
+            passed_time = (long)((omp_get_wtime()-start_time) * 1e6);
+            if(passed_time > window_us_comp)
+            {
+                usleep(window_us_pause);
+                start_time = omp_get_wtime();
+            }
+        }
+        
+        MPI_Send(&data,com_size*MB, MPI_INT, ranks_to_disturb[target_rank_id], 1, MPI_COMM_WORLD);
+        DEBUG_PRINT("Rank %d\t Recived Message from %d, send to %d", rank_number, ranks_to_disturb[previous_rank_id], ranks_to_disturb[target_rank_id]);
+        if (abort_program) {
+            break;
+        }
     }
+    
 }
 
 int main(int argc, char *argv[])
@@ -246,7 +337,7 @@ int main(int argc, char *argv[])
         printf("\ncan't catch SIGABRT\n");
 
     int i, k;
-    int iNumProcs;
+    int *length = (int*)malloc(sizeof(int));
     MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &iNumProcs);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank_number);
@@ -264,7 +355,7 @@ int main(int argc, char *argv[])
     for (i = 1; i < argc; i++)
     {
         // DEBUG_PRINT("Param %d: Len=%d - %s\n", i, strlen(argv[i]), argv[i]);
-        char **s = split(argv[i], '=', 2);
+        char **s = split(argv[i], "=", 2, length);
         // DEBUG_PRINT("Param %d: s[0]=%s s[1]=%s\n", i, s[0], s[1]);
 
         if(strcmp(s[0], "--type") == 0)
@@ -292,71 +383,27 @@ int main(int argc, char *argv[])
         }
         else if(strcmp(s[0], "--window_us_comp") == 0)
         {
-            long a = atol(s[1]);
-            if (a == 0 && s[1] != "0" || a < 0)
-            {
-                fprintf(stderr,space);
-                fprintf(stderr,"--window_us_comp was not set correctly!\n");
-                fprintf(stderr,"please only use positiv integers!\n");
-                fprintf(stderr,space);
-                continue;
-            }
-            window_us_comp = a;
+            window_us_comp = get_integer(s[1], s[0], window_us_comp);
         }
         else if(strcmp(s[0], "--window_us_size_max") == 0)
         {
-            long a = atol(s[1]);
-            if (a == 0 && s[1] != "0" || a < 0)
-            {
-                fprintf(stderr,space);
-                fprintf(stderr,"--window_us_size_max was not set correctly!\n");
-                fprintf(stderr,"please only use positiv integers!\n");
-                fprintf(stderr,space);
-                continue;
-            }
-            window_us_size_max = a;
+            window_us_size_max = get_integer(s[1], s[0], window_us_size_max);
         }
         else if(strcmp(s[0], "--window_us_size_min") == 0)
         {
-            long a = atol(s[1]);
-            if (a == 0 && s[1] != "0" || a < 0)
-            {
-                fprintf(stderr,space);
-                fprintf(stderr,"--window_us_size_min was not set correctly!\n");
-                fprintf(stderr,"please only use positiv integers!\n");
-                fprintf(stderr,space);
-                continue;
-            }
-            window_us_size_min = a;
+            window_us_size_min = get_integer(s[1], s[0], window_us_size_min);
         }
         else if(strcmp(s[0], "--window_us_pause") == 0)
         {
-            long a = atol(s[1]);
-            if (a == 0 && s[1] != "0")
-            {
-                fprintf(stderr,space);
-                fprintf(stderr,"--window_us_pause was not set correctly!\n");
-                fprintf(stderr,"please only use positiv integers!\n");
-                fprintf(stderr,space);
-                continue;
-            }
-            window_us_pause = a;
+            window_us_pause = get_integer(s[1], s[0], window_us_pause);
         }
         else if(strcmp(s[0], "--use_multiple_cores") == 0)
         {
-            int a = atoi(s[1]);
-            if (a == 0 && s[1] != "0" || a < 0)
-            {
-                fprintf(stderr,space);
-                fprintf(stderr,"--use_multiple_cores was not set correctly!\n");
-                fprintf(stderr,"please only use positiv integers!\n");
-                fprintf(stderr,space);
-                continue;
-            }
-            use_multiple_cores = a;
+            use_multiple_cores = get_integer(s[1], s[0], use_multiple_cores);
         }
         else if(strcmp(s[0], "--use_random") == 0)
-        {if(strcmp(s[1], "true") == 0)
+        {
+            if(strcmp(s[1], "true") == 0)
             {
                 use_random = true;
             } 
@@ -375,31 +422,75 @@ int main(int argc, char *argv[])
         }
         else if(strcmp(s[0], "--rank_number") == 0)
         {
-            if(rank_number == -1) {
-                int a = atoi(s[1]);
-                if (a == 0 && s[1] != "0" || a < 0)
-                {
-                    fprintf(stderr,space);
-                    fprintf(stderr,"--rank_number was not set correctly!\n");
-                    fprintf(stderr,"please only use positiv integers!\n");
-                    fprintf(stderr,space);
-                    continue;
-                }
-                rank_number = a;
-            }
+            rank_number = get_integer(s[1], s[0], rank_number);
         }
         else if(strcmp(s[0], "--use_ram") == 0)
         {
-            int a = atoi(s[1]);
-            if (a == 0 && s[1] != "0" || a < 0)
+            use_ram = get_integer(s[1], s[0], use_ram);
+        }
+        else if(strcmp(s[0], "--ranks_to_disturb") == 0)
+        {
+            //char* tmp = split(s[1],'(',iNumProcs)[1];
+            //tmp = split(tmp,')',iNumProcs)[0];
+            //char** partner_list = split(tmp,',',iNumProcs);  
+            char** partner_list = split(s[1], ",", iNumProcs, length);  
+            num_partner = *length;
+
+            int *tmp_com_partner = (int*)malloc(sizeof(int)*num_partner);
+
+            for (k = 0; k < (*length); k++) {
+                if(strcmp(partner_list[k], "") == 1) {
+                    if(atoi(partner_list[k]) <= num_partner){
+                        tmp_com_partner[k] = atoi(partner_list[k]);
+                    }
+                }
+            }
+
+            ranks_to_disturb = (int*)malloc(sizeof(int)*num_partner);
+            char* partners = (char*)malloc(sizeof(char)*num_partner*2);
+
+            for (k = 0; k < (*length); k++) {
+                ranks_to_disturb[k] = tmp_com_partner[k];
+                partners[2*k] =  (char)(tmp_com_partner[k] + 48);
+                if(2*k >=  (*length))
+                    partners[2*k + 1] = ',';
+                else partners[2*k + 1] = 0;
+            }
+            
+            if(iNumProcs > 1)
+                for (i = 0; i < num_partner; i++) {
+                    if (ranks_to_disturb[i] >= iNumProcs || ranks_to_disturb[i] < 0) {
+                        printf("--ranks_to_disturb %d is not set correctly\n", i);
+                        printf("please use only available ranks\n");
+                        return 0;
+                    }
+                }
+
+
+            printf("--ranks_to_disturb are set to: %s\t number of ranks to disturb: %d\n", partners, *length);
+
+            free(tmp_com_partner);
+        }
+        else if(strcmp(s[0], "--com_type") == 0)
+        {
+            if(strcmp(s[1], "pingpong") == 0)
             {
-                fprintf(stderr,space);
-                fprintf(stderr,"--use_ram was not set correctly!\n");
-                fprintf(stderr,"please only use positiv integers!\n");
-                fprintf(stderr,space);
+                c_mode = 0;
+            } 
+            else if(strcmp(s[1], "roundtrip") == 0)
+            {
+                c_mode = 1;
+            } else
+            {
+                printf(space);
+                printf("--type was not set correctly!\n");
+                printf("please try one of the following:\n");
+                printf("\tpingpong\n\troundtrip");
+                printf(space);
                 continue;
             }
-            use_ram = a;
+            
+            printf("--com_type is set to: %s\n", s[1]);
         }
         else if(strcmp(argv[i], "--help") == 0)
         {
@@ -413,6 +504,9 @@ int main(int argc, char *argv[])
             fprintf(stderr,"\t--use_multiple_cores\n");
             fprintf(stderr,"\t--rank_number\n");
             fprintf(stderr,"\t--use_ram\t  in MB\n");
+            fprintf(stderr,"\t--com_type\n");
+            fprintf(stderr,"\t--ranks_to_disturb\t in form 1,2,3\n");
+            fprintf(stderr,"\t--com_size\t in MB\n");
             return 0;
         }
     }
@@ -426,6 +520,9 @@ int main(int argc, char *argv[])
     DEBUG_PRINT("--use_random is set to: %d\n", use_random);
     DEBUG_PRINT("--rank_number is set to: %d\n", rank_number);
     DEBUG_PRINT("--use_ram is set to: %d\n", use_ram);
+    DEBUG_PRINT("--com_type is set to: %d\n", c_mode);
+    DEBUG_PRINT("--ranks_to_disturb is set to: %d\n", ranks_to_disturb);
+    DEBUG_PRINT("--com_size is set to: %d\n", com_size);
 
     if (use_random)
     {
@@ -438,13 +535,35 @@ int main(int argc, char *argv[])
         DEBUG_PRINT("New window comp set to: %d\n", window_us_comp);
     }
 
+    bool not_disturb = true;
+    for (int i = 0; i < num_partner; i++) {
+        if (rank_number == ranks_to_disturb[i])
+        {
+            not_disturb = false;
+        }
+    }
 
+    printf(space);
+    if (not_disturb) {
+        printf("Rank %d will not be disturbed\nExit disturbance", rank_number);
+        printf(space);
+        MPI_Finalize();
+        return 1;
+    }
+    else 
+    {
+        printf("Rank %d will be disturbed\n", rank_number);
+    }
+    printf(space);
+    
+    
     if (window_us_comp <= 0)
     {
         DEBUG_PRINT("window_us_comp is negative or zero, program will terminate\n");
         return 0;
     }
     int num_threads = use_multiple_cores;
+    free(length);
 
 #pragma omp parallel num_threads(use_multiple_cores)
 {
@@ -471,11 +590,13 @@ int main(int argc, char *argv[])
     MPI_Finalize();
 }
 
-char **split(char *str, char div, int num_args)
+
+
+char **split(char *str, char *div, int num_args, int *length)
 {
     char **result = (char**)malloc(sizeof(char)*num_args);
-
-    char * token = strtok(str, "=");
+    
+    char * token = strtok(str, div);
     int count = 0;
     // loop through the string to extract all other tokens
     while( token != NULL) {
@@ -483,9 +604,28 @@ char **split(char *str, char div, int num_args)
         result[count] = (char*) malloc(sizeof(char)*tmp_size);
         strcpy(result[count], token);
         //printf( "%sEND\n", token); //printing each token
-        token = strtok(NULL, "=");
+        token = strtok(NULL, div);
         count++;
-        if(count >= num_args) break;            
+        if(count >= num_args) {
+            break;    
+        }            
     }
+
+    *length = count;
     return result;
+}
+
+int get_integer(char *str, char *id, int normal)
+{
+    int a = atoi(str);
+    if (a == 0 && str != "0" || a < 0)
+    {
+        printf(space);
+        printf("%s was not set correctly!\n", id);
+        printf("please only use positiv integers!");
+        printf(space);
+        return normal;
+    }
+    printf("%s is set to: %d\n", id, a);
+    return a;
 }
