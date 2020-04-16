@@ -114,13 +114,6 @@ on_cham_t_callback_task_create(
     }    
     task_data->ptr                  = (void*) cur_task_data;
 
-    // late equipment of task with annotations
-    chameleon_annotations_t* ann = chameleon_get_task_annotations_opaque(task);
-    if(!ann) {
-        ann = chameleon_create_annotation_container();
-        chameleon_set_task_annotations(task, ann);
-    }
-    chameleon_set_annotation_int(ann, "TID", (int)internal_task_id);
     
     // access data containers for current rank and current thread
     cham_t_data_t * rank_data       = cham_t_get_rank_data();
@@ -158,11 +151,6 @@ on_cham_t_callback_task_schedule(
     cham_t_task_flag_t_value(task_flag, val_task_flag);
     cham_t_task_flag_t_value(prior_task_flag, val_prior_task_flag);
 
-    // validate that every task (also migrated tasks) keeps annotations
-    chameleon_annotations_t* ann = chameleon_get_task_annotations_opaque(task);
-    int tmp_validation_id;
-    int found = chameleon_get_annotation_int(ann, "TID", &tmp_validation_id);
-    assert(found == 1 && tmp_validation_id == (int)internal_task_id);
 
     if(prior_task_data) {
         TYPE_TASK_ID prior_internal_task_id    = chameleon_get_task_id(prior_task);
