@@ -18,6 +18,12 @@ module test
       write(*,*) i,arr_ptr(i)
     end do
   end subroutine
+
+  subroutine printTest(n) bind(c)
+    integer, intent(in) :: n
+    write(*,*) 'task finished',n
+  end subroutine 
+
 end module 
 
 program HelloWorld
@@ -28,8 +34,8 @@ use iso_c_binding
 
   integer :: i, N, ierr, y
   real :: p(100), v1(100), v2(100)
-  type(c_ptr):: ctest
-  type(map_entry), dimension(:), allocatable :: args
+  type(c_ptr):: ctest, task_c_ptr
+  type(map_entry), dimension(:), allocatable, target :: args
   integer, dimension(:), allocatable :: arr
 
   allocate(arr(1:50))
@@ -61,8 +67,11 @@ use iso_c_binding
   ierr = chameleon_determine_base_addresses(c_null_ptr)
 
 ! call foo(i, y, arr) 
-
-  ierr = chameleon_add_task_manual(foo, 3, args)
+  task_c_ptr = chameleon_create_task(foo, 3, args)
+  ierr = chameleon_add_task_fortran(task_c_ptr)
+  
+  ierr = chameleon_set_callback_task_finish(task_c_ptr, c_funloc(printTest), c_loc(i))
+ !ierr = chameleon_add_task_fortran(foo, 3, args)
 
   ierr = chameleon_distributed_taskwait(0)
 
