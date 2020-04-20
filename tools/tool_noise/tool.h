@@ -14,8 +14,6 @@
       time_=((double)ts.tv_sec)+(1.0e-9)*((double)ts.tv_nsec);		\
   } while(0)
 
-// class for profiling task
-cham_t_task_lis_t tool_task_list;
 
 void chameleon_t_print(char data[])
 {
