@@ -67,12 +67,10 @@ use iso_c_binding
   ierr = chameleon_determine_base_addresses(c_null_ptr)
 
 ! call foo(i, y, arr) 
-  task_c_ptr = chameleon_create_task(foo, 3, args)
-  ierr = chameleon_add_task_fortran(task_c_ptr)
-  
+  task_c_ptr = chameleon_create_task(foo, 3, args)  
   ierr = chameleon_set_callback_task_finish(task_c_ptr, c_funloc(printTest), c_loc(i))
- !ierr = chameleon_add_task_fortran(foo, 3, args)
-
+  ierr = chameleon_add_task_fortran(task_c_ptr)
+ 
   ierr = chameleon_distributed_taskwait(0)
 
   ierr = chameleon_finalize()
