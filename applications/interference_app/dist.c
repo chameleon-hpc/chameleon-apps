@@ -62,7 +62,7 @@ int abort_program           = 0;
 
 int iNumProcs;
 
-#define DEBUG 1
+//#define DEBUG 1
 
 #ifdef DEBUG
 static void DEBUG_PRINT(const char * format, ... ) {
@@ -249,7 +249,9 @@ void memory_kernel()
 void communication_kernel()
 {
     //com size in Bytes
-    int com_size_byte = com_size/8;
+    int com_size_byte = com_size/8/omp_get_num_threads();
+
+    int thread_id = omp_get_thread_num();
 
     if (num_partner < 2) 
         return;
@@ -272,11 +274,17 @@ void communication_kernel()
     int target_rank_id = (id + 1)%num_partner;
 
     if (c_mode == pingpong) {
-        if (id >= 2)
+        if (num_partner%2>0 && id == num_partner-1)
             return;
-        total_num_partner = 2;
-        if (previous_rank_id >= 2)
-            previous_rank_id = target_rank_id;
+        if(id%2==0) {
+            target_rank_id = id+1;
+            previous_rank_id = id+1;
+        }
+        else {
+            target_rank_id = id-1;
+            previous_rank_id = id-1;
+        }
+        
     }
     
     DEBUG_PRINT("Rank get Com ID: %d\n", id);
@@ -288,7 +296,7 @@ void communication_kernel()
     MPI_Status status;
     if (id == 0) {
         DEBUG_PRINT("Starting Communication, sending to RANK:%d\n",target_rank);
-        MPI_Send(data,com_size_byte*MB, MPI_CHAR,target_rank , 1, MPI_COMM_WORLD);
+        MPI_Send(data,com_size_byte*MB, MPI_CHAR,target_rank , thread_id, MPI_COMM_WORLD);
         DEBUG_PRINT("Message Send\n");
     }
     if (window_us_pause == 0) {
@@ -296,8 +304,8 @@ void communication_kernel()
         {
             char* tmp_data = (char*)malloc(sizeof(char)*com_size_byte*MB + 1);
             DEBUG_PRINT("Wait for message from RANK:%d\n",previous_rank);
-            MPI_Recv(tmp_data,com_size_byte*MB,MPI_CHAR,previous_rank,1,MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Send(&data,com_size_byte*MB, MPI_CHAR, target_rank, 1, MPI_COMM_WORLD);
+            MPI_Recv(tmp_data,com_size_byte*MB,MPI_CHAR,previous_rank,thread_id,MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Send(&data,com_size_byte*MB, MPI_CHAR, target_rank, thread_id, MPI_COMM_WORLD);
             DEBUG_PRINT("Rank %d\t Recived Message from %d, send to %d\n", rank_number, previous_rank, target_rank);
             free(tmp_data);
             if (abort_program) {
@@ -321,7 +329,7 @@ void communication_kernel()
         DEBUG_PRINT("Wait for message from RANK:%d\n",previous_rank);
         char* tmp_data = (char*)malloc(sizeof(char)*com_size_byte*MB + 1);
         DEBUG_PRINT("Wait for message from RANK:%d\n",previous_rank);
-        MPI_Recv(tmp_data,com_size_byte*MB,MPI_CHAR,previous_rank,1,MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(tmp_data,com_size_byte*MB,MPI_CHAR,previous_rank, thread_id, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
         if (id == 0) {
             passed_time = (long)((omp_get_wtime()-start_time) * 1e6);
@@ -332,7 +340,7 @@ void communication_kernel()
             }
         }
         
-        MPI_Send(&data,com_size_byte*MB, MPI_CHAR, target_rank, 1, MPI_COMM_WORLD);
+        MPI_Send(&data,com_size_byte*MB, MPI_CHAR, target_rank, thread_id, MPI_COMM_WORLD);
         DEBUG_PRINT("Rank %d\t Recived Message from %d, send to %d\n", rank_number, previous_rank, target_rank);
         free(tmp_data);
         DEBUG_PRINT("Rank %d\t Recived Message from %d, send to %d\n", rank_number, previous_rank, target_rank);
@@ -353,11 +361,24 @@ int main(int argc, char *argv[])
     if (signal(SIGABRT, sig_handler) == SIG_ERR)
         printf("\ncan't catch SIGABRT\n");
 
-    int i, k;
+    int i, k, provided;
     int *length = (int*)malloc(sizeof(int));
-    MPI_Init(&argc, &argv);
+    //MPI_Init(&argc, &argv);
+    //MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &provided);
+    MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
 	MPI_Comm_size(MPI_COMM_WORLD, &iNumProcs);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank_number);
+
+
+    if(provided < MPI_THREAD_MULTIPLE)
+    {
+        printf("The threading support level is lesser than that demanded.\n");
+        MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+    }
+    else
+    {
+        printf("The threading support level corresponds to that demanded.\n");
+    }
 
 #ifdef TRACE
     int ierr;
@@ -489,11 +510,11 @@ int main(int argc, char *argv[])
         {
             if(strcmp(s[1], "pingpong") == 0)
             {
-                c_mode = 0;
+                c_mode = pingpong;
             } 
             else if(strcmp(s[1], "roundtrip") == 0)
             {
-                c_mode = 1;
+                c_mode = roundtrip;
             } else
             {
                 printf(space);
@@ -558,18 +579,18 @@ int main(int argc, char *argv[])
         }
     }
 
-    printf(space);
+    DEBUG_PRINT(space);
     if (not_disturb) {
-        printf("Rank %d will not be disturbed\nExit disturbance\n", rank_number);
-        printf(space);
+        DEBUG_PRINT("Rank %d will not be disturbed\nExit disturbance\n", rank_number);
+        DEBUG_PRINT(space);
         MPI_Finalize();
         return 1;
     }
     else 
     {
-        printf("Rank %d will be disturbed\n", rank_number);
+        DEBUG_PRINT("Rank %d will be disturbed\n", rank_number);
     }
-    printf(space);
+    DEBUG_PRINT(space);
     
     
     if (window_us_comp <= 0)
