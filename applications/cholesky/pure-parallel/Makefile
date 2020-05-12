@@ -20,7 +20,9 @@ MPI_EXEC_CMD    ?= mpiexec.hydra -np $(NUM_RANKS)
 
 .PHONY: ch-$(TARGET)-par ch-$(TARGET)-par-timing clean cleanall
 
-all : ch-$(TARGET)-par ch-$(TARGET)-par-timing
+all:
+	$(MAKE) ch-$(TARGET)-par
+	$(MAKE) ch-$(TARGET)-par-timing
 
 ch-$(TARGET)-par:
 	$(CC) $(CFLAGS) -g -o $@ ch_ompss.c ../common/ch_common.c $(LDFLAGS)

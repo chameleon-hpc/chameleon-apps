@@ -329,7 +329,7 @@ int main(int argc, char *argv[])
     printf("[%d] has %d tiles in total and %d tiles on the diagonal\n", mype, nr_tiles, nr_tiles_diag);
     #endif
 
-    double * SPEC_RESTRICT A[nt][nt], * SPEC_RESTRICT B, * SPEC_RESTRICT C[nt], * SPEC_RESTRICT Ans[nt][nt];
+    double *A[nt][nt], *B, *C[nt], *Ans[nt][nt];
 
     #pragma omp parallel
     {
@@ -391,7 +391,7 @@ int main(int argc, char *argv[])
     if (mype == 0)
       printf("Starting parallel computation\n");
     const float t1 = get_time();
-    cholesky_mpi(ts, nt, (double* SPEC_RESTRICT (*)[nt])A, B, C, block_rank);
+    cholesky_mpi(ts, nt, (double* (*)[nt])A, B, C, block_rank);
     const float t2 = get_time() - t1;
     if (mype == 0)
       printf("Finished parallel computation\n");

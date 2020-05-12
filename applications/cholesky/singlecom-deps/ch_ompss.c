@@ -1,8 +1,7 @@
 #include "../common/ch_common.h"
 #include "../timing.h"
-// #include "../timing_override.h"
 
-void cholesky_mpi(const int ts, const int nt, double * SPEC_RESTRICT A[nt][nt], double * SPEC_RESTRICT B, double * SPEC_RESTRICT C[nt], int *block_rank)
+void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, double *C[nt], int *block_rank)
 {
     TASK_DEPTH_INIT;
     #if defined(CHAMELEON) || defined(CHAMELEON_TARGET)
@@ -12,7 +11,7 @@ void cholesky_mpi(const int ts, const int nt, double * SPEC_RESTRICT A[nt][nt], 
     }
     // necessary to be aware of binary base addresses to calculate offset for target entry functions
     chameleon_determine_base_addresses((void *)&cholesky_mpi);
-    void* literal_ts            = *(void**)(&ts);
+    void* literal_ts = *(void**)(&ts);
     #endif
 
     #pragma omp parallel
@@ -116,6 +115,8 @@ void cholesky_mpi(const int ts, const int nt, double * SPEC_RESTRICT A[nt][nt], 
             }
         }
 
+        double * SPEC_RESTRICT tmp_b = B;
+
         for (int i = k + 1; i < nt; i++) {
             double * SPEC_RESTRICT tmp_a_k_i = A[k][i];
 
@@ -152,7 +153,7 @@ void cholesky_mpi(const int ts, const int nt, double * SPEC_RESTRICT A[nt][nt], 
                         DEBUG_PRINT("Computing omp_trsm[%03d][%03d] - Start\n", k, i);
                         #if CHAMELEON
                         chameleon_map_data_entry_t* args = (chameleon_map_data_entry_t*) malloc(4*sizeof(chameleon_map_data_entry_t));
-                        args[0] = chameleon_map_data_entry_create(B, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
+                        args[0] = chameleon_map_data_entry_create(tmp_b, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
                         args[1] = chameleon_map_data_entry_create(tmp_a_k_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
                         args[2] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
                         args[3] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
@@ -165,7 +166,7 @@ void cholesky_mpi(const int ts, const int nt, double * SPEC_RESTRICT A[nt][nt], 
                             chameleon_taskyield();
                         }
                         #else
-                        omp_trsm(B, tmp_a_k_i, ts, ts);
+                        omp_trsm(tmp_b, tmp_a_k_i, ts, ts);
                         #endif
                         DEBUG_PRINT("Computing omp_trsm[%03d][%03d] - End\n", k, i);
                         TASK_DEPTH_DECR;

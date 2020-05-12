@@ -20,7 +20,10 @@ MPI_EXEC_CMD    ?= mpiexec.hydra -np $(NUM_RANKS)
 
 .PHONY: ch-$(TARGET)-single ch-$(TARGET)-single-noyield ch-$(TARGET)-single-timing clean cleanall
 
-all : ch-$(TARGET)-single ch-$(TARGET)-single-noyield ch-$(TARGET)-single-timing
+all:
+	$(MAKE) ch-$(TARGET)-single 
+	$(MAKE) ch-$(TARGET)-single-noyield 
+	$(MAKE) ch-$(TARGET)-single-timing
 
 ch-$(TARGET)-single:
 	$(CC) $(CFLAGS) -g -o $@ ch_ompss.c ../common/ch_common.c $(LDFLAGS)
