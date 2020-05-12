@@ -18,6 +18,7 @@
 
 #include <atomic>
 
+#include <omp.h>
 #include "tool.h"
 
 #define TASK_TOOL_SAMPLE_DATA_SIZE 10
@@ -32,10 +33,9 @@ static cham_t_get_task_data_t cham_t_get_task_data;
 
 
 static std::atomic<int> tasks_processed_sync_cycle (0);
-static std::atomic<int> num_noise_generated(0);
-static std::atomic<int> acc_noise (0);
-static int noise = 0;
+static bool has_clocked_down[100];
 static double fraction = 0.5;
+static int rr_cnt = 0;
 
 //================================================================
 // Variables
@@ -106,8 +106,18 @@ on_cham_t_callback_sync_region(
     const void *codeptr_ra)
 {
     tasks_processed_sync_cycle = 0;
-    num_noise_generated = 0;
-    system("likwid-setFrequencies -f 2.3 -c 0,1");
+   
+    //printf("Called on thread %d\n", omp_get_thread_num())
+    int id = omp_get_thread_num();
+
+    if(sync_region_status == cham_t_sync_region_end && has_clocked_down[id]) {
+      has_clocked_down[id] = false;
+      system("likwid-setFrequencies -f 2.3 -c 0,1");
+    } 
+
+    if(sync_region_status == cham_t_sync_region_start && id==0) {
+      rr_cnt = (rr_cnt + 1) % cham_t_get_rank_info()->comm_size;
+    }
 }
 
 
@@ -203,14 +213,13 @@ on_cham_t_callback_change_freq_for_execution(
     int32_t total_created_tasks_per_rank
 )
 {
-    int rank = cham_t_get_rank_info()->comm_rank;
     int start_tasks_processed_per_rank = total_created_tasks_per_rank * fraction; // 50% processed load
+    int id = omp_get_thread_num();
 
-    if (rank%2==1 && tasks_processed_sync_cycle >= start_tasks_processed_per_rank && num_noise_generated==0){ // && load_info_per_rank != 0){
-        //printf("setting clock frequency 1.2\n");
+    int rank = cham_t_get_rank_info()->comm_rank;
+    if (rank==rr_cnt && tasks_processed_sync_cycle >= start_tasks_processed_per_rank && !has_clocked_down[id]){ // && load_info_per_rank != 0){
         system("likwid-setFrequencies -f 1.2 -c 0,1");
-        //system("cat /proc/cpuinfo");
-        num_noise_generated++;
+        has_clocked_down[id] = true;
     }
     tasks_processed_sync_cycle++;
 
@@ -261,13 +270,8 @@ int cham_t_initialize(
     // cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
     // cham_t_data_t * r_data      = cham_t_get_rank_data();
     // r_data->value               = r_info->comm_rank;
-    char *env_p = getenv("NOISE");
+    char *env_p;
 
-    if(env_p) {
-       noise = atoi(env_p);
-       printf("Using noise = %d microseconds\n", noise);
-    }
-  
     env_p = getenv("FRACTION");
     if(env_p) {
        fraction = atof(env_p);
@@ -281,9 +285,7 @@ void cham_t_finalize(cham_t_data_t *tool_data)
 {
     printf("------------------------- Chameleon Statistics ---------------------\n");
      int rank_info       = cham_t_get_rank_info()->comm_rank;
-     printf("R#%d accumulated generated noise = %d\n", rank_info, acc_noise.load());
 
-    system("likwid-setFrequencies -f 2.3 -c 0,1");
     // if (rank_info == 0){
     //     printf("Task ID \t queued_time \t start_time \t mig_time\n");
     //     for (std::list<cham_t_task_info_t*>::iterator it=tool_task_list.task_list.begin(); it!=tool_task_list.task_list.end(); ++it) {
