@@ -107,7 +107,11 @@ on_cham_t_callback_sync_region(
 {
     tasks_processed_sync_cycle = 0;
     num_noise_generated = 0;
+<<<<<<< HEAD
     system("likwid-setFrequencies -f 2.3 -c 0,1");
+=======
+    //system("likwid-setFrequencies -f 2.3");
+>>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
 }
 
 
@@ -207,9 +211,16 @@ on_cham_t_callback_change_freq_for_execution(
     int start_tasks_processed_per_rank = total_created_tasks_per_rank * fraction; // 50% processed load
 
     if (rank%2==1 && tasks_processed_sync_cycle >= start_tasks_processed_per_rank && num_noise_generated==0){ // && load_info_per_rank != 0){
+<<<<<<< HEAD
         //printf("setting clock frequency 1.2\n");
         system("likwid-setFrequencies -f 1.2 -c 0,1");
         //system("cat /proc/cpuinfo");
+=======
+        printf("setting clock frequency 1.2\n");
+        system("likwid-setFrequencies -f 1.2 -c 0");
+        system("cat /proc/cpuinfo");
+
+>>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
         num_noise_generated++;
     }
     tasks_processed_sync_cycle++;
@@ -283,7 +294,11 @@ void cham_t_finalize(cham_t_data_t *tool_data)
      int rank_info       = cham_t_get_rank_info()->comm_rank;
      printf("R#%d accumulated generated noise = %d\n", rank_info, acc_noise.load());
 
+<<<<<<< HEAD
     system("likwid-setFrequencies -f 2.3 -c 0,1");
+=======
+    //system("likwid-setFrequencies -f 2.3");
+>>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
     // if (rank_info == 0){
     //     printf("Task ID \t queued_time \t start_time \t mig_time\n");
     //     for (std::list<cham_t_task_info_t*>::iterator it=tool_task_list.task_list.begin(); it!=tool_task_list.task_list.end(); ++it) {
