@@ -1,0 +1,6 @@
+LOAD_COMPILER="intel/19.0"
+LOAD_LIBS="mercurium/2.3.0 ompss/19.06 chameleon-lib/ompss"
+
+CC      = mcc
+CFLAGS  = --ompss --cc=mpiicc --cpp=mpiicc -g -O3 --Wn,-mkl=sequential -std=c11 -mt_mpi -DCHAMELEON -DHAVE_COMM_SENTINEL -DHAVE_INTERMEDIATE_COMM_SENTINEL -I./ -I../common 
+LDFLAGS = --ld=mpiicc --Wl,-mkl=sequential -lrt -lpthread -lm -mt_mpi -lc -ldl -DCHAMELEON -lchameleon

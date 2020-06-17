@@ -16,8 +16,10 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
     #endif
 
     #ifdef USE_TIMING
+#if !defined(OMPSS_VER)
     #pragma omp parallel
     #pragma omp master
+#endif
     INIT_TIMING(omp_get_num_threads());
     #endif
     
@@ -35,20 +37,20 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
     #endif
 
     START_TIMING(TIME_TOTAL);
+#if !defined(OMPSS_VER)
     #pragma omp parallel
     {
+#endif
     for (int k = 0; k < nt; k++) {
-        // printf("%d\n", k);
-        // DEBUG_PRINT("Iteration [%03d][000] --> 0 Starting new loop iter\n", k);
+        DEBUG_PRINT("Iteration [%03d][000] --> 0 Starting new loop iter\n", k);
         if (block_rank[k*nt+k] == mype) {
-            #pragma omp single 
+#if !defined(OMPSS_VER)
+            #pragma omp single
+#endif
             {
                 // first calculate diagonal element
                 omp_potrf(A[k][k], ts, ts);
-            }
 
-            #pragma omp master 
-            {
                 START_TIMING(TIME_COMM);
                 send_cnt = 0;
                 reset_send_flags(send_flags);
@@ -61,6 +63,7 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                     send_cnt = 0;
                     for (int dst = 0; dst < np; dst++) {
                         if (send_flags[dst] && dst != mype) {
+                            DEBUG_PRINT("Iteration [%03d][000] --> 0 Sending A-k-k to R#%d\n", k, dst);
                             exec_wait = 1;
                             MPI_Isend(A[k][k], ts*ts, MPI_DOUBLE, dst, k*nt+k, MPI_COMM_WORLD,
                                     &send_reqs[send_cnt++]);
@@ -75,7 +78,9 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                 END_TIMING(TIME_COMM);
             }
         } else {
+#if !defined(OMPSS_VER)
             #pragma omp single
+#endif
             {
                 START_TIMING(TIME_COMM);
                 recv_flag = 0;
@@ -85,6 +90,7 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                     #ifdef TRACE
                     VT_begin(event_communication);
                     #endif
+                    DEBUG_PRINT("Iteration [%03d][000] --> 0 Recv A-k-k from R#%d\n", k, block_rank[k*nt+k]);
                     MPI_Irecv(B, ts*ts, MPI_DOUBLE, block_rank[k*nt+k], k*nt+k, MPI_COMM_WORLD,
                             &recv_req);
                     wait(&recv_req);
@@ -173,7 +179,9 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
         #pragma omp barrier
         #endif
 
+#if !defined(OMPSS_VER)
         #pragma omp single nowait
+#endif
         {
             for (int i = k + 1; i < nt; i++) {
                 DEBUG_PRINT("Iteration [%03d][%03d] --> 0 Begin\n", k, i);
@@ -400,12 +408,16 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
         // }
         // #endif
     }
+#if !defined(OMPSS_VER)
 } /* end omp parallel */
+#endif
     END_TIMING(TIME_TOTAL);
     MPI_Barrier(MPI_COMM_WORLD);
-    
+
+#if !defined(OMPSS_VER)    
     #pragma omp parallel
     #pragma omp master
+#endif
     PRINT_TIMINGS(omp_get_num_threads());
 
 	FREE_TIMING();

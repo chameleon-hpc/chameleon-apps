@@ -1,6 +1,8 @@
 LOAD_COMPILER="intel/19.0"
-LOAD_LIBS="mercurium/2.3.0 ompss/19.06"
+LOAD_LIBS="ompss"
 
-CC      = mcc
-CFLAGS  = --openmp --cc=mpiicc --cpp=mpiicc -g -O3 --Wn,-mkl=sequential --std=c11 -mt_mpi -I./ -I../common 
-LDFLAGS = --ld=mpiicc --Wl,-mkl=sequential -lrt -lpthread -lm -mt_mpi -lc -ldl
+CC = mcc --ompss
+MKLROOT = /opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/
+CFLAGS = --cc=mpiicc --cpp=mpiicc -I$(MKLROOT)/include -I./ -I../common --std=c11 -g -O3 --Wn,-O3,-ip,-xSSE4.2,-axCORE-AVX2,-fp-model,fast=2,-mkl=sequential -mt_mpi -DOMPSS_VER
+LDFLAGS = --ld=mpiicc --Wl,-dynamic -L$(MKLROOT)/lib/intel64 -Wl,--rpath,$(MKLROOT)/lib/intel64 -lmkl_intel_lp64 -lmkl_core -lmkl_sequential -lrt -lpthread -lm -mt_mpi -lc -ldl
+

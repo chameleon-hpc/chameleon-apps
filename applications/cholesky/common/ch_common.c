@@ -158,10 +158,12 @@ void omp_syrk(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, int ts, int ld
 void cholesky_single(const int ts, const int nt, double* A[nt][nt])
 {
     // speed up "serial" verification with only a single rank
+#if !defined(OMPSS_VER)
 #pragma omp parallel
 {
 #pragma omp single
 {
+#endif
     for (int k = 0; k < nt; k++) {
 #pragma omp task depend(out: A[k][k])
 {
@@ -199,8 +201,10 @@ void cholesky_single(const int ts, const int nt, double* A[nt][nt])
         }
     }
 #pragma omp taskwait
+#if !defined(OMPSS_VER)
 }
 }
+#endif
 }
 
 inline void wait(MPI_Request *comm_req)
@@ -331,52 +335,58 @@ int main(int argc, char *argv[])
 
     double * SPEC_RESTRICT A[nt][nt], * SPEC_RESTRICT B, * SPEC_RESTRICT C[nt], * SPEC_RESTRICT Ans[nt][nt];
 
-    #pragma omp parallel
-    {
-    #pragma omp single
-    {
+#if !defined(OMPSS_VER)
+#pragma omp parallel
+{
+#pragma omp single
+#endif
+{
     for (int i = 0; i < nt; i++) {
         for (int j = 0; j < nt; j++) {
-            #pragma omp task shared(Ans, A)
-            {
-                int error;
-                if (check) {
-                    Ans[i][j] = (double*) malloc(ts * ts * sizeof(double));
-                    initialize_tile(ts, Ans[i][j]);
-                }
-                if (block_rank[i*nt+j] == mype) {
-                    A[i][j] = (double*) malloc(ts * ts * sizeof(double));
-                    if (!check) {
-                        initialize_tile(ts, A[i][j]);
-                    } else {
-                        for (int k = 0; k < ts * ts; k++) {
-                            A[i][j][k] = Ans[i][j][k];
-                        }
+#pragma omp task depend(out: A[i][j]) shared(Ans, A)
+{
+            if (check) {
+                MPI_Alloc_mem(ts * ts * sizeof(double), MPI_INFO_NULL, &Ans[i][j]);
+                initialize_tile(ts, Ans[i][j]);
+            }
+            if (block_rank[i*nt+j] == mype) {
+                MPI_Alloc_mem(ts * ts * sizeof(double), MPI_INFO_NULL, &A[i][j]);
+                if (!check) {
+                    initialize_tile(ts, A[i][j]);
+                } else {
+                    for (int k = 0; k < ts * ts; k++) {
+                        A[i][j][k] = Ans[i][j][k];
                     }
                 }
             }
+}
         }
-    }
-    } // omp single
-    } // omp parallel
-
-    for (int i = 0; i < nt; i++) {
+#pragma omp task depend(inout: A[i][i]) shared(Ans, A)
+{
         // add to diagonal
         if (check) {
             Ans[i][i][i*ts+i] = (double)nt;
         }
         if (block_rank[i*nt+i] == mype) {
-            A[i][i][i*ts+i] = (double)nt;
+            A[i][i][ts/2*ts+ts/2] = (double)nt;
         }
+}
     }
+
+} // omp single
+#if !defined(OMPSS_VER)
+} // omp parallel
+#endif
 
     B = (double*) malloc(ts * ts * sizeof(double));
     for (int i = 0; i < nt; i++) {
         C[i] = (double*) malloc(ts * ts * sizeof(double));
     }
 
+#if !defined(OMPSS_VER)
     #pragma omp parallel
     #pragma omp single
+#endif
     num_threads = omp_get_num_threads();
 
     INIT_TIMING(num_threads);
@@ -388,13 +398,11 @@ int main(int argc, char *argv[])
     MPI_Barrier(MPI_COMM_WORLD);
 
     RESET_TIMINGS(num_threads);
-    if (mype == 0)
-      printf("Starting parallel computation\n");
+    if (mype == 0) printf("Starting parallel computation\n");
     const float t1 = get_time();
     cholesky_mpi(ts, nt, (double* SPEC_RESTRICT (*)[nt])A, B, C, block_rank);
     const float t2 = get_time() - t1;
-    if (mype == 0)
-      printf("Finished parallel computation\n");
+    if (mype == 0) printf("Finished parallel computation\n");
 
     MPI_Barrier(MPI_COMM_WORLD);
 

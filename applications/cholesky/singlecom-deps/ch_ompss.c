@@ -24,15 +24,21 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
 >>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
     #endif
 
+    #ifdef USE_TIMING
+#if !defined(OMPSS_VER)
     #pragma omp parallel
     #pragma omp master
+#endif
     INIT_TIMING(omp_get_num_threads());
+    #endif    
 
     START_TIMING(TIME_TOTAL);
 
+#if !defined(OMPSS_VER)
     #pragma omp parallel
     {
     #pragma omp single nowait
+#endif
     {
     {
     START_TIMING(TIME_CREATE);
@@ -66,7 +72,7 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
             }
         }
 
-        int comm_sentinel; // <-- sentinel, never actual referenced
+        int comm_sentinel = 0; // <-- sentinel, never actual referenced
 
         if (block_rank[k*nt+k] == mype && np != 1) {
             // use comm_sentinel to make sure this task runs before the communication tasks below
@@ -265,7 +271,7 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
 
                 if (block_rank[j*nt+i] == mype) {
                     if (block_rank[k*nt+i] == mype && block_rank[k*nt+j] == mype) {
-                        #pragma omp task depend(in: A[k][i], A[k][j]) depend(out: A[j][i]) firstprivate(k, j, i)
+                        #pragma omp task depend(in: A[k][i], A[k][j], comm_sentinel) depend(out: A[j][i]) firstprivate(k, j, i)
                         {
                             TASK_DEPTH_INCR;
                             DEBUG_PRINT("Computing omp_gemm[%03d][%03d] - Start\n", j, i);
@@ -374,7 +380,7 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
 
             if (block_rank[i*nt+i] == mype) {
                 if (block_rank[k*nt+i] == mype) {
-                    #pragma omp task depend(in: A[k][i]) depend(out: A[i][i]) firstprivate(k, i)
+                    #pragma omp task depend(in: A[k][i], comm_sentinel) depend(out: A[i][i]) firstprivate(k, i)
                     {
                         TASK_DEPTH_INCR;
                         DEBUG_PRINT("Computing omp_syrk[%03d][%03d] - Start\n", i, i);
@@ -433,18 +439,26 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
 
     #if defined(CHAMELEON) || defined(CHAMELEON_TARGET)
     chameleon_distributed_taskwait(0);
+    #else
+    #pragma omp barrier
     #endif
-    
+
+#if !defined(OMPSS_VER)    
     #pragma omp single
+#endif
     {
         MPI_Barrier(MPI_COMM_WORLD);
     }
+#if !defined(OMPSS_VER)
     }// pragma omp parallel
+#endif
 
     END_TIMING(TIME_TOTAL);
 
+#if !defined(OMPSS_VER)
     #pragma omp parallel
     #pragma omp master
+#endif
     PRINT_TIMINGS(omp_get_num_threads());
 
     FREE_TIMING();
