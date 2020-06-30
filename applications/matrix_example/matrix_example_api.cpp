@@ -67,12 +67,9 @@
 //#define LOG(rank, str) fprintf(stderr, "#R%d: %s\n", rank, str)
 #define LOG(rank, str) printf("#R%d: %s\n", rank, str)
 
-<<<<<<< HEAD
-=======
 #define SPEC_RESTRICT __restrict__
 //#define SPEC_RESTRICT restrict
 
->>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
 #include <assert.h>
 #include <mpi.h>
 #include "chameleon.h"
@@ -87,20 +84,6 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <atomic>
-<<<<<<< HEAD
-
-#if CHECK_GENERATED_TASK_ID
-#include <mutex>
-#include <list>
-#endif
-
-
-#define SPEC_RESTRICT __restrict__
-//#define SPEC_RESTRICT restrict
-
-// static rank id that can also be used in other functions except main
-static int my_rank_id = -1;
-=======
 #include <list>
 #include <vector>
 #include <algorithm>
@@ -140,7 +123,6 @@ typedef struct non_uniform_matrix_settings_t {
 non_uniform_ordering_t non_uniform_ordering = non_uniform_ordering_high_to_low;
 std::vector<non_uniform_matrix_settings_t> non_uniform_matrix_settings;
 std::vector<int> non_uniform_full_array_matrix_sizes;
->>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
 
 #if USE_EXTERNAL_CALLBACK
 typedef struct my_custom_params_t {
@@ -229,13 +211,6 @@ void compute_random_task_distribution(int *dist, int nRanks) {
 }
 
 void printHelpMessage() {
-<<<<<<< HEAD
-    std::cout<<"Usage: mpiexec -n np ./matrixExample matrixSize [nt_(0) ... nt_(np-1)] "<<std::endl;
-    std::cout<<"    Arguments: "<<std::endl;
-    std::cout<<"        matrixSize: number of elements of the matrixSize x matrixSize matrices"<<std::endl;
-    std::cout<<"        nt_(i): number of tasks for process i "<<std::endl;
-    std::cout<<"If the number of tasks is not specified for every process, the application will generate an initial task distribution"<<std::endl; 
-=======
     if(my_rank_id == 0) {
         std::cout << "Usage (mode=normal): mpiexec -n np ./matrixExample matrixSize [nt_(0) ... nt_(np-1)] " << std::endl;
         std::cout << "    Arguments: " << std::endl;
@@ -249,7 +224,6 @@ void printHelpMessage() {
         std::cout << "        numberTasks:  Comma separated list defining number of tasks for each matrix size" << std::endl;
         std::cout << "        order_(i):    Ordering of tasks using matrix sizes for rank/process i; 0=\"high to low\" (default); 1=\"low to high\"" << std::endl << std::endl;
     }
->>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
 }
 
 void printArray(int rank, double * SPEC_RESTRICT array, char* arr_name, int n) {
@@ -278,8 +252,6 @@ void matrixMatrixKernel(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, doub
 #endif
 }
 
-<<<<<<< HEAD
-=======
 int parse_command_line_args(int argc, char **argv) {
     if(argc>=2 && strcmp(argv[1], "non-uniform")==0) {
         matrix_size_mode = matrix_size_mode_non_uniform;
@@ -393,7 +365,6 @@ int parse_command_line_args(int argc, char **argv) {
     return 0;
 }
 
->>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
 int main(int argc, char **argv)
 {
 	int iMyRank, iNumProcs;
@@ -403,12 +374,7 @@ int main(int argc, char **argv)
 	MPI_Comm_size(MPI_COMM_WORLD, &iNumProcs);
 	MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank);
     my_rank_id = iMyRank;
-<<<<<<< HEAD
-	int numberOfTasks;
-	int matrixSize;
-=======
     num_procs = iNumProcs;
->>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
 	double fTimeStart, fTimeEnd;
 	double wTimeCham, wTimeHost;
 	bool pass = true;
@@ -432,30 +398,6 @@ int main(int argc, char **argv)
 #endif
 #endif /* COMPILE_CHAMELEON */
 
-<<<<<<< HEAD
-    if(argc==2) {
-        matrixSize = atoi( argv[1] );
-        if(RANDOMDIST) {
-            int *dist = new int[iNumProcs];
-            if( iMyRank==0 ) {
-                compute_random_task_distribution(dist, iNumProcs);
-            }
-            MPI_Bcast(dist, iNumProcs, MPI_INTEGER, 0, MPI_COMM_WORLD);
-            numberOfTasks = dist[iMyRank];
-            delete[] dist;
-        } else {
-            numberOfTasks = NR_TASKS;
-        }
-    } else if(argc==iNumProcs+2) {
-        if(iMyRank==0) {
-            LOG(iMyRank, "using user-defined initial load distribution...");    
-        } 
-        matrixSize = atoi( argv[1] ); 
-        numberOfTasks = atoi( argv[iMyRank+2] ); 
-    } else { 
-        printHelpMessage();
-        return 0;     
-=======
     int ret_code = parse_command_line_args(argc, argv);
     if (ret_code != 0) {
         return ret_code;
@@ -467,25 +409,16 @@ int main(int argc, char **argv)
         } else if (matrix_size_mode == matrix_size_mode_non_uniform) {
             printf("Mode: Non-Uniform Task Distribution\n");
         }
->>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
     }
 	
     std::string msg = "will create "+std::to_string(numberOfTasks)+" tasks";
     LOG(iMyRank, msg.c_str());
 
 	double **matrices_a, **matrices_b, **matrices_c;
-<<<<<<< HEAD
-
-=======
->>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
 	matrices_a = new double*[numberOfTasks];
 	matrices_b = new double*[numberOfTasks];
 	matrices_c = new double*[numberOfTasks];
 
-<<<<<<< HEAD
-	//allocate and initialize matrices
-=======
->>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
 #if PARALLEL_INIT
     if(iMyRank == 0) {
         printf("Executing parallel init\n");
@@ -493,20 +426,6 @@ int main(int argc, char **argv)
     #pragma omp parallel for
 #endif
 	for(int i=0; i<numberOfTasks; i++) {
-<<<<<<< HEAD
- 		matrices_a[i] = new double[(long)matrixSize*matrixSize];
-    	matrices_b[i] = new double[(long)matrixSize*matrixSize];
-    	matrices_c[i] = new double[(long)matrixSize*matrixSize];
-    	if(RANDOMINIT) {
-    		initialize_matrix_rnd(matrices_a[i], matrixSize);
-    		initialize_matrix_rnd(matrices_b[i], matrixSize);
-    		initialize_matrix_zero(matrices_c[i], matrixSize);
-    	}
-    	else {
-    		initialize_matrix_test_A(matrices_a[i], matrixSize);
-    		initialize_matrix_test_A(matrices_b[i], matrixSize);
-    		initialize_matrix_zero(matrices_c[i], matrixSize);
-=======
 
         int cur_size = matrixSize;
         if(matrix_size_mode == matrix_size_mode_non_uniform) {
@@ -525,7 +444,6 @@ int main(int argc, char **argv)
     		initialize_matrix_test_A(matrices_a[i], cur_size);
     		initialize_matrix_test_A(matrices_b[i], cur_size);
     		initialize_matrix_zero(matrices_c[i], cur_size);
->>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
     	}
 #if VERY_VERBOSE
         printArray(iMyRank, matrices_a[i], "A", 10);
@@ -554,14 +472,11 @@ int main(int argc, char **argv)
 #endif
 		#pragma omp for
     		for(int i=0; i<numberOfTasks; i++) {
-<<<<<<< HEAD
-=======
                 int cur_size = matrixSize;
                 if(matrix_size_mode == matrix_size_mode_non_uniform) {
                     cur_size = non_uniform_full_array_matrix_sizes[i];
                 }
 
->>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
 				double * SPEC_RESTRICT A = matrices_a[i];
 		        double * SPEC_RESTRICT B = matrices_b[i];
 		        double * SPEC_RESTRICT C = matrices_c[i];
@@ -571,15 +486,6 @@ int main(int argc, char **argv)
                 printArray(iMyRank, C, "C", 10);
 #endif
                 // here we need to call library function to add task entry point and parameters by hand
-<<<<<<< HEAD
-                void* literal_matrix_size   = *(void**)(&matrixSize);
-                void* literal_i             = *(void**)(&i);
-
-                chameleon_map_data_entry_t* args = new chameleon_map_data_entry_t[5];
-                args[0] = chameleon_map_data_entry_create(A, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
-                args[1] = chameleon_map_data_entry_create(B, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
-                args[2] = chameleon_map_data_entry_create(C, matrixSize*matrixSize*sizeof(double), CHAM_OMP_TGT_MAPTYPE_FROM);
-=======
                 void* literal_matrix_size   = *(void**)(&cur_size);
                 void* literal_i             = *(void**)(&i);
 
@@ -587,7 +493,6 @@ int main(int argc, char **argv)
                 args[0] = chameleon_map_data_entry_create(A, cur_size*cur_size*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
                 args[1] = chameleon_map_data_entry_create(B, cur_size*cur_size*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
                 args[2] = chameleon_map_data_entry_create(C, cur_size*cur_size*sizeof(double), CHAM_OMP_TGT_MAPTYPE_FROM);
->>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
                 args[3] = chameleon_map_data_entry_create(literal_matrix_size, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
                 args[4] = chameleon_map_data_entry_create(literal_i, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
 
@@ -682,15 +587,11 @@ int main(int argc, char **argv)
     LOG(iMyRank, "Validation:");
     if(numberOfTasks>0) {
         for(int t=0; t<numberOfTasks; t++) {
-<<<<<<< HEAD
-            pass &= check_test_matrix(matrices_c[t], matrixSize, matrixSize);
-=======
             int cur_size = matrixSize;
             if(matrix_size_mode == matrix_size_mode_non_uniform) {
                 cur_size = non_uniform_full_array_matrix_sizes[t];
             }
             pass &= check_test_matrix(matrices_c[t], cur_size, cur_size);
->>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
         }
         if(pass)
             LOG(iMyRank, "TEST SUCCESS");
@@ -714,32 +615,21 @@ int main(int argc, char **argv)
 #endif
 		#pragma omp for
         for(int i=0; i<numberOfTasks; i++) {
-<<<<<<< HEAD
-=======
             int cur_size = matrixSize;
             if(matrix_size_mode == matrix_size_mode_non_uniform) {
                 cur_size = non_uniform_full_array_matrix_sizes[i];
             }
->>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
             // double *A = matrices_a[i];
             // double *B = matrices_b[i];
             // double *C = matrices_c[i];
             
             // somehow target offloading is very slow when performing more that one iteration
-<<<<<<< HEAD
-            // #pragma omp target map(from: C[0:matrixSize*matrixSize]) map(to:matrixSize, A[0:matrixSize*matrixSize], B[0:matrixSize*matrixSize]) device(1001)
-=======
             // #pragma omp target map(from: C[0:cur_size*cur_size]) map(to:cur_size, A[0:cur_size*cur_size], B[0:cur_size*cur_size]) device(1001)
->>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
             
             // uses normal tasks to have a fair comparison
             #pragma omp task default(shared) firstprivate(i)
             {
-<<<<<<< HEAD
-                compute_matrix_matrix(matrices_a[i], matrices_b[i], matrices_c[i], matrixSize);
-=======
                 compute_matrix_matrix(matrices_a[i], matrices_b[i], matrices_c[i], cur_size);
->>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
             }
         }
 
@@ -761,15 +651,11 @@ int main(int argc, char **argv)
     pass = true;
     if(numberOfTasks>0) {
         for(int t=0; t<numberOfTasks; t++) {
-<<<<<<< HEAD
-            pass &= check_test_matrix(matrices_c[t], matrixSize, matrixSize);
-=======
             int cur_size = matrixSize;
             if(matrix_size_mode == matrix_size_mode_non_uniform) {
                 cur_size = non_uniform_full_array_matrix_sizes[t];
             }
             pass &= check_test_matrix(matrices_c[t], cur_size, cur_size);
->>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
         }
         if(pass)
             LOG(iMyRank, "TEST SUCCESS");
