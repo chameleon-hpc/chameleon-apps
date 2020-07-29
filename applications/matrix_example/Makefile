@@ -31,6 +31,7 @@ default: release
 
 release: FLAGS_OPTIMIZATION=-g -O3
 release: generic
+release: scorep_comp
 
 debug: FLAGS_OPTIMIZATION=-g -O0
 debug: generic
@@ -41,6 +42,9 @@ simulate-work: generic
 generic: clean
 	${MPICXX} $(FLAGS_OPTIMIZATION) -o $(PROG) $(APP_COMPILE_FLAGS) $(FILE_NAMES) $(APP_LINKER_FLAGS)
 
+scorep_comp: clean 
+	I_MPI_CXX=icpc scorep --user --compiler --thread=pthread mpiicpc -mt_mpi $(FLAGS_OPTIMIZATION) -o $(PROG)_scorep $(APP_COMPILE_FLAGS) $(FILE_NAMES) $(APP_LINKER_FLAGS)
+
 run:
 	$(RUN_SETTINGS) mpiexec.hydra -np 4 -genvall $(PROG) $(MATRIX_SIZE) 70 50 30 20
 
@@ -48,4 +52,4 @@ run-batch:
 	$(RUN_SETTINGS_SLURM) ${MPIEXEC} ${FLAGS_MPI_BATCH} ${MPI_EXPORT_VARS_SLURM} $(PROG) ${MATRIX_SIZE} ${NUM_TASKS} ${NUM_TASKS} ${NUM_TASKS}
 
 clean:
-	rm -f $(PROG) *.o 
+	rm -f $(PROG) *.o $(PROG)_scorep

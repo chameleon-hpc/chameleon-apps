@@ -52,9 +52,9 @@ long window_us_size_max     = 1000*3000;    // default 3 sesc
 bool use_random             = false;
 int rank_number             = -1;
 int use_multiple_cores      = 1;
-int use_ram                 = 1;
+int disturb_mem_mb_size     = 1000;
 int *ranks_to_disturb;
-int com_size                = 1000;
+int disturb_com_mb_size     = 1000;
 int num_partner             = 0;
 int seed                    = 0;
 int abort_program           = 0;
@@ -62,7 +62,7 @@ int abort_program           = 0;
 
 int iNumProcs;
 
-//#define DEBUG 1
+#define DEBUG 1
 
 #ifdef DEBUG
 static void DEBUG_PRINT(const char * format, ... ) {
@@ -189,22 +189,25 @@ void compute_kernel()
 void memory_kernel()
 {
 
-    long long size_of_ram_usage = use_ram/use_multiple_cores/2;
-    //printf ("Allocating %dMB of RAM\n",size_of_ram_usage*2);
+    float size_of_int_array_per_thread = 1.0f*disturb_mem_mb_size*MB/use_multiple_cores/sizeof(int)/2;
+    DEBUG_PRINT ("Allocating %f MB of RAM\n",size_of_int_array_per_thread*sizeof(int)*use_multiple_cores*2);
 
-    void *p = malloc(size_of_ram_usage*MB);
-    void *q = malloc(size_of_ram_usage*MB);
+    int *p = (int*)calloc(size_of_int_array_per_thread,sizeof(int));
+    int *q = (int*)calloc(size_of_int_array_per_thread,sizeof(int));
+
+    
+    DEBUG_PRINT ("Allocaded\n");
     int i = 0;
 
     if (window_us_pause <= 0) {
 
-        memset(p, 1, size_of_ram_usage*MB);
-        memcpy(q, p, size_of_ram_usage*MB);
+        memset(p, 1, size_of_int_array_per_thread);
+        memcpy(q, p, size_of_int_array_per_thread);
 
         while(true)
         {
-            memset(p, i, size_of_ram_usage*MB);
-            memcpy(q, p,  size_of_ram_usage*MB);
+            memset(p, i, size_of_int_array_per_thread);
+            memcpy(q, p,  size_of_int_array_per_thread);
             usleep(10);
 
             if (i == 0)
@@ -221,8 +224,8 @@ void memory_kernel()
     int count = 0;
     while(true)
     {
-        memset(p, i, size_of_ram_usage*MB);
-        memcpy(q, p,  size_of_ram_usage*MB);
+        memset(p, i, size_of_int_array_per_thread);
+        memcpy(q, p,  size_of_int_array_per_thread);
 
         if (i == 0)
             i = 1;
@@ -239,8 +242,8 @@ void memory_kernel()
                 free(q);
                 usleep(window_us_pause);
                 start_time = omp_get_wtime();
-                p = malloc(size_of_ram_usage*MB);
-                q = malloc(size_of_ram_usage*MB);
+                p = (int*)calloc(size_of_int_array_per_thread,sizeof(int));
+                q = (int*)calloc(size_of_int_array_per_thread,sizeof(int));
             }
         }
     }
@@ -249,7 +252,7 @@ void memory_kernel()
 void communication_kernel()
 {
     //com size in Bytes
-    int com_size_byte = com_size/8/omp_get_num_threads();
+    int size_of_int_array_per_thread = disturb_com_mb_size*MB/use_multiple_cores/sizeof(int);
 
     int thread_id = omp_get_thread_num();
 
@@ -257,8 +260,7 @@ void communication_kernel()
         return;
 
     int i ,id;
-    //int *data = (int*)malloc(sizeof(int)*com_size*MB);
-    char data[com_size_byte*MB];
+    int *data = (int*)calloc(size_of_int_array_per_thread,sizeof(int));
 
     int total_num_partner = num_partner;
 
@@ -291,21 +293,21 @@ void communication_kernel()
 
     int target_rank = ranks_to_disturb[target_rank_id];
     int previous_rank = ranks_to_disturb[previous_rank_id];
-    //memset(data, rank_number, com_size*MB);
+    //memset(data, rank_number, disturb_com_mb_size*MB);
 
     MPI_Status status;
     if (id == 0) {
         DEBUG_PRINT("Starting Communication, sending to RANK:%d\n",target_rank);
-        MPI_Send(data,com_size_byte*MB, MPI_CHAR,target_rank , thread_id, MPI_COMM_WORLD);
+        MPI_Send(data, size_of_int_array_per_thread, MPI_INT,target_rank , thread_id, MPI_COMM_WORLD);
         DEBUG_PRINT("Message Send\n");
     }
     if (window_us_pause == 0) {
         while (true)
         {
-            char* tmp_data = (char*)malloc(sizeof(char)*com_size_byte*MB + 1);
+            int* tmp_data = (int*)calloc(size_of_int_array_per_thread,sizeof(int));
             DEBUG_PRINT("Wait for message from RANK:%d\n",previous_rank);
-            MPI_Recv(tmp_data,com_size_byte*MB,MPI_CHAR,previous_rank,thread_id,MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Send(&data,com_size_byte*MB, MPI_CHAR, target_rank, thread_id, MPI_COMM_WORLD);
+            MPI_Recv(tmp_data,size_of_int_array_per_thread,MPI_INT,previous_rank,thread_id,MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Send(data,size_of_int_array_per_thread, MPI_INT, target_rank, thread_id, MPI_COMM_WORLD);
             DEBUG_PRINT("Rank %d\t Recived Message from %d, send to %d\n", rank_number, previous_rank, target_rank);
             free(tmp_data);
             if (abort_program) {
@@ -327,9 +329,9 @@ void communication_kernel()
     {
 
         DEBUG_PRINT("Wait for message from RANK:%d\n",previous_rank);
-        char* tmp_data = (char*)malloc(sizeof(char)*com_size_byte*MB + 1);
+        int* tmp_data = (int*)calloc(size_of_int_array_per_thread,sizeof(int));
         DEBUG_PRINT("Wait for message from RANK:%d\n",previous_rank);
-        MPI_Recv(tmp_data,com_size_byte*MB,MPI_CHAR,previous_rank, thread_id, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(tmp_data, size_of_int_array_per_thread,MPI_INT,previous_rank, thread_id, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
         if (id == 0) {
             passed_time = (long)((omp_get_wtime()-start_time) * 1e6);
@@ -340,7 +342,7 @@ void communication_kernel()
             }
         }
         
-        MPI_Send(&data,com_size_byte*MB, MPI_CHAR, target_rank, thread_id, MPI_COMM_WORLD);
+        MPI_Send(data, size_of_int_array_per_thread, MPI_INT, target_rank, thread_id, MPI_COMM_WORLD);
         DEBUG_PRINT("Rank %d\t Recived Message from %d, send to %d\n", rank_number, previous_rank, target_rank);
         free(tmp_data);
         DEBUG_PRINT("Rank %d\t Recived Message from %d, send to %d\n", rank_number, previous_rank, target_rank);
@@ -353,6 +355,8 @@ void communication_kernel()
 
 int main(int argc, char *argv[])
 {
+
+    fprintf(stderr, "Size: %d\n", sizeof(size_t));
     // catch signals to allow controlled way to end application
     if (signal(SIGINT, sig_handler) == SIG_ERR)
         printf("\ncan't catch SIGINT\n");
@@ -462,13 +466,13 @@ int main(int argc, char *argv[])
         {
             rank_number = get_integer(s[1], s[0], rank_number);
         }
-        else if(strcmp(s[0], "--use_ram") == 0)
+        else if(strcmp(s[0], "--disturb_mem_mb_size") == 0)
         {
-            use_ram = get_integer(s[1], s[0], use_ram);
+            disturb_mem_mb_size = get_integer(s[1], s[0], disturb_mem_mb_size);
         }
-        else if(strcmp(s[0], "--com_size") == 0)
+        else if(strcmp(s[0], "--disturb_com_mb_size") == 0)
         {
-            com_size = get_integer(s[1], s[0], com_size);
+            disturb_com_mb_size = get_integer(s[1], s[0], disturb_com_mb_size);
         }
         else if(strcmp(s[0], "--ranks_to_disturb") == 0)
         {
@@ -538,10 +542,10 @@ int main(int argc, char *argv[])
             fprintf(stderr,"\t--use_random\n");
             fprintf(stderr,"\t--use_multiple_cores\n");
             fprintf(stderr,"\t--rank_number\n");
-            fprintf(stderr,"\t--use_ram\t  in MB\n");
+            fprintf(stderr,"\t--disturb_mem_mb_size\t  in MB\n");
             fprintf(stderr,"\t--com_type\n");
             fprintf(stderr,"\t--ranks_to_disturb\t in form 1,2,3\n");
-            fprintf(stderr,"\t--com_size\t in MB\n");
+            fprintf(stderr,"\t--disturb_com_mb_size\t in MB\n");
             return 0;
         }
     }
@@ -554,12 +558,18 @@ int main(int argc, char *argv[])
     DEBUG_PRINT("--use_multiple_cores is set to: %ld\n", use_multiple_cores);
     DEBUG_PRINT("--use_random is set to: %d\n", use_random);
     DEBUG_PRINT("--rank_number is set to: %d\n", rank_number);
-    DEBUG_PRINT("--use_ram is set to: %d\n", use_ram);
+    DEBUG_PRINT("--disturb_mem_mb_size is set to: %d\n", disturb_mem_mb_size);
     DEBUG_PRINT("--com_type is set to: %d\n", c_mode);
     //DEBUG_PRINT("--ranks_to_disturb is set to: %d\n", ranks_to_disturb);
-    DEBUG_PRINT("--com_size is set to: %d\n", com_size);
+    DEBUG_PRINT("--disturb_com_mb_size is set to: %d\n", disturb_com_mb_size);
     DEBUG_PRINT("--number of ranks to disturb is set to: %d\n", num_partner);
 
+    if(d_mode == 2 && c_mode == pingpong && num_partner%2 > 0) 
+    {
+        fprintf(stderr, "To use Pinpong communication mode, you have to have an even number of disturbance ranks...\tabort...\n");
+        return 0;
+    }
+    
     if (use_random)
     {
         seed = (rank_number+1)*42;
