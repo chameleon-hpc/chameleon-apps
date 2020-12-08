@@ -54,12 +54,14 @@ std::vector<float> norm_ground_truth;
 std::vector<float> runtime_list;
 std::vector<float> pred_runtime_list;
 bool is_model_trained = false;
-int num_samples = 100;
-int num_epochs = 1000;
+int num_samples = DEF_NUM_SAMPLE;
+int num_epochs = DEF_NUM_EPOCH;
+int num_features = 1;
 
 
 /**************** regression model definition *****/
 struct SimpleRegression:torch::nn::Module {
+
     SimpleRegression(int in_dim, int n_hidden, int out_dim){
         hidden1 = register_module("hidden1", torch::nn::Linear(in_dim, n_hidden));
         hidden2 = register_module("hidden2", torch::nn::Linear(n_hidden, n_hidden));
@@ -87,6 +89,7 @@ struct SimpleRegression:torch::nn::Module {
 
 
 /**************** create a global model ***********/
+// TODO: get num of features here
 auto net = std::make_shared<SimpleRegression>(6, 20, 1);
 
 
@@ -320,45 +323,3 @@ auto online_training_model(std::vector<std::vector<float>> input, std::vector<fl
 
     return net;
 }
-
-// void test_bcl_fast_queue(int rank, int num_procs)
-// {
-//     /* init BCL env */
-//     BCL::init();
-
-//     /* declare queue size (num of elements in queue) */
-//     int num_tasks = num_samples * 2;
-//     int queue_size = num_tasks * 2;
-
-//     std::vector<BCL::FastQueue<int>> queues;
-
-//     queues.push_back(BCL::FastQueue<int>(rank, queue_size));
-
-//     srand48(0);
-
-//     for (int i = 0; i < num_tasks; i++) {
-        
-//         int dst_rank = lrand48() % num_procs;
-
-//         // init info for each element
-//         queues[dst_rank].push(i);
-//     }
-
-//     BCL::barrier();
-
-//     // Pop out of queue
-//     int count = 0;
-//     while (!queues[rank].empty()) {
-//         int value;
-//         bool success = queues[rank].pop(value);
-//         if (success) {
-//             count++;
-//         }
-//     }
-
-//     int total_count = BCL::allreduce<int>(count, std::plus<int>{});
-
-//     BCL::print("Popped %lu values total.\n", total_count);
-
-//     BCL::finalize();
-// }
