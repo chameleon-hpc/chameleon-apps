@@ -22,8 +22,8 @@ As the principle of Chameleon lib, there is an additional thread for monitoring 
   }  
   void *handle = dlopen(cham_tool_path, RTLD_LAZY|RTLD_LOCAL);
 ```
-*   So, we could use a env-variable to adapt at the compiling step. Set CHAM_TOOL_DIR=`".../libtool.so"`
-*  To compile the tool, we use CMake (CMakeLists.txt for more detail). Please rememeber to export ENV for Chameleon lib and Pytorch-C++ lib-folder.
+*   So, we could use an env-variable to adapt at the compiling step. Set CHAM_TOOL_DIR=`".../libtool.so"`
+*  To compile the tool, we use CMake (CMakeLists.txt in more detail). Please rememeber to export ENV for Chameleon lib and Pytorch-C++ lib-folder.
     *   For Pytorch-C++, download here: https://pytorch.org/get-started/locally/. The version could be for Linux/LibTorch/C++, and with or without CUDA.
     *   Specify the path to CMake for compiling the tool (e.g., like the script in `./build/cmake-script.sh`).
 
