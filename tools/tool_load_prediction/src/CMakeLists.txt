@@ -5,18 +5,9 @@ cmake_minimum_required(VERSION 3.5)
 project(pred_model_tool)
 
 # include Chameleon
-set(CHAMELEON_LIB, "/dss/dsshome1/0A/di49mew/chameleon_tool_dev/install/intel_tool_itac/lib")
-set(CHAMELEON_INC, "/dss/dsshome1/0A/di49mew/chameleon_tool_dev/install/intel_tool_itac/include")
+set(CHAMELEON_LIB, "/dss/dsshome1/0A/di49mew/chameleon_tool_dev/install/chamtool_commthread/lib")
+set(CHAMELEON_INC, "/dss/dsshome1/0A/di49mew/chameleon_tool_dev/install/chamtool_commthread/include")
 include_directories(${CHAMELEON_INC})
-
-# include MPI lib
-# find_package(MPI REQUIRED)
-# include_directories(${MPI_INCLUDE_PATH})
-
-# include BCL lib (inc. mpi.h already)
-# set(BCL_INC, "/dss/dsshome1/0A/di49mew/loc-libs/bcl")
-# include_directories(${BCL_INC})
-# set(BCL_CXX_LINK_FLAGS "-std=c++17 -lstdc++ -fopenmp -lm -lchameleon -L${CHAMELEON_LIB} -I${BCL_INC}")
 
 # include MPI lib
 find_package(MPI REQUIRED)
@@ -25,8 +16,8 @@ set(MPI_CXX_LINK_FLAGS "-std=c++17 -lstdc++ -fopenmp -lm -lchameleon -L${CHAMELE
 
 # include VTune
 # find_package(VTune REQUIRED)
-include_directories(${VT_INC})
-set(VT_FLAGS "-trace")
+# include_directories(${VT_INC})
+# set(VT_FLAGS "-trace")
 
 # include Torch lib
 find_package(Torch REQUIRED)
