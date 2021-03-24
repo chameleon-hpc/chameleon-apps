@@ -13,10 +13,14 @@
 #include <sched.h>
 #include <numeric>
 
+// import torch
 #include <torch/torch.h>
 #include <iostream>
 #include <cstddef>
 #include <iomanip>
+
+// import mlpack
+#include <mlpack/methods/linear_regression/linear_regression.hpp>
 
 // instead of using mpi.h, we use bcl.h
 #include <mpi.h>
@@ -74,6 +78,9 @@ static int _tracing_enabled = 1;
 // ================================================================================
 // Declare Struct
 // ================================================================================
+/* Types: prof_task_info_t and prof_task_list_t
+used to write the logfiles with detail information of tasks at runtime.
+E.g., queued_time, start_time, end_time,... */
 typedef struct prof_task_info_t {
     TYPE_TASK_ID tid;   // task id
     int rank_belong;    // rank created it
@@ -144,6 +151,35 @@ class prof_task_list_t {
         }
 };
 
+/* Types: iter_tasklist_t & mlpack_dataset_t
+used to store the dataset for mlpack
+E.g., actually a 2d-array [[iter0_data], [iter1_data], ...]
+where iter0_data is a single list of input-features [idx, arg1, ...]
+with idx is the index of the iteration. */
+typedef struct features_list_t {
+    std::vector<float> input_arr;
+    std::mutex m;
+
+    void add_item(float i){
+        this->m.lock();
+        this->input_arr.push_back(i);
+        this->m.unlock();
+    }
+
+}features_list_t;
+
+class mlpack_dataset_t {
+    public:
+        std::vector<features_list_t *> iters_data;
+        std::mutex m;
+
+        void push_back(features_list_t* f_list){
+            this->m.lock();
+            this->iters_data.push_back(f_list);
+            this->m.unlock();
+        }
+};
+
 
 // ================================================================================
 // Global Variables
@@ -158,6 +194,10 @@ std::vector<float> max_vec; // the last element is max_ground_truth
 bool is_model_trained = false;
 int num_samples = DEF_NUM_SAMPLE;
 int num_epochs = DEF_NUM_EPOCH;
+
+// for mlpack training
+// mlpack_dataset_t mltrain_data;
+// std::vector<std::vector<float>> mltrain_data;
 
 // for load-stats per iter
 const int num_iters = DEF_ITERS;
@@ -294,6 +334,7 @@ static void free_prof_task(prof_task_info_t* task){
     }
 }
 
+
 void clear_prof_tasklist() {
     while(!profiled_task_list.empty()) {
         prof_task_info_t *task = profiled_task_list.pop_back();
@@ -397,7 +438,7 @@ void normalize_ground_truth(std::vector<float> &norm_ground_output)
 
 
 /* Normalize input */
-void normalize_input(cham_tool_profiled_task_list_t *tasklist_ptr, std::vector<std::vector<float>> result)
+void normalize_input(prof_task_list_t& tasklist_ref, std::vector<std::vector<float>> result)
 {
 //     // find min-max in arg_sizes
 //     int num_args = 0;
@@ -434,6 +475,68 @@ void normalize_input(cham_tool_profiled_task_list_t *tasklist_ptr, std::vector<s
 //     // normalized 2d-vector by column
 //     normalize_2dvector_by_column(norm_input);
 }
+
+
+/* Gathering data for mlpack-training
+    - Input: fix a number of iters-data
+    - Ouput: return a 2d-vector for mlpack
+Filter and select the good args for training */
+void gather_training_data(prof_task_list_t& tasklist_ref)
+{
+    // this value depends on num_omp_threads for execution
+    // here is 3 threads / rank, 2 ranks in total
+    // TODO: need to adapt somehow???
+    const int num_tasks_per_iter = 48;
+
+    int size_tasklist = tasklist_ref.tasklist_size;
+    int num_iters = size_tasklist / num_tasks_per_iter;
+    printf("[CHAM_TOOL] gather_training_data: tasklist_size = %d, num_iters = %d\n", size_tasklist, num_iters);
+
+    // check runtimer per iter
+    std::vector<double> in_vec;
+    std::vector<double> out_vec;
+    // std::string iter_features_statement;
+    for (int i = 0; i < (num_iters-1); i++){
+        in_vec.push_back(double(i));
+        out_vec.push_back(double(tasklist_ref.avg_load_list[i]));
+        // iter_features_statement += std::to_string(tasklist_ref.avg_load_list[i]) + ",";
+    }
+    // iter_features_statement += "end\n";
+    // printf("%s", iter_features_statement.c_str());
+    int n_rows = in_vec.size();
+    arma::mat input(n_rows, 1);
+    arma::rowvec output(n_rows);   // a vector of label (runtime per iter)
+    for (int i = 0; i < n_rows; i++){
+        input.row(i) = in_vec[i];
+        output(i) = out_vec[i];
+    }
+
+    // declare and generate the regression model here
+    mlpack::regression::LinearRegression lr(input, output);
+    printf("[CHAM_TOOL] training is done\n");
+
+    // Get the parameters, or coefficients.
+    // arma::vec parameters = lr.Parameters();
+
+    // predict the future
+    // int start = n_rows;
+    // int end   = n_rows + 20;
+    // int length = end - start;
+    // printf("[CHAM_TOOL] create mat size (%d, 1)\n", length);
+    // for (int i = 0; i < length; i++){
+    //     arma::mat future_iters(1, 1);
+    //     future_iters = double(start + i);
+    //     arma::rowvec predicted_runtimes;
+    //     lr.Predict(future_iters, predicted_runtimes);
+    //     std::cout << predicted_runtimes << std::endl;
+    //     // future_iters.row(i) = double(start + i);
+    //     // printf("[CHAMTOOL] Checking iter %d = %f\n", (start + i), future_iters.row(i));
+    // }
+}
+
+
+/* Offline trainig model
+ */
 
 
 /* Online training model */

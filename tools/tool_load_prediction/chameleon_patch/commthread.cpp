@@ -3029,7 +3029,8 @@ void* comm_thread_action(void* arg) {
             prev_taskwait_counter = current_taskwait_counter;
 
 #if CHAMELEON_TOOL_SUPPORT
-            if(current_taskwait_counter == 3) {
+            // TODO: more flexible configs here??? maybe ENV_VARS, ...
+            if(current_taskwait_counter == 50) {
                 bool _flag_model_is_trained = false;
                 if(cham_t_status.enabled && cham_t_status.cham_t_callback_train_prediction_model) {
                     _flag_model_is_trained = cham_t_status.cham_t_callback_train_prediction_model(current_taskwait_counter);

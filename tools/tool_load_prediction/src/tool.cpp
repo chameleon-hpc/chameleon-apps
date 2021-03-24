@@ -1,19 +1,18 @@
 #include "tool.h"
 
+
+//================================================================
+// Variables
+//================================================================
 static cham_t_set_callback_t cham_t_set_callback;
 static cham_t_get_rank_data_t cham_t_get_rank_data;
 static cham_t_get_thread_data_t cham_t_get_thread_data;
 static cham_t_get_rank_info_t cham_t_get_rank_info;
 
-//================================================================
-// Variables
-//================================================================
-
 
 //================================================================
 // Additional functions
 //================================================================
-
 int compare( const void *pa, const void *pb ){
     const int *a = (int *) pa;
     const int *b = (int *) pb;
@@ -75,6 +74,7 @@ on_cham_t_callback_task_begin(int thread_id, cham_migratable_task_t * task, doub
     // double core_freq = get_core_freq(core_id);
 }
 
+
 /* interfere ending-tasks */
 static void
 on_cham_t_callback_task_end(int thread_id, cham_migratable_task_t * task, double end_time, int32_t taskwait_counter)
@@ -118,9 +118,8 @@ on_cham_t_callback_train_prediction_model(int32_t taskwait_counter)
     bool is_trained = false;
     int rank = cham_t_get_rank_info()->comm_rank;
 
-    sleep(3);
-
-    // printf("[CHAM_TOOL] R%d: starts training pred_model at iter-%d\n", rank, taskwait_counter);
+    printf("[CHAM_TOOL] R%d: starts training pred_model at iter-%d\n", rank, taskwait_counter);
+    gather_training_data(profiled_task_list);
 
     return is_trained;
 }

@@ -1,6 +1,7 @@
 import torch
 from torch.autograd import Variable
 import torch.optim as optim
+from mlpack import linear_regression
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import numpy as np
@@ -558,15 +559,16 @@ if __name__ == "__main__":
     
     """ -------- training based on args and iter-idx """
     # get the profile_data of the first rank
-    rank_0_task_profiled_data = task_profile_data[0]
-    rank_0_runtime_data = runtime_profile_data[0]
-    rank = rank_0_task_profiled_data[0]
-    num_iters = len(rank_0_task_profiled_data[1])
-    num_tasks_per_iter = len((rank_0_task_profiled_data[1])[0])
+    rank = 2
+    rank_task_profiled_data = task_profile_data[rank]
+    rank_runtime_data = runtime_profile_data[rank]
+    # rank = rank_task_profiled_data[0]
+    num_iters = len(rank_task_profiled_data[1])
+    num_tasks_per_iter = len((rank_task_profiled_data[1])[0])
     num_total_tasks = num_iters * num_tasks_per_iter
     print("Rank {}: {} iters, {} tasks in total".format(rank, num_iters, num_total_tasks))
-    task_ars_data = rank_0_task_profiled_data[1]
-    runtime_data = rank_0_runtime_data[1]
+    task_ars_data = rank_task_profiled_data[1]
+    runtime_data = rank_runtime_data[1]
     filtered_data = []
     ground_truth = []
     for i in range(num_iters):
@@ -598,19 +600,28 @@ if __name__ == "__main__":
     """ -------- visualize the dataset before training """
     # num_plot_iters = 100
     # plot_groundtruth_by_iters(ground_truth, num_plot_iters)
+
+    """ --------- write dataset oto csv file """
+    csv_file = open("sample-dataset-r"+str(rank)+".csv", 'w')
+    with csv_file:
+        writer = csv.writer(csv_file, delimiter ='\t')
+        for row in filtered_data:
+            print(row)
+            writer.writerow(row)
     
 
     """ -------- convert filtered_data to tensor_type """
-    tensor_dataset = torch.FloatTensor(filtered_data)
-    size = len(tensor_dataset)
-    num_elements = len(tensor_dataset[0])
-    # setting num_features for the input here
-    input_num    = num_elements - 1
-    output_num   = num_elements - input_num
-    NUM_TRAIN = int(size / 2)
-    NUM_VALID = int(NUM_TRAIN / 2)
-    NUM_TEST  = int(size - NUM_TRAIN - NUM_VALID)
-    print("Size: {} | num_inputs={}, num_outputs={}, NUM_TRAIN,_VALID,_TEST={}, {}, {}".format(size, input_num, output_num, NUM_TRAIN, NUM_VALID, NUM_TEST))
+    # tensor_dataset = torch.FloatTensor(filtered_data)
+    # size = len(tensor_dataset)
+    # num_elements = len(tensor_dataset[0])
+    # # setting num_features for the input here
+    # input_num    = num_elements - 1
+    # output_num   = num_elements - input_num
+    # NUM_TRAIN = int(size / 2)
+    # NUM_VALID = int(NUM_TRAIN / 2)
+    # NUM_TEST  = int(size - NUM_TRAIN - NUM_VALID)
+    # print("Size: {} | num_inputs={}, num_outputs={}, NUM_TRAIN,_VALID,_TEST={}, {}, {}".format(size, input_num, output_num, NUM_TRAIN, NUM_VALID, NUM_TEST))
+
 
     """ ---------- refactor dataset for training & validating """
     # Case 1: get all features
@@ -623,13 +634,13 @@ if __name__ == "__main__":
     # y_valid = tensor_dataset[NUM_TRAIN:(NUM_TRAIN+NUM_VALID), label_idx].view(NUM_VALID, num_out)
 
     # Case 2: get 1 feature is iter_idx (it looks like a sim/cos function)
-    num_features = 1
-    num_out      = output_num
-    label_idx    = num_elements-1
-    x_train = tensor_dataset[0:NUM_TRAIN, 0].view(NUM_TRAIN, num_features)
-    y_train = tensor_dataset[0:NUM_TRAIN, label_idx].view(NUM_TRAIN, num_out)
-    x_valid = tensor_dataset[NUM_TRAIN:(NUM_TRAIN+NUM_VALID), 0].view(NUM_VALID, num_features)
-    y_valid = tensor_dataset[NUM_TRAIN:(NUM_TRAIN+NUM_VALID), label_idx].view(NUM_VALID, num_out)
+    # num_features = 1
+    # num_out      = output_num
+    # label_idx    = num_elements-1
+    # x_train = tensor_dataset[0:NUM_TRAIN, 0].view(NUM_TRAIN, num_features)
+    # y_train = tensor_dataset[0:NUM_TRAIN, label_idx].view(NUM_TRAIN, num_out)
+    # x_valid = tensor_dataset[NUM_TRAIN:(NUM_TRAIN+NUM_VALID), 0].view(NUM_VALID, num_features)
+    # y_valid = tensor_dataset[NUM_TRAIN:(NUM_TRAIN+NUM_VALID), label_idx].view(NUM_VALID, num_out)
 
     """ ---------- training & validating """
     # call training the model

@@ -187,7 +187,6 @@ typedef int (*cham_t_get_callback_t) (
 typedef cham_t_data_t *(*cham_t_get_thread_data_t) (void);
 typedef cham_t_data_t *(*cham_t_get_rank_data_t) (void);
 typedef cham_t_data_t *(*cham_t_get_task_data_t) (TYPE_TASK_ID);
-
 typedef cham_t_rank_info_t *(*cham_t_get_rank_info_t) (void);
 
 /*****************************************************************************
