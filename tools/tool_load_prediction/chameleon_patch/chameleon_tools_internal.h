@@ -22,6 +22,7 @@ typedef struct cham_t_callbacks_active_s {
     cham_t_callback_change_freq_for_execution_t     cham_t_callback_change_freq_for_execution   = nullptr;  // change frequency
     cham_t_callback_get_load_stats_per_taskwait_t   cham_t_callback_get_load_stats_per_taskwait = nullptr;
     cham_t_callback_train_prediction_model_t        cham_t_callback_train_prediction_model      = nullptr;  // train pred_model
+    cham_t_callback_valid_prediction_model_t        cham_t_callback_valid_prediction_model      = nullptr;  // valid pred_model
 
 } cham_t_callbacks_active_t;
 

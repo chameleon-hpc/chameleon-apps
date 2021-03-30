@@ -1,6 +1,3 @@
-import torch
-from torch.autograd import Variable
-import torch.optim as optim
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -16,9 +13,11 @@ NUM_RANKS = 4
 NUM_ITERATIONS = 20
 NUM_OMPTHREADS = 23
 SAMOA_SECTIONS = 16
-torch.manual_seed(1)    # reproducible
 
 
+#########################################################
+###### Self-defined Classes
+#########################################################
 """Task definition
 
 Define a struct of task to save profile-info per task.
@@ -35,42 +34,15 @@ class Task:
         self.exe_time = exe_time
 
 
-"""Prediction models
-
-Define the net-structure for prediction models.
-The inputs should be normalized or not, or this depends on
-each kind of task-parallel applications. 
-"""
-class PredictionModel(torch.nn.Module):
-    def __init__(self, n_features, n_hidden, n_output):
-        super(LinearRegression, self).__init__()
-        self.hidden = torch.nn.Linear(n_features, n_hidden)  # hidden layer
-        self.hidden1 = torch.nn.Linear(n_hidden, n_hidden)  # hidden layer
-        self.predict = torch.nn.Linear(n_hidden, n_output)  # output layer
-
-        torch.nn.init.xavier_uniform_(self.hidden.weight)
-        torch.nn.init.zeros_(self.hidden.bias)
-        torch.nn.init.xavier_uniform_(self.hidden1.weight)
-        torch.nn.init.zeros_(self.hidden1.bias)
-
-        torch.nn.init.xavier_uniform_(self.predict.weight)
-        torch.nn.init.zeros_(self.predict.bias)
-
-    def forward(self, x):
-        x = torch.tanh(self.hidden(x))  # activation function for hidden layer
-        x = torch.relu(self.hidden1(x))  # activation function for hidden layer
-        x = self.predict(x)  # linear output
-        return x
-
-
+#########################################################
+###### Util-functions
+#########################################################
 """Read log-file and parse total_load per iter
 
 As the layout of data for storing profile-data per rank. We define
-results_per_rank          = [R0] [R1] ... [Rn]
-    data_[R0]             = [iter0] [iter1] ... [iter_n]
-        data_[iter0]      = [tot_runtime0]
-        data_[iter1]      = [tot_runtime1]
-        data_[iter2]      = [...         ]
+results_per_rank    = [R0] [R1] ... [Rn]
+    [R0]            = [it0_runtime] [it1_runtime] ... [itN_runtime]
+    [R1]            = [it0_runtime] [it1_runtime] ... [itN_runtime]
 """
 def parse_stats_iter_runtime(filename, num_ranks):
 
@@ -91,7 +63,7 @@ def parse_stats_iter_runtime(filename, num_ranks):
             get_rank = (data_per_line[0]).split(" ")[1]
             rank = int(re.findall(r'\d+', get_rank)[0])
             total_runtime = float(data_per_line[3])
-            avg_iter_runt = total_runtime  / 3
+            avg_iter_runt = total_runtime
             # append data to the list/rank
             data_per_rank[rank][1].append(avg_iter_runt)
 
@@ -102,7 +74,7 @@ def parse_stats_iter_runtime(filename, num_ranks):
 """Plot runtime-by-iters
 
 Input is a list of runtime-data per rank. Use them to plot
-a line chart for easily to compare the load imbalance.
+a stack-bar chart for easily to compare the load imbalance.
 """
 def plot_runtime_by_iters(stats_data, output_folder):
     # for the chart information
@@ -112,7 +84,7 @@ def plot_runtime_by_iters(stats_data, output_folder):
 
     # for x_index
     first_rank_data = stats_data[0]
-    num_iters = 100 #len(first_rank_data[1])
+    num_iters = len(first_rank_data[1])
     x_indices = np.arange(num_iters)
 
     # traverse the profile-data
@@ -151,9 +123,46 @@ def plot_runtime_by_iters(stats_data, output_folder):
     plt.savefig(os.path.join(output_folder, fig_filename), bbox_inches='tight')
 
 
+
+""" Dataset generator 1
+    Chain-on-Chain runtimes per iter dataset
+    It means the runtimes of first iters could be the input
+    for learning and predicting the next-iter runtime. """
+def cc_runtime_dataset_generator(raw_data, rank, num_features):
+    # get data by rank
+    rank_data = raw_data[rank]
+    runtime_list = rank_data[1]
+
+    # identify num_features for the dataset
+    num_iters = len(runtime_list)   # as the total num of points we have (named N)
+    num_feat_points = num_features
+
+    labels = []
+    for i in range(num_feat_points):
+        labels.append("a"+str(i))
+
+    length = num_iters
+    x_ds = []
+    y_ds = []
+    for i in range(num_feat_points, length):
+        x_ds.append(runtime_list[(i-num_feat_points):i])
+        y_ds.append(runtime_list[i])
+    tmp_ds = pd.DataFrame(np.array(x_ds), columns=labels)
+    final_ds = tmp_ds
+    final_ds["target"] = y_ds
+
+    # write to csv file
+    final_ds.to_csv('./cc_runtime_dataset_r' + str(rank) + '.csv', index=False, header=False)
+
+    return final_ds
+
+
+#########################################################
+###### Main Function
+#########################################################
 """The main function
 
-There are 3 mains phases in the boday of this source,
+There are 3 mains phases in the body of this source,
 that could be reading-logs, visualizing, and prediction.
 """
 if __name__ == "__main__":
@@ -176,8 +185,29 @@ if __name__ == "__main__":
         for j in range(len(runtime_list)):
             formated_val = float("{:.4f}".format(runtime_list[j]))
             statement += str(formated_val) + "\t"
-        # print(statement)
+        print(statement)
 
+
+    # generate dataset by chain-on-chain runtimes per iter
+    if (len(sys.argv) < 3):
+        rank = 0
+    else:
+        rank = rank = int(sys.argv[3])
+    num_features = 6
+    cc_runtime_dataset_generator(stats_data, rank, num_features)
+
+    
+    # plot a single-rank runtime-list
+    # rank = 25
+    # rank_data = stats_data[rank]
+    # runtime_data = rank_data[1]
+    # x_indices = np.arange(len(runtime_data))
+    # plt.xlabel("Iterations")
+    # plt.ylabel("Total_Load (in seconds)")
+    # plt.plot(x_indices, runtime_data)
+    # plt.grid(True)
+    # plt.show()
+    
     # plot the data
-    output_folder = "./"
-    plot_runtime_by_iters(stats_data, output_folder)
+    # output_folder = "./"
+    # plot_runtime_by_iters(stats_data, output_folder)

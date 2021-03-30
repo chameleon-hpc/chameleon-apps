@@ -87,6 +87,9 @@ thread_safe_task_map_t _map_overall_tasks;
 
 std::unordered_set<TYPE_TASK_ID> _cancelled_task_ids;
 
+// a defined flag for checking the cham-tool prediction model is ready or not
+std::atomic<bool> _flag_model_is_trained(false);
+
 // ====== Info about outstanding jobs (local & stolen) ======
 std::vector<int32_t> _outstanding_jobs_ranks;
 std::atomic<int32_t> _outstanding_jobs_local(0);
@@ -2813,20 +2816,6 @@ void action_communication_progression(int comm_thread) {
             #endif
             return;
         }
-        // else if(!request_gather_created) {
-        //     // post Iallgather asap!
-        //     #ifdef TRACE
-        //     VT_BEGIN_CONSTRAINED(event_create_gather_request);
-        //     #endif
-        //     action_create_gather_request(&num_threads_in_tw, &(transported_load_values[0]), buffer_load_values, &request_gather_out);
-        //     #ifdef TRACE
-        //     VT_END_W_CONSTRAINED(event_create_gather_request);
-        //     #endif
-        //     request_gather_created = 1;
-        //     #if CHAM_STATS_RECORD
-        //     time_gather_posted = omp_get_wtime();
-        //     #endif /* CHAM_STATS_RECORD */
-        // }
     }
 
     #if CHAM_REPLICATION_MODE>0
@@ -3029,13 +3018,22 @@ void* comm_thread_action(void* arg) {
             prev_taskwait_counter = current_taskwait_counter;
 
 #if CHAMELEON_TOOL_SUPPORT
+            // the trigger for training
             // TODO: more flexible configs here??? maybe ENV_VARS, ...
-            if(current_taskwait_counter == 50) {
-                bool _flag_model_is_trained = false;
+            if(current_taskwait_counter == 20) {
                 if(cham_t_status.enabled && cham_t_status.cham_t_callback_train_prediction_model) {
                     _flag_model_is_trained = cham_t_status.cham_t_callback_train_prediction_model(current_taskwait_counter);
                 }
-                RELP("Comm_thread: _flag_model_is_trained = %d\n", _flag_model_is_trained);
+                RELP("Comm_thread: _flag_model_is_trained = %d\n", _flag_model_is_trained.load());
+            }
+
+            // the triger for validating
+            if(_flag_model_is_trained){
+                RELP("Comm_thread: The Cham-Tool prediction model is ready for iter=%d\n", current_taskwait_counter);
+                if(cham_t_status.enabled && cham_t_status.cham_t_callback_valid_prediction_model) {
+                    double pred_val = cham_t_status.cham_t_callback_valid_prediction_model(current_taskwait_counter);
+                    RELP("Comm_thread: The Predicted Load for Iter-%d = %f\n", current_taskwait_counter, pred_val);
+                }
             }
 #endif
         }

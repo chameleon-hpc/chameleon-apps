@@ -12,18 +12,25 @@
 #include <string>
 #include <sched.h>
 #include <numeric>
+#include <mpi.h>
 
-// import torch
+// for using torch
 #include <torch/torch.h>
 #include <iostream>
 #include <cstddef>
 #include <iomanip>
 
-// import mlpack
+// for using mlpack
 #include <mlpack/methods/linear_regression/linear_regression.hpp>
-
-// instead of using mpi.h, we use bcl.h
-#include <mpi.h>
+#include <mlpack/prereqs.hpp>
+#include <mlpack/core.hpp>
+#include <mlpack/methods/ann/loss_functions/mean_squared_error.hpp>
+#include <mlpack/core/data/scaler_methods/min_max_scaler.hpp>
+#include <mlpack/methods/ann/layer/layer.hpp>
+#include <mlpack/core/data/split_data.hpp>
+#include <mlpack/methods/ann/ffn.hpp>
+#include <mlpack/methods/ann/init_rules/he_init.hpp>
+#include <ensmallen.hpp>
 
 #ifndef TRACE
 #define TRACE 0
@@ -78,9 +85,13 @@ static int _tracing_enabled = 1;
 // ================================================================================
 // Declare Struct
 // ================================================================================
-/* Types: prof_task_info_t and prof_task_list_t
-used to write the logfiles with detail information of tasks at runtime.
-E.g., queued_time, start_time, end_time,... */
+
+/**
+ * The cham-tool task struct for storing profiled-data.
+ *
+ * This struct helps collect task-by-task info
+ * @attributes: tid, rank, num_args, args_list, ...
+ */
 typedef struct prof_task_info_t {
     TYPE_TASK_ID tid;   // task id
     int rank_belong;    // rank created it
@@ -94,6 +105,13 @@ typedef struct prof_task_info_t {
     intptr_t code_ptr;  // code pointer
 } prof_task_info_t;
 
+
+/**
+ * The cham-tool profile-task data class.
+ *
+ * This class helps holding a list of prof-tasks.
+ * @attributes: tasks_list, ...
+ */
 class prof_task_list_t {
     public:
         std::vector<prof_task_info_t *> task_list;
@@ -151,61 +169,13 @@ class prof_task_list_t {
         }
 };
 
-/* Types: iter_tasklist_t & mlpack_dataset_t
-used to store the dataset for mlpack
-E.g., actually a 2d-array [[iter0_data], [iter1_data], ...]
-where iter0_data is a single list of input-features [idx, arg1, ...]
-with idx is the index of the iteration. */
-typedef struct features_list_t {
-    std::vector<float> input_arr;
-    std::mutex m;
 
-    void add_item(float i){
-        this->m.lock();
-        this->input_arr.push_back(i);
-        this->m.unlock();
-    }
-
-}features_list_t;
-
-class mlpack_dataset_t {
-    public:
-        std::vector<features_list_t *> iters_data;
-        std::mutex m;
-
-        void push_back(features_list_t* f_list){
-            this->m.lock();
-            this->iters_data.push_back(f_list);
-            this->m.unlock();
-        }
-};
-
-
-// ================================================================================
-// Global Variables
-// ================================================================================
-prof_task_list_t profiled_task_list;
-std::vector<float> min_vec; // the last element is min_ground_truth
-std::vector<float> max_vec; // the last element is max_ground_truth
-// std::vector<std::vector<float>> norm_input;
-// std::vector<float> norm_ground_truth;
-// std::vector<float> runtime_list;
-// std::vector<float> pred_runtime_list;
-bool is_model_trained = false;
-int num_samples = DEF_NUM_SAMPLE;
-int num_epochs = DEF_NUM_EPOCH;
-
-// for mlpack training
-// mlpack_dataset_t mltrain_data;
-// std::vector<std::vector<float>> mltrain_data;
-
-// for load-stats per iter
-const int num_iters = DEF_ITERS;
-const int num_omp_threads = 3;
-
-// ================================================================================
-// Regression Model Definition
-// ================================================================================
+/**
+ * The general regression model struct based on Torch-CXX
+ *
+ * @param num_features, num hidden layers, num_outputs
+ * @return a corresponding prediction model
+ */
 struct SimpleRegression:torch::nn::Module {
 
     SimpleRegression(int in_dim, int n_hidden, int out_dim){
@@ -233,13 +203,26 @@ struct SimpleRegression:torch::nn::Module {
     torch::nn::Linear hidden1{nullptr}, hidden2{nullptr}, predict{nullptr};
 };
 
-// Create a global model
-// TODO: get num of features here
-// #if SAMOA_EXAMPLE==1
-// auto net = std::make_shared<SimpleRegression>(4, 10, 1);
-// #else
-// auto net = std::make_shared<SimpleRegression>(1, 10, 1);
-// #endif
+/**
+ * Example: how to declare the torch-based regression model.
+ *  + auto net = std::make_shared<SimpleRegression>(4, 10, 1);
+ *  + ...
+ */
+
+
+// ================================================================================
+// Global Variables
+// ================================================================================
+prof_task_list_t profiled_task_list;
+std::vector<float> min_vec; // the last element is min_ground_truth
+std::vector<float> max_vec; // the last element is max_ground_truth
+bool is_model_trained = false;
+int num_samples = DEF_NUM_SAMPLE;
+int num_epochs = DEF_NUM_EPOCH;
+
+// Declare a general mlpack regression model
+mlpack::regression::LinearRegression lr;
+
 
 // ================================================================================
 // Help Functions
@@ -259,7 +242,12 @@ std::vector<size_t> sort_indexes(const std::vector<T> &v) {
 	return idx;
 }
 
-/* pairing function */
+/**
+ * Paring the index numbers
+ *
+ * @param a, b
+ * @return an unique number 
+ */
 int pairing_function(int a, int b){
     int result = ((a + b) * (a + b + 1) / 2) + b;
     return result;
@@ -271,6 +259,13 @@ int pairing_function(int a, int b){
 // ================================================================================
 // Util Functions
 // ================================================================================
+
+/**
+ * Writing logs for all tasks.
+ *
+ * @param task_list_ref with profiled-info, mpi_rank
+ * @return .csv logfiles by rank
+ */
 void chameleon_t_write_logs(prof_task_list_t& tasklist_ref, int mpi_rank){
     // get log_dir_env
     char* log_dir_env = std::getenv("LOG_DIR");
@@ -307,8 +302,8 @@ void chameleon_t_write_logs(prof_task_list_t& tasklist_ref, int mpi_rank){
 #endif
 
         std::string line = std::to_string((*it)->tid) + "\t"
-                            + prob_sizes_statement
-                            + std::to_string((*it)->que_time) + "\n";
+                            + prob_sizes_statement + "\n";
+                            // + std::to_string((*it)->exe_time) + "\n";
         
         // writing logs
         outfile << line;
@@ -327,6 +322,12 @@ void chameleon_t_write_logs(prof_task_list_t& tasklist_ref, int mpi_rank){
 }
 
 
+/**
+ * Free memory of each task.
+ *
+ * @param a pointer to a task object (struct prof_task_info)
+ * @return free mem
+ */
 static void free_prof_task(prof_task_info_t* task){
     if (task){
         delete task;
@@ -334,7 +335,12 @@ static void free_prof_task(prof_task_info_t* task){
     }
 }
 
-
+/**
+ * Free memory of a whole tasks-list.
+ *
+ * @param a ref to a list of tasks (class prof_task_list)
+ * @return free mem
+ */
 void clear_prof_tasklist() {
     while(!profiled_task_list.empty()) {
         prof_task_info_t *task = profiled_task_list.pop_back();
@@ -342,7 +348,12 @@ void clear_prof_tasklist() {
     }
 }
 
-/* Get CPU-core frequencies */
+/**
+ * Get CPU frequency (Hz).
+ *
+ * @param CPU core ID
+ * @return freq_value
+ */
 double get_core_freq(int core_id){
 	std::string line;
 	std::ifstream file ("/proc/cpuinfo");
@@ -371,8 +382,13 @@ double get_core_freq(int core_id){
 	return freq;
 }
 
-
-/* Check tensor values */
+/**
+ * Printing tensor values in Torch-CXX.
+ *
+ * @param tensor_arr, num_vals are an array of tensor values,
+ *      and num of values we want to print.
+ * @return I/O
+ */
 void print_tensor(torch::Tensor tensor_arr, int num_vals)
 {
     std::cout << std::fixed << std::setprecision(3);
@@ -382,7 +398,11 @@ void print_tensor(torch::Tensor tensor_arr, int num_vals)
 }
 
 
-/* Normalize 2d-vector by column */
+/**
+ * Normalizing 2D-vector by column for training with Torch.
+ *
+ * @param vec: a ref to the 2D vector
+ */
 void normalize_2dvector_by_column(std::vector<std::vector<float>> &vec)
 {
     int num_rows = vec.size();
@@ -418,7 +438,11 @@ void normalize_2dvector_by_column(std::vector<std::vector<float>> &vec)
 }
 
 
-/* Normalize ground_truth */
+/**
+ * Normalizing the groundtruth for training with Torch.
+ *
+ * @param vec: a ref to the groundtruth vector
+ */
 void normalize_ground_truth(std::vector<float> &norm_ground_output)
 {
     // // find min-max values
@@ -437,7 +461,12 @@ void normalize_ground_truth(std::vector<float> &norm_ground_output)
 }
 
 
-/* Normalize input */
+/**
+ * Normalizing the features_input for training with Torch
+ *
+ * @param tasklist_ref, result: a ref to the tasklist_ref & a 2D vector
+        for saving the result.
+ */
 void normalize_input(prof_task_list_t& tasklist_ref, std::vector<std::vector<float>> result)
 {
 //     // find min-max in arg_sizes
@@ -477,69 +506,69 @@ void normalize_input(prof_task_list_t& tasklist_ref, std::vector<std::vector<flo
 }
 
 
-/* Gathering data for mlpack-training
-    - Input: fix a number of iters-data
-    - Ouput: return a 2d-vector for mlpack
-Filter and select the good args for training */
-void gather_training_data(prof_task_list_t& tasklist_ref)
+/**
+ * Gathering profiled-data for training with mlpack.
+ *
+ * @param tasklist_ref: a ref to the list of profiled tasks.
+        But currently work for the runtime list, no need arguments
+        of each task.
+ * @return a dataset matrix
+ */
+bool gather_training_data(prof_task_list_t& tasklist_ref, int num_input_points, int num_iters)
 {
-    // this value depends on num_omp_threads for execution
-    // here is 3 threads / rank, 2 ranks in total
-    // TODO: need to adapt somehow???
-    const int num_tasks_per_iter = 48;
-
+    // the current list of finished tasks
     int size_tasklist = tasklist_ref.tasklist_size;
-    int num_iters = size_tasklist / num_tasks_per_iter;
-    printf("[CHAM_TOOL] gather_training_data: tasklist_size = %d, num_iters = %d\n", size_tasklist, num_iters);
+    std::cout << "[CHAM_TOOL] gather_train_data: num finished tasks=" << size_tasklist
+              << ", num finished iters=" << num_iters <<std::endl;
 
-    // check runtimer per iter
-    std::vector<double> in_vec;
-    std::vector<double> out_vec;
-    // std::string iter_features_statement;
-    for (int i = 0; i < (num_iters-1); i++){
-        in_vec.push_back(double(i));
-        out_vec.push_back(double(tasklist_ref.avg_load_list[i]));
-        // iter_features_statement += std::to_string(tasklist_ref.avg_load_list[i]) + ",";
+    // preparing data
+    arma::vec runtime_list(num_iters);
+    for (int i = 0; i < num_iters; i++){
+        runtime_list[i] = double(tasklist_ref.avg_load_list[i]);
     }
-    // iter_features_statement += "end\n";
-    // printf("%s", iter_features_statement.c_str());
-    int n_rows = in_vec.size();
-    arma::mat input(n_rows, 1);
-    arma::rowvec output(n_rows);   // a vector of label (runtime per iter)
-    for (int i = 0; i < n_rows; i++){
-        input.row(i) = in_vec[i];
-        output(i) = out_vec[i];
+    // std::cout << "[CHAM_TOOL] gather_train_data: runtime_list" << std::endl;
+    // std::cout << runtime_list << std::endl;
+
+    // generate a std mat dataset for training
+    int n_rows_X = num_input_points;
+    int n_cols_X = num_iters - num_input_points;
+    int n_rows_Y = 1;
+    int n_cols_Y = n_cols_X;
+    std::cout << "[CHAM_TOOL] gather_train_data: trainX_size=" << n_rows_X << "x" << n_cols_X
+              << ", trainY_size=" << n_rows_Y << "x" << n_cols_Y << std::endl;
+    arma::mat trainX(n_rows_X, n_cols_X);
+    arma::mat trainY(n_rows_Y, n_cols_Y);
+    for (int i = num_input_points; i < num_iters; i++){
+        trainX.col(i-num_input_points) = runtime_list.subvec((i-num_input_points), (i-1));
+        trainY.col(i-num_input_points) = runtime_list[i];
     }
+    // std::cout << "[CHAM_TOOL] gather_train_data: trainX" << std::endl;
+    // std::cout << trainX << std::endl;
+    // std::cout << "[CHAM_TOOL] gather_train_data: trainY" << std::endl;
+    // std::cout << trainY << std::endl;
 
     // declare and generate the regression model here
-    mlpack::regression::LinearRegression lr(input, output);
-    printf("[CHAM_TOOL] training is done\n");
+    mlpack::regression::LinearRegression lr_pred_model(trainX, trainY);
+    lr = lr_pred_model;
 
-    // Get the parameters, or coefficients.
-    // arma::vec parameters = lr.Parameters();
+    printf("[CHAM_TOOL] the training is done\n");
 
-    // predict the future
-    // int start = n_rows;
-    // int end   = n_rows + 20;
-    // int length = end - start;
-    // printf("[CHAM_TOOL] create mat size (%d, 1)\n", length);
-    // for (int i = 0; i < length; i++){
-    //     arma::mat future_iters(1, 1);
-    //     future_iters = double(start + i);
-    //     arma::rowvec predicted_runtimes;
-    //     lr.Predict(future_iters, predicted_runtimes);
-    //     std::cout << predicted_runtimes << std::endl;
-    //     // future_iters.row(i) = double(start + i);
-    //     // printf("[CHAMTOOL] Checking iter %d = %f\n", (start + i), future_iters.row(i));
-    // }
+    return true;
 }
 
 
-/* Offline trainig model
+/**
+ * Offline regression training.
+ *
+ * @param mat
  */
 
 
-/* Online training model */
+/**
+ * Online regression training.
+ *
+ * @param mat
+ */
 auto online_training_model(std::vector<std::vector<float>> input, std::vector<float> ground_truth)
 {
     // // measure time

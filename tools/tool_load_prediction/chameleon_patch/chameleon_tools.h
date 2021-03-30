@@ -30,7 +30,8 @@ typedef enum cham_t_callback_types_t {
     cham_t_callback_task_end                    = 13,
     cham_t_callback_task_begin                  = 14,
     cham_t_callback_get_load_stats_per_taskwait = 15,
-    cham_t_callback_train_prediction_model      = 16
+    cham_t_callback_train_prediction_model      = 16,
+    cham_t_callback_valid_prediction_model      = 17
 } cham_t_callback_types_t;
 
 typedef enum cham_t_set_result_t {
@@ -118,10 +119,6 @@ typedef union cham_t_data_t {
 typedef struct cham_t_migration_tupel_t {
     TYPE_TASK_ID task_id;
     int32_t rank_id;
-    // cham_t_migration_tupel_t(TYPE_TASK_ID p_task_id, int32_t p_rank_id) {
-    //     task_id = p_task_id;
-    //     rank_id = p_rank_id;
-    // }
 } cham_t_migration_tupel_t;
 
 static cham_t_migration_tupel_t cham_t_migration_tupel_create(TYPE_TASK_ID task_id, int32_t rank_id) {
@@ -297,6 +294,10 @@ typedef double (*cham_t_callback_get_load_stats_per_taskwait_t)(
 );
 
 typedef bool (*cham_t_callback_train_prediction_model_t)(
+    int32_t taskwait_counter
+);
+
+typedef double (*cham_t_callback_valid_prediction_model_t)(
     int32_t taskwait_counter
 );
 

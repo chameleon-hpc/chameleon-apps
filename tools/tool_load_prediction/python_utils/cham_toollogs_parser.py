@@ -514,7 +514,7 @@ def validate_model(net_model, X_valid, Y_valid, num_inputs):
     # validating the model
     print("Task ID: [inputs...] \t pred_val | real_val")
     for i in range(num_inputs):
-        tid = int((x_valid[i])[0])
+        tid = int((X_valid[i])[0])
         pred_val = net_model(x_val[i]).item()
         real_val = float(Y_valid[i])
         print("{} ... \t {:4f} | {:4f}".format(tid, pred_val, real_val))
@@ -559,7 +559,7 @@ if __name__ == "__main__":
     
     """ -------- training based on args and iter-idx """
     # get the profile_data of the first rank
-    rank = 2
+    rank = 3
     rank_task_profiled_data = task_profile_data[rank]
     rank_runtime_data = runtime_profile_data[rank]
     # rank = rank_task_profiled_data[0]
@@ -601,10 +601,10 @@ if __name__ == "__main__":
     # num_plot_iters = 100
     # plot_groundtruth_by_iters(ground_truth, num_plot_iters)
 
-    """ --------- write dataset oto csv file """
+    """ --------- write dataset to csv file """
     csv_file = open("sample-dataset-r"+str(rank)+".csv", 'w')
     with csv_file:
-        writer = csv.writer(csv_file, delimiter ='\t')
+        writer = csv.writer(csv_file, delimiter =',')
         for row in filtered_data:
             print(row)
             writer.writerow(row)

@@ -27,23 +27,26 @@ int compare( const void *pa, const void *pb ){
 // Callback Functions
 //================================================================ 
 
-/* interfere creating-tasks */
+/**
+ * Callback task create.
+ *
+ * @param task: a pointer to the migration task object at Chameleon-side.
+ * @param arg_sizes: list of argument sizes
+ * @param queue_time: could be measured at the time a task is added to the queue
+ * @param codeptr_ra: the code pointer of the task-entry (function)
+ * @param taskwait_counter: id of the current iteration (cycle)
+ */
 static void
-on_cham_t_callback_task_create(
-    cham_migratable_task_t * task,
-    std::vector<int64_t> arg_sizes,
-    double queued_time,
-    intptr_t codeptr_ra,
-    int taskwait_counter)
+on_cham_t_callback_task_create(cham_migratable_task_t * task, std::vector<int64_t> arg_sizes,
+    double queued_time, intptr_t codeptr_ra, int taskwait_counter)
 {
-    int rank_id                 = cham_t_get_rank_info()->comm_rank;
-    TYPE_TASK_ID cham_task_id   = chameleon_get_task_id(task);
+    int rank_id = cham_t_get_rank_info()->comm_rank;
+    TYPE_TASK_ID cham_task_id = chameleon_get_task_id(task);
 
     // get num of args per task
     const int num_args          = arg_sizes.size();
     
     // create custom data structure and use task_data as pointer
-    // malloc doesn't work here???
     prof_task_info_t *cur_task  = new prof_task_info_t;
     cur_task->tid               = cham_task_id;
     cur_task->rank_belong       = rank_id;
@@ -61,23 +64,38 @@ on_cham_t_callback_task_create(
     profiled_task_list.push_back(cur_task);
 }
 
-/* interfere processing-tasks */
+
+/**
+ * Callback task begin.
+ *
+ * @param thread_id: the current thread is proceeding this task.
+ * @param task: a pointer to the migration task object at Chameleon-side.
+ * @param start_time: could be measured at the time a task is started.
+ * @param arg_sizes: list of argument sizes.
+ * @param taskwait_counter: id of the current iteration (cycle).
+ */
 static void
 on_cham_t_callback_task_begin(int thread_id, cham_migratable_task_t * task, double start_time,
     std::vector<int64_t> arg_sizes, int taskwait_counter)
 {
-    // get rank
-    int rank_info = cham_t_get_rank_info()->comm_rank;
+    /**
+     * Not using yet.
+     */
 
-    // get and set core_freq_info
-    // int core_id = sched_getcpu();
-    // double core_freq = get_core_freq(core_id);
 }
 
 
-/* interfere ending-tasks */
+/**
+ * Callback task end.
+ *
+ * @param thread_id: the current thread is proceeding this task.
+ * @param task: a pointer to the migration task object at Chameleon-side.
+ * @param end_time: could be measured at the time a task is finished.
+ * @param taskwait_counter: id of the current iteration (cycle).
+ */
 static void
-on_cham_t_callback_task_end(int thread_id, cham_migratable_task_t * task, double end_time, int32_t taskwait_counter)
+on_cham_t_callback_task_end(int thread_id, cham_migratable_task_t * task,
+    double end_time, int32_t taskwait_counter)
 {
     
 #if TRACE==1
@@ -97,9 +115,17 @@ on_cham_t_callback_task_end(int thread_id, cham_migratable_task_t * task, double
 
 }
 
-/* interfere distributed-taskwaits */
+
+/**
+ * Callback get stats_load info after a cycle (iteration) is done.
+ *
+ * @param taskwait_counter: id of the current iteration (cycle).
+ * @param thread_id: the last thread calls this callback.
+ * @param taskwait_load: the loac value per this cycle.
+ */
 static double
-on_cham_t_callback_get_load_stats_per_taskwait(int32_t taskwait_counter, int32_t thread_id, double taskwait_load)
+on_cham_t_callback_get_load_stats_per_taskwait(int32_t taskwait_counter,
+    int32_t thread_id, double taskwait_load)
 {
     int rank = cham_t_get_rank_info()->comm_rank;
     int iter = taskwait_counter;
@@ -107,11 +133,19 @@ on_cham_t_callback_get_load_stats_per_taskwait(int32_t taskwait_counter, int32_t
     double load_avg = total_load / NUM_THREADS;
     profiled_task_list.add_avgload(load_avg);
 
-    // do something
+    /**
+     * Do something.
+     */
 
     return load_avg;
 }
 
+/**
+ * Callback get the trigger from comm_thread, then training the pred-model.
+ *
+ * @param taskwait_counter: id of the current iteration (cycle),
+ *      now trigger this callack by the num of passed iters.
+ */
 static bool
 on_cham_t_callback_train_prediction_model(int32_t taskwait_counter)
 {
@@ -119,14 +153,32 @@ on_cham_t_callback_train_prediction_model(int32_t taskwait_counter)
     int rank = cham_t_get_rank_info()->comm_rank;
 
     printf("[CHAM_TOOL] R%d: starts training pred_model at iter-%d\n", rank, taskwait_counter);
-    gather_training_data(profiled_task_list);
+    int num_points = 6;
+    int num_finished_iters = taskwait_counter-1;
+    is_trained = gather_training_data(profiled_task_list, num_points, num_finished_iters);
 
     return is_trained;
+}
+
+
+/**
+ * Callback get the trigger from comm_thread, then calling the trained pred-model.
+ *
+ * @param taskwait_counter: id of the current iteration (cycle).
+ * @return predicted_value: for the load of the corresponding iter.
+ */
+static double
+on_cham_t_callback_valid_prediction_model(int32_t taskwait_counter)
+{
+    double pred_load = 7.0;
+
+    return pred_load;
 }
 
 //================================================================
 // Start Tool & Register Callbacks
 //================================================================
+
 #define register_callback_t(name, type)                                         \
 do{                                                                             \
     type f_##name = &on_##name;                                                 \
@@ -137,7 +189,12 @@ do{                                                                             
 #define register_callback(name) register_callback_t(name, name##_t)
 
 
-/* cham_tool init and calling callbacks */
+/**
+ * Initializing the cham-tool callbacks.
+ *
+ * @param lookup: search the name of activated callbacks.
+ * @param tool_data
+ */
 int cham_t_initialize(
     cham_t_function_lookup_t lookup,
     cham_t_data_t *tool_data)
@@ -153,6 +210,7 @@ int cham_t_initialize(
     // register_callback(cham_t_callback_task_end);
     register_callback(cham_t_callback_get_load_stats_per_taskwait);
     register_callback(cham_t_callback_train_prediction_model);
+    register_callback(cham_t_callback_valid_prediction_model);
 
     // get num_samples_env_var value
     char* num_samples_env_var = std::getenv("NUM_SAMPLE");
@@ -171,19 +229,29 @@ int cham_t_initialize(
     return 1;
 }
 
-/* cham_tool finalize */
+/**
+ * Finalizing the cham-tool.
+ *
+ * @param tool_data
+ */
 void cham_t_finalize(cham_t_data_t *tool_data)
 {
     int rank = cham_t_get_rank_info()->comm_rank;
 
     chameleon_t_write_logs(profiled_task_list, rank);
 
-    // clear prof-data
+    // clear profiled-data task list
     clear_prof_tasklist();
 
 }
 
-/* start the tool */
+/**
+ * Starting the cham-tool.
+ *
+ * @param cham_version.
+ * @return as a main function of the callback took,
+ *      would init cham_t_initialize and cham_t_finalize.
+ */
 #ifdef __cplusplus
 extern "C" {
 #endif

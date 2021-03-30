@@ -110,6 +110,9 @@ extern int event_progress_recv;
 // lock used to ensure that currently only a single thread is doing communication progression
 extern std::mutex _mtx_comm_progression;
 
+// a defined flag for checking the cham-tool prediction model is ready or not
+extern std::atomic<bool> _flag_model_is_trained;
+
 class chameleon_comm_thread_session_data_t {
     public:
     // =============== General Vars
