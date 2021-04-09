@@ -21,6 +21,10 @@
 
 #define CHAM_SLEEP_TIME_MICRO_SECS 5
 
+//================================================================
+// Commthread Variables
+//================================================================
+
 #pragma region Variables
 // communicator for remote task requests
 MPI_Comm chameleon_comm;
@@ -32,7 +36,6 @@ MPI_Comm chameleon_comm_cancel;
 MPI_Comm chameleon_comm_load;
 // communicator for activating replicated tasks
 MPI_Comm chameleon_comm_activate;
-
 
 int chameleon_comm_rank = -1;
 int chameleon_comm_size = -1;
@@ -62,7 +65,6 @@ std::atomic<int32_t> _num_remote_tasks_outstanding(0);
 thread_safe_task_list_t _replicated_local_tasks;
 std::atomic<int32_t> _num_replicated_local_tasks_outstanding_sends(0);
 std::atomic<int32_t> _num_replicated_local_tasks_outstanding_compute(0);
-
 thread_safe_task_list_t _replicated_remote_tasks;
 thread_safe_task_list_t _replicated_migrated_tasks;
 std::atomic<int32_t> _num_replicated_remote_tasks_outstanding(0);
@@ -97,9 +99,15 @@ std::atomic<int32_t> _outstanding_jobs_sum(0);
 // counter for current number of offloaded tasks
 //std::atomic<int> _num_offloaded_tasks_outstanding(0);
 
-// ====== Info about real load that is open or is beeing processed ======
+// ====== Info about real load that is open or is being processed ======
 std::vector<int32_t> _load_info_ranks;
+std::vector<double>  _list_real_load;
+std::vector<double>  _total_load_info_ranks; // load after a finished iter
 std::mutex _mtx_cancellation;
+
+// ====== Info about predicted load by the tool that is being processed ======
+std::vector<double> _list_predicted_load;
+std::vector<double> _predicted_load_info_ranks;
 
 // ====== Info about the number of taskwait count being processed ======
 std::atomic<int> _commthread_time_taskwait_count(0);
@@ -149,19 +157,19 @@ int event_send_back              = -1;
 int event_progress_send          = -1;
 int event_progress_recv          = -1;
 
-
 chameleon_comm_thread_session_data_t _session_data;
 
 #pragma endregion Variables
+
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#pragma region Forward Declarations
 // ================================================================================
 // Forward declartion of internal functions (just called inside shared library)
 // ================================================================================
+#pragma region Forward Declarations
 void* encode_send_buffer(cham_migratable_task_t **tasks, int32_t num_tasks, int32_t *buffer_size);
 void decode_send_buffer(void *buffer, int mpi_tag, int32_t *num_tasks, std::vector<cham_migratable_task_t*> &tasks);
 
@@ -177,11 +185,19 @@ static void send_back_handler(void* buffer, int tag, int rank, cham_migratable_t
 static void receive_back_handler(void* buffer, int tag, int rank, cham_migratable_task_t** tasks, int num_tasks);
 static void receive_back_trash_handler(void* buffer, int tag, int rank, cham_migratable_task_t** tasks, int num_tasks);
 inline void action_post_recvback_requests(cham_migratable_task_t *task_entry, int mpi_source, int mpi_tag, RequestManager *request_manager_receive);
-
-
 #pragma endregion Forward Declarations
 
+
+// ================================================================================
+// Start/Stop/Pin Communication Threads
+// ================================================================================
 #pragma region Start/Stop/Pin Communication Threads
+/**
+ * Start comm_thread when it is activated.
+ *
+ * @param None.
+ * @return CHAM_SUCCESS or not
+ */
 int32_t start_communication_threads() {
     if(_comm_threads_started)
         return CHAM_SUCCESS;
@@ -219,6 +235,12 @@ int32_t start_communication_threads() {
     return CHAM_SUCCESS;
 }
 
+/**
+ * Wake up comm_thread when necessary.
+ *
+ * @param None.
+ * @return CHAM_SUCCESS or not
+ */
 int32_t chameleon_wake_up_comm_threads() {
     // if threads already awake
     if(!_flag_comm_thread_sleeping)
@@ -238,10 +260,16 @@ int32_t chameleon_wake_up_comm_threads() {
     return CHAM_SUCCESS;
 }
 
+/**
+ * Stop comm_thread when necessary.
+ *
+ * @param None.
+ * @return CHAM_SUCCESS or not
+ */
 int32_t stop_communication_threads() {
 
     // ===> Not necessary any more... should just be done in finalize call
-    #if !THREAD_ACTIVATION
+#if !THREAD_ACTIVATION
     _mtx_comm_threads_ended.lock();
     // increment counter
     _comm_threads_ended_count++;
@@ -252,7 +280,7 @@ int32_t stop_communication_threads() {
         _mtx_comm_threads_ended.unlock();
         return CHAM_SUCCESS;
     }
-    #endif
+#endif
 
     DBP("stop_communication_threads (enter)\n");
     int err = 0;
@@ -264,18 +292,26 @@ int32_t stop_communication_threads() {
 
     // should be save to reset flags and counters here
     _comm_threads_started = 0;
-    #if !THREAD_ACTIVATION
+#if !THREAD_ACTIVATION
     _comm_threads_ended_count       = 0;
     _th_service_actions_created     = 0;
-    #endif
+#endif
     
     DBP("stop_communication_threads (exit)\n");
-    #if !THREAD_ACTIVATION
+    
+#if !THREAD_ACTIVATION
     _mtx_comm_threads_ended.unlock();
-    #endif
+#endif
+
     return CHAM_SUCCESS;
 }
 
+/**
+ * Put comm_thread to sleep when necessary.
+ *
+ * @param None.
+ * @return CHAM_SUCCESS or not
+ */
 int32_t put_comm_threads_to_sleep() {
     _mtx_comm_threads_ended.lock();
     // increment counter
@@ -306,7 +342,14 @@ int32_t put_comm_threads_to_sleep() {
     return CHAM_SUCCESS;
 }
 
+/**
+ * Clean allo_mem & others.
+ *
+ * @param None.
+ * @return None.
+ */
 void cleanup_work_phase() {
+
 #if CHAM_REPLICATION_MODE==4
 	while(!_replicated_remote_tasks.empty()) {
 		cham_migratable_task_t *task = _replicated_remote_tasks.pop_back();
@@ -327,8 +370,8 @@ void cleanup_work_phase() {
 
      
     //_active_migrations_per_target_rank.clear();
-
     _num_replicated_local_tasks_outstanding_compute = 0;
+
 #if CHAM_REPLICATION_MODE==4
     _map_overall_tasks.clear();
 #endif
@@ -344,6 +387,12 @@ void cleanup_work_phase() {
     }
 }
 
+/**
+ * Print CPU set of the working system.
+ *
+ * @param set: type of cpu_set_t.
+ * @return None.
+ */
 void print_cpu_set(cpu_set_t set) {
     std::string val("");
     for(long i = 0; i < 48; i++) {
@@ -354,6 +403,12 @@ void print_cpu_set(cpu_set_t set) {
     RELP("Process/thread affinity to cores %s\n", val.c_str());
 }
 
+/**
+ * Pin comm_thread to the last core.
+ *
+ * @param n_last_core: idx of the last core.
+ * @return CHAM_SUCCESS or not.
+ */
 short pin_thread_to_last_core(int n_last_core) {
     int err;
     int s, j;
@@ -440,9 +495,15 @@ short pin_thread_to_last_core(int n_last_core) {
 
     return CHAM_SUCCESS;
 }
+
 #pragma endregion Start/Stop/Pin Communication Threads
 
+
+// ================================================================================
+// Handlers for Dealing With Requests
+// ================================================================================
 #pragma region Handler
+
 static void handler_noop(void* buffer, int tag, int source, cham_migratable_task_t** tasks, int num_tasks) {
 };
 
@@ -508,13 +569,16 @@ static void receive_handler(void* buffer, int tag, int source, cham_migratable_t
     DBP("receive_handler - received tasks from rank %d with tag: %d\n", source, tag);
     std::vector<cham_migratable_task_t*> list_tasks;
     int32_t n_tasks = 0;
+
 #if CHAM_STATS_RECORD
     double cur_time_decode, cur_time;
     cur_time_decode = omp_get_wtime();
 #endif
+
     int num_bytes_received = 0;
     decode_send_buffer(buffer, tag, &n_tasks, list_tasks);
     free(buffer);
+
 #if CHAM_STATS_RECORD
     cur_time_decode = omp_get_wtime()-cur_time_decode;
     atomic_add_dbl(_time_decode_sum, cur_time_decode);
@@ -532,6 +596,7 @@ static void receive_handler(void* buffer, int tag, int source, cham_migratable_t
     for(int i_task = 0; i_task < n_tasks; i_task++) {
         list_tasks[i_task]->source_mpi_rank = source;
         p_tasks[i_task] = list_tasks[i_task];
+
 #if CHAM_REPLICATION_MODE!=4
         if(p_tasks[i_task]->is_replicated_task)
           _num_replicated_remote_tasks_outstanding++;
@@ -553,6 +618,7 @@ static void receive_handler(void* buffer, int tag, int source, cham_migratable_t
 #if CHAM_STATS_RECORD
     cur_time = omp_get_wtime();
 #endif
+
 #if OFFLOAD_DATA_PACKING_TYPE == 1
     int num_requests = 0;
     for(int i_task = 0; i_task < n_tasks; i_task++) {
@@ -793,8 +859,10 @@ static void receive_back_trash_handler(void* buffer, int tag, int source, cham_m
 }
 #pragma endregion
 
+// ================================================================================
+// Packing Tasks and Offloading Stuffs
+// ================================================================================
 #pragma region Offloading / Packing
-
 
 void add_active_replication_victim(int rank, int ntasks) {
 	DBP("add_active_replication_victim - rank %d, ntasks %d\n", rank, ntasks);
@@ -1496,31 +1564,23 @@ void decode_send_buffer(void * buffer, int mpi_tag, int32_t *num_tasks, std::vec
 }
 #pragma endregion Offloading / Packing
 
+// ================================================================================
+// Helpers for Commthread, Init Session Data
+// ================================================================================
 #pragma region Helper Functions
+
 int exit_condition_met(int from_taskwait, int print) {
     if(from_taskwait) {
         int cp_ranks_not_completely_idle = _num_ranks_not_completely_idle.load();
-        if( _comm_thread_load_exchange_happend && _outstanding_jobs_sum.load() == 0 && cp_ranks_not_completely_idle == 0  && request_manager_cancel.getNumberOfOutstandingRequests()==0) {
-            // if(print)
-                // DBP("exit_condition_met - exchange_happend: %d oustanding: %d _num_ranks_not_completely_idle: %d\n", 
-                //     _comm_thread_load_exchange_happend.load(), 
-                //     _outstanding_jobs_sum.load(), 
-                //     cp_ranks_not_completely_idle);
+        if( _comm_thread_load_exchange_happend && _outstanding_jobs_sum.load() == 0 &&
+            cp_ranks_not_completely_idle == 0  && request_manager_cancel.getNumberOfOutstandingRequests()==0) {
             return 1;
         }
     } else {
         if( _num_threads_idle >= _num_threads_involved_in_taskwait) {
             int cp_ranks_not_completely_idle = _num_ranks_not_completely_idle.load();
-            if( _comm_thread_load_exchange_happend && _outstanding_jobs_sum.load() == 0 && cp_ranks_not_completely_idle == 0 && request_manager_cancel.getNumberOfOutstandingRequests()==0) {
-                // if(print)
-                    // DBP("exit_condition_met - exchange_happend: %d oustanding: %d _num_ranks_not_completely_idle: %d\n", 
-                    //     _comm_thread_load_exchange_happend.load(), 
-                //     _comm_thread_load_exchange_happend.load(), 
-                    //     _comm_thread_load_exchange_happend.load(), 
-                    //     _outstanding_jobs_sum.load(), 
-                //     _outstanding_jobs_sum.load(), 
-                    //     _outstanding_jobs_sum.load(), 
-                    //     cp_ranks_not_completely_idle);
+            if( _comm_thread_load_exchange_happend && _outstanding_jobs_sum.load() == 0 &&
+                cp_ranks_not_completely_idle == 0 && request_manager_cancel.getNumberOfOutstandingRequests()==0) {
                 return 1;
             }
         }
@@ -1558,6 +1618,7 @@ void print_arg_info_w_tgt(std::string prefix, cham_migratable_task_t *task, int 
             is_lit,
             is_from);
 }
+
 
 void chameleon_comm_thread_session_data_t_init() {
     #ifdef TRACE
@@ -1603,22 +1664,65 @@ void chameleon_comm_thread_session_data_t_init() {
 
     _session_data.tasks_to_offload.resize(chameleon_comm_size);
     _session_data.tracked_last_req_recv.resize(chameleon_comm_size);
-    _session_data.buffer_load_values = (int*) malloc(sizeof(int)*3*chameleon_comm_size);
     _session_data.n_task_send_at_once = MAX_TASKS_PER_RANK_TO_MIGRATE_AT_ONCE.load();
+    // there're 3 queues/rank: local, remote and replicated queue
+    _session_data.buffer_load_values = (int*) malloc(sizeof(int) * 3 * chameleon_comm_size);
+    // allocate mem for the buffer of real&predicted load
+    _session_data.buffer_real_load_values = (double *) malloc(sizeof(double) * chameleon_comm_size);
+    _session_data.buffer_predicted_load_values = (double *) malloc(sizeof(double) * chameleon_comm_size);
 
     for(int tmp_i = 0; tmp_i < chameleon_comm_size; tmp_i++)
         _session_data.tracked_last_req_recv[tmp_i] = -1;
-    
 }
+
+/**
+ * Estimate real-load difference based on profile-info.
+ *
+ * @param the idx of current cycle/iteration.
+ * @return showing real-load info
+ */
+void estimate_real_load_diff(int tw_index){
+    double rr0_load = _total_load_info_ranks[0];
+    double rr1_load = _total_load_info_ranks[1];
+    double diff     = 0.0;
+    if (rr0_load < rr1_load)
+        diff = (rr0_load / rr1_load) * 100;
+    else
+        diff = (rr1_load / rr0_load) * 100;
+    RELP("Iter%d: real load [R%d, R%d] = [%f, %f] | diff=%f\n", tw_index, 0, 1, rr0_load, rr1_load, diff);
+}
+
+/**
+ * Estimate predicted-load difference based on profile-info.
+ *
+ * @param the idx of current cycle/iteration.
+ * @return showing predicted-load info
+ */
+void estimate_pred_load_diff(int tw_index) {
+    double pr0_load = _predicted_load_info_ranks[0];
+    double pr1_load = _predicted_load_info_ranks[1];
+    double diff     = 0.0;
+    if (pr0_load < pr1_load)
+        diff = (pr0_load / pr1_load) * 100;
+    else
+        diff = (pr1_load / pr0_load) * 100;
+    RELP("Iter%d: pred load [R%d, R%d] = [%f, %f] | diff=%f\n", tw_index, 0, 1, pr0_load, pr1_load, diff);
+}
+
+
 #pragma endregion Helper Functions
 
+// ===================================================================================
+// Main Actions for CommThread, Gathering Requests, Session Data, Migrating Tasks, ...
+// ===================================================================================
 #pragma region CommThread
+
 inline void action_create_gather_request() {
     int32_t local_load_representation;
     int32_t num_tasks_local = _local_tasks.dup_size();
     int32_t num_tasks_replicated_local = _replicated_local_tasks.dup_size();
     int32_t num_tasks_replicated_remote = _replicated_remote_tasks.dup_size();
-    int32_t num_tasks_stolen = _stolen_remote_tasks.dup_size()+ _replicated_migrated_tasks.dup_size();
+    int32_t num_tasks_stolen = _stolen_remote_tasks.dup_size() + _replicated_migrated_tasks.dup_size();
 
     assert(num_tasks_local>=0);
     assert(num_tasks_replicated_local>=0);
@@ -1636,11 +1740,11 @@ inline void action_create_gather_request() {
         ids_local   = _local_tasks.get_task_ids(&num_tasks_local);
         ids_stolen  = _stolen_remote_tasks.get_task_ids(&num_tasks_stolen);
         ids_local_rep  = _replicated_local_tasks.get_task_ids(&num_tasks_replicated_local);
-        ids_stolen_rep  = _replicated_remote_tasks.get_task_ids(&num_tasks_replicated_remote);
+        ids_stolen_rep = _replicated_remote_tasks.get_task_ids(&num_tasks_replicated_remote);
         local_load_representation = cham_t_status.cham_t_callback_determine_local_load(ids_local, num_tasks_local,
-        		                                                                       ids_local_rep, num_tasks_replicated_local,
-        		                                                                       ids_stolen, num_tasks_stolen,
-											       ids_stolen_rep, num_tasks_replicated_remote);
+        		                                                                        ids_local_rep, num_tasks_replicated_local,
+        		                                                                        ids_stolen, num_tasks_stolen,
+											                                            ids_stolen_rep, num_tasks_replicated_remote);
         // clean up again
         free(ids_local);
         free(ids_stolen);
@@ -1649,30 +1753,65 @@ inline void action_create_gather_request() {
     } else {
         // Todo: we need to exclude migrated tasks from load representation, so far this is a hack
         local_load_representation = get_default_load_information_for_rank(ids_local, num_tasks_local, ids_local_rep, _num_replicated_local_tasks_outstanding_compute.load(),
-        											      ids_stolen, num_tasks_stolen,
-												      ids_stolen_rep, num_tasks_replicated_remote);
+        											    ids_stolen, num_tasks_stolen,
+												        ids_stolen_rep, num_tasks_replicated_remote);
     }
-    #else 
+    #else
+
     // Todo: we need to exclude migrated tasks from load representation, so far this is a hack
     local_load_representation = get_default_load_information_for_rank(ids_local, num_tasks_local, ids_local_rep, _num_replicated_local_tasks_outstanding_compute.load(),
-            											  ids_stolen, num_tasks_stolen,
-    												  ids_stolen_rep, num_tasks_replicated_remote);
+            											ids_stolen, num_tasks_stolen,
+    												    ids_stolen_rep, num_tasks_replicated_remote);
     #endif
 
     int tmp_val = _num_threads_idle.load() < _session_data.num_threads_in_tw.load() ? 1 : 0;
     // DBP("action_create_gather_request - my current value for rank_not_completely_in_taskwait: %d\n", tmp_val);
     _session_data.transported_load_values[0] = tmp_val;
-    // transported_load_values[1] = _outstanding_jobs_local.load();
     _session_data.transported_load_values[1] = _num_local_tasks_outstanding.load() + _num_remote_tasks_outstanding.load() + _num_replicated_local_tasks_outstanding_sends.load() + _num_replicated_remote_tasks_outstanding.load();
     _session_data.transported_load_values[2] = local_load_representation;
         
     MPI_Iallgather(&(_session_data.transported_load_values[0]), 3, MPI_INT, _session_data.buffer_load_values, 3, MPI_INT, chameleon_comm_load, &(_session_data.request_gather_out));
 }
 
+/**
+ * Action to create the request for gathering prediction info.
+ *
+ * @param None.
+ * @return None: pred_info are kept in the buffer of
+ *              _predicted_load_values
+ */
+inline void action_create_gather_prediction_request(){
+    int cur_tw_counter = _commthread_time_taskwait_count.load();
+    double predicted_value;
+    if (cur_tw_counter < MAX_EST_NUM_ITERS)
+        predicted_value = _list_predicted_load[cur_tw_counter];
+    else
+        predicted_value = 0.0;
+    MPI_Iallgather(&predicted_value, 1, MPI_DOUBLE,
+                _session_data.buffer_predicted_load_values, 1, MPI_DOUBLE,
+                chameleon_comm_load, &(_session_data.request_gather_prediction_out));
+}
+
+/**
+ * Action to create the request for gathering real-load info per iter.
+ *
+ * @param None.
+ * @return None: real_load_info are kept in the buffer of
+ *              _real_load_values
+ */
+inline void action_create_gather_realload_request(double real_load){
+    int cur_tw_counter = _commthread_time_taskwait_count.load();
+    double real_value = real_load;
+    MPI_Iallgather(&real_value, 1, MPI_DOUBLE,
+                _session_data.buffer_real_load_values, 1, MPI_DOUBLE,
+                chameleon_comm_load, &(_session_data.request_gather_realload_out));
+}
+
 inline void action_handle_gather_request() {
     #ifdef TRACE
     VT_BEGIN_CONSTRAINED(event_exchange_outstanding);
     #endif
+
     // sum up that stuff
     // DBP("action_handle_gather_request - gathered new load info\n");
     int32_t old_val_n_ranks                 = _num_ranks_not_completely_idle;
@@ -1703,13 +1842,15 @@ inline void action_handle_gather_request() {
     if(_session_data.last_known_sum_outstanding == -1) {
         _session_data.last_known_sum_outstanding = sum_outstanding;
         _session_data.offload_triggered = 0;
-        // DBP("action_handle_gather_request - sum outstanding operations=%d, nr_open_requests_send=%d\n", *last_known_sum_outstanding, request_manager_send.getNumberOfOutstandingRequests());
+        // DBP("action_handle_gather_request - sum outstanding operations=%d, nr_open_requests_send=%d\n",
+        //      *last_known_sum_outstanding, request_manager_send.getNumberOfOutstandingRequests());
     } else {
         // check whether changed.. only allow new offload after change
         if(_session_data.last_known_sum_outstanding != sum_outstanding) {
             _session_data.last_known_sum_outstanding = sum_outstanding;
             _session_data.offload_triggered = 0;
-            // DBP("action_handle_gather_request - sum outstanding operations=%d, nr_open_requests_send=%d\n", *last_known_sum_outstanding, request_manager_send.getNumberOfOutstandingRequests());
+            // DBP("action_handle_gather_request - sum outstanding operations=%d, nr_open_requests_send=%d\n",
+            //      *last_known_sum_outstanding, request_manager_send.getNumberOfOutstandingRequests());
         }
     }
     #else
@@ -1720,6 +1861,33 @@ inline void action_handle_gather_request() {
     VT_END_W_CONSTRAINED(event_exchange_outstanding);
     #endif
 }
+
+/**
+ * Action to handle request for gathering prediction info.
+ *
+ * @param None.
+ * @return None: move predicted_load info to the common arr
+ *              _predicted_load_info_ranks per rank.
+ */
+inline void action_handle_gather_prediction_request(){
+    for(int j = 0; j < chameleon_comm_size; j++) {
+        _predicted_load_info_ranks[j] = _session_data.buffer_predicted_load_values[j];
+    }
+}
+
+/**
+ * Action to handle request for gathering real load info.
+ *
+ * @param None.
+ * @return None: move real_load info to the common arr
+ *              _total_load_info_ranks per rank.
+ */
+inline void action_handle_gather_realload_request(){
+    for(int j = 0; j < chameleon_comm_size; j++) {
+        _total_load_info_ranks[j] = _session_data.buffer_real_load_values[j];
+    }
+}
+
 
 inline void action_task_migration() {
     // only check for offloading if enough local tasks available and exchange has happend at least once
@@ -2168,7 +2336,7 @@ inline void action_post_recvback_requests(cham_migratable_task_t *task_entry, in
     int ierr;
     
     #if OFFLOAD_DATA_PACKING_TYPE == 0
-    //entry is removed in receiveBackHandler!
+    // entry is removed in receiveBackHandler!
     // receive data back
     int recv_buff_size = task_entry->buffer_size_output_data;
     // MPI_Get_count(cur_status_receiveBack, MPI_BYTE, &recv_buff_size);
@@ -2670,10 +2838,6 @@ inline void action_task_replication_send() {
     	_replication_infos_list.push_back(rep_info);
     	return;
     }
-   
-
-    //if(request_manager_receive.getNumberOfOutstandingRequests()>0) 
-    //    return;
 
     //Todo: don't replicate if any target has active migrations
     if(rep_info->num_tasks<=0) return;
@@ -2704,29 +2868,41 @@ inline void action_task_replication_send() {
   }
 }
 
-void action_communication_progression(int comm_thread) {
-    #if ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE>0
+
+void action_communication_progression(int comm_thread) { 
+
+#if ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE>0
+
+    // if REPL_MODE = 2 or 3, 4, there's request for canceling tasks
     #if CHAM_REPLICATION_MODE>=2
     _mtx_cancellation.lock();
     request_manager_cancel.progressRequests(comm_thread);
     _mtx_cancellation.unlock();
     #endif
+
     #if CHAM_REPLICATION_MODE==4
     // Todo: progress requests for activation of replicated tasks
     #endif
+
     #ifdef TRACE
     VT_BEGIN_CONSTRAINED(event_progress_send);
     #endif
+
+    // requests for sending tasks
     request_manager_send.progressRequests(comm_thread);
+
     #ifdef TRACE
     VT_END_W_CONSTRAINED(event_progress_send);
     VT_BEGIN_CONSTRAINED(event_progress_recv);
     #endif
+
+    // requests for reciving tasks
     request_manager_receive.progressRequests(comm_thread);
+
     #ifdef TRACE
     VT_END_W_CONSTRAINED(event_progress_recv);
     #endif
-    #endif /* ENABLE_TASK_MIGRATION */
+#endif /* ENABLE_TASK_MIGRATION */
 
     // ==============================
     // ========== SEND / EXCHANGE
@@ -2734,38 +2910,55 @@ void action_communication_progression(int comm_thread) {
 
     int request_gather_avail = 0;
     // avoid overwriting request and keep it up to date
-    #if COMMUNICATION_MODE == 2
+#if COMMUNICATION_MODE == 2
     if (_mtx_comm_progression.try_lock()) {
-    #elif COMMUNICATION_MODE != 1
+#elif COMMUNICATION_MODE != 1
     if(comm_thread) {  // only execute that code if called from communication thread
-    #endif /* COMMUNICATION_MODE */
+#endif /* COMMUNICATION_MODE */
 
     if(!_session_data.request_gather_created) {
+
         #ifdef TRACE
         VT_BEGIN_CONSTRAINED(event_create_gather_request);
         #endif
+
+        // gathering requests
+        // RELP("Comm_thread: calling action_create_gather_request\n");
         action_create_gather_request();
+
+        // gathering the prediction request
+        // RELP("Comm_thread: calling action_create_gather_prediction_request\n");
+        action_create_gather_prediction_request();
+
         #ifdef TRACE
         VT_END_W_CONSTRAINED(event_create_gather_request);
         #endif
+
+        // if ok, set the flag into 1
         _session_data.request_gather_created = 1;
+
         #if CHAM_STATS_RECORD
         _session_data.time_gather_posted = omp_get_wtime();
         #endif /* CHAM_STATS_RECORD */
     }
 
-    #if CHAM_STATS_RECORD && SHOW_WARNING_SLOW_COMMUNICATION
+#if CHAM_STATS_RECORD && SHOW_WARNING_SLOW_COMMUNICATION
     double cur_time = omp_get_wtime();
-    #endif
+#endif
+
+    // check request_gather_avail is ready or not
     MPI_Test(&_session_data.request_gather_out, &request_gather_avail, &_session_data.status_gather_out);
-    #if CHAM_STATS_RECORD && SHOW_WARNING_SLOW_COMMUNICATION
+    
+#if CHAM_STATS_RECORD && SHOW_WARNING_SLOW_COMMUNICATION
     cur_time = omp_get_wtime()-cur_time;
     if(cur_time>CHAM_SLOW_COMMUNICATION_THRESHOLD)
         _num_slow_communication_operations++;
-    #endif
+#endif
 
+    // if all requests are ready
     if(request_gather_avail) {
-        #if CHAM_STATS_RECORD
+        
+#if CHAM_STATS_RECORD
         _num_load_exchanges_performed++;
 
         double cur_diff = omp_get_wtime()-_session_data.time_gather_posted;
@@ -2778,19 +2971,25 @@ void action_communication_progression(int comm_thread) {
             atomic_add_dbl(_time_between_load_exchange_sum, cur_diff);
             _time_between_load_exchange_count++;
         }
-        #endif /* CHAM_STATS_RECORD */
+#endif /* CHAM_STATS_RECORD */
 
+        // handeling requests
+        // RELP("Comm_thread: calling action_handle_gather_request\n");
         action_handle_gather_request();
+
+        // handeling the prediction request
+        // RELP("Comm_thread: calling action_handle_gather_prediction_request\n");
+        action_handle_gather_prediction_request();
 
         // set flag that exchange has happend
         if(!_comm_thread_load_exchange_happend) {
             _comm_thread_load_exchange_happend = 1;
         }
 
-        #if CHAM_STATS_RECORD
+#if CHAM_STATS_RECORD
         // save last time load exchange happend for current sync cycle
         _session_data.time_last_load_exchange = omp_get_wtime();
-        #endif /* CHAM_STATS_RECORD */
+#endif /* CHAM_STATS_RECORD */
 
         // Handle exit condition here to avoid that iallgather is posted after iteration finished
         bool exit_true = exit_condition_met(0,1);
@@ -2798,12 +2997,14 @@ void action_communication_progression(int comm_thread) {
             _flag_comm_thread_sleeping              = 1;
             _comm_thread_service_stopped            = 1;
             _session_data.flag_thread_sleeping_set  = 1;
-            #if CHAM_STATS_RECORD
+            
+#if CHAM_STATS_RECORD
             double time_commthread_elapsed = omp_get_wtime()-_session_data.time_start_comm;
             atomic_add_dbl(_time_commthread_active_sum, time_commthread_elapsed);
             _time_commthread_active_count++;
             assert(_num_active_communications_overall.load()==0);
-            #endif /* CHAM_STATS_RECORD */
+#endif /* CHAM_STATS_RECORD */
+
             assert(_remote_tasks_send_back.empty());
             assert(request_manager_cancel.getNumberOfOutstandingRequests()==0);
 
@@ -2811,33 +3012,35 @@ void action_communication_progression(int comm_thread) {
             cleanup_work_phase();
 
             DBP("action_communication_progression - thread went to sleep again due to exit condition\n");
-            #if COMMUNICATION_MODE == 2
+
+#if COMMUNICATION_MODE == 2
             _mtx_comm_progression.unlock();
-            #endif
+#endif
             return;
         }
     }
 
-    #if CHAM_REPLICATION_MODE>0
+#if CHAM_REPLICATION_MODE > 0
     if(!_session_data.has_replicated && _session_data.num_threads_in_tw == _num_threads_active_in_taskwait) {
         _session_data.has_replicated = action_task_replication();
     }
-    #endif
+#endif
 
-    #if ENABLE_TASK_MIGRATION
+#if ENABLE_TASK_MIGRATION
+    // check conditions for migrating tasks & migrating them then
     action_task_migration();
-    #endif /* ENABLE_TASK_MIGRATION */
+#endif /* ENABLE_TASK_MIGRATION */
 
-    #if CHAM_REPLICATION_MODE>0
+#if CHAM_REPLICATION_MODE>0
     if(!_session_data.has_replicated && _session_data.num_threads_in_tw == _num_threads_active_in_taskwait) {
         _session_data.has_replicated = action_task_replication();
     }
-    #endif
+#endif
 
-    #if CHAM_REPLICATION_MODE>0
+#if CHAM_REPLICATION_MODE>0
     if(_session_data.has_replicated && !_session_data.offload_triggered && !_session_data.is_migration_victim )
         action_task_replication_send();
-    #endif
+#endif
 
     // transfer back data of stolen tasks
     for (int i_sb = 0; i_sb < _session_data.n_task_send_at_once; i_sb++) {
@@ -2866,11 +3069,14 @@ void action_communication_progression(int comm_thread) {
     MPI_Status cur_status_activate;
     int flag_open_request_activate = 0;
 
-    #if ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE>0
+#if ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE>0
+
     #if CHAM_STATS_RECORD && SHOW_WARNING_SLOW_COMMUNICATION
     cur_time = omp_get_wtime();
     #endif
+
     MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, chameleon_comm, &flag_open_request_receive, &cur_status_receive);
+
     #if CHAM_STATS_RECORD && SHOW_WARNING_SLOW_COMMUNICATION
     cur_time = omp_get_wtime()-cur_time;
     if(cur_time>CHAM_SLOW_COMMUNICATION_THRESHOLD)
@@ -2891,7 +3097,7 @@ void action_communication_progression(int comm_thread) {
     }
     #endif
 
-    #endif /* ENABLE_TASK_MIGRATION */
+#endif /* ENABLE_TASK_MIGRATION */
 
     if ( flag_open_request_receive ) {
 
@@ -2908,7 +3114,7 @@ void action_communication_progression(int comm_thread) {
         }
     }
 
-    #if CHAM_REPLICATION_MODE>0 || ENABLE_EARLY_IRECVS==0
+#if CHAM_REPLICATION_MODE>0 || ENABLE_EARLY_IRECVS==0
     for (int i_sb = 0; i_sb < _session_data.n_task_send_at_once; i_sb++) {
         flag_open_request_receiveBack = 0;
         #if CHAM_STATS_RECORD && SHOW_WARNING_SLOW_COMMUNICATION
@@ -2926,19 +3132,23 @@ void action_communication_progression(int comm_thread) {
             break;
         }
     }
-    #endif
-    #if COMMUNICATION_MODE == 2
+#endif
+
+#if COMMUNICATION_MODE == 2
     _mtx_comm_progression.unlock();
     }
-    #elif COMMUNICATION_MODE != 1
+#elif COMMUNICATION_MODE != 1
     }
-    #endif
+#endif
+
 }
 
 void* comm_thread_action(void* arg) {
-    #if COMMUNICATION_MODE != 4
+    
+#if COMMUNICATION_MODE != 4
     pin_thread_to_last_core(1);
-    #endif
+#endif
+
     // trigger signal to tell that thread is running now
     pthread_mutex_lock( &_th_service_actions_mutex );
     _th_service_actions_created = 1;
@@ -2947,9 +3157,9 @@ void* comm_thread_action(void* arg) {
 
     DBP("comm_thread_action (enter)\n");
 
-    #if CHAM_STATS_RECORD
+#if CHAM_STATS_RECORD
     _session_data.time_start_comm = omp_get_wtime();
-    #endif
+#endif
 
     // flag to check taskwait counters
     int prev_taskwait_counter = 9999;
@@ -3012,27 +3222,33 @@ void* comm_thread_action(void* arg) {
         #endif
 
         // check taskwait counter to trigger training the prediction model
-        // get the current taskwait counter
+        // happen when a new cycle is started to run
         int current_taskwait_counter = _commthread_time_taskwait_count.load();
         if (current_taskwait_counter != prev_taskwait_counter){
+            // update the previous taskwait counter
             prev_taskwait_counter = current_taskwait_counter;
 
 #if CHAMELEON_TOOL_SUPPORT
+            // get real load and predicted load for checking
+            estimate_pred_load_diff(current_taskwait_counter);
+
             // the trigger for training
             // TODO: more flexible configs here??? maybe ENV_VARS, ...
             if(current_taskwait_counter == 20) {
                 if(cham_t_status.enabled && cham_t_status.cham_t_callback_train_prediction_model) {
                     _flag_model_is_trained = cham_t_status.cham_t_callback_train_prediction_model(current_taskwait_counter);
                 }
-                RELP("Comm_thread: _flag_model_is_trained = %d\n", _flag_model_is_trained.load());
+                // RELP("Comm_thread: _flag_model_is_trained = %d\n", _flag_model_is_trained.load());
             }
 
             // the triger for validating
             if(_flag_model_is_trained){
-                RELP("Comm_thread: The Cham-Tool prediction model is ready for iter=%d\n", current_taskwait_counter);
                 if(cham_t_status.enabled && cham_t_status.cham_t_callback_valid_prediction_model) {
-                    double pred_val = cham_t_status.cham_t_callback_valid_prediction_model(current_taskwait_counter);
-                    RELP("Comm_thread: The Predicted Load for Iter-%d = %f\n", current_taskwait_counter, pred_val);
+                    int cur_tw_idx = current_taskwait_counter;
+                    double pred_val = cham_t_status.cham_t_callback_valid_prediction_model(cur_tw_idx);
+                    if (cur_tw_idx < MAX_EST_NUM_ITERS)
+                        _list_predicted_load[cur_tw_idx] = pred_val;
+                    // RELP("Comm_thread: The Predicted Load for Iter-%d = %f\n", current_taskwait_counter, pred_val);
                 }
             }
 #endif

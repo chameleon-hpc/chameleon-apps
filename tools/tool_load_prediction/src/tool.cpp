@@ -112,7 +112,6 @@ on_cham_t_callback_task_end(int thread_id, cham_migratable_task_t * task,
 #if TRACE==1
     VT_END_W_CONSTRAINED(cb_event_taskend);
 #endif
-
 }
 
 
@@ -129,15 +128,14 @@ on_cham_t_callback_get_load_stats_per_taskwait(int32_t taskwait_counter,
 {
     int rank = cham_t_get_rank_info()->comm_rank;
     int iter = taskwait_counter;
-    double total_load = taskwait_load;
-    double load_avg = total_load / NUM_THREADS;
-    profiled_task_list.add_avgload(load_avg);
+    profiled_task_list.add_avgload(taskwait_load);
 
     /**
-     * Do something.
+     * Do something / try to add it to another arma::vector
      */
+    avg_load_per_iter_list[iter] = taskwait_load;
 
-    return load_avg;
+    return taskwait_load;
 }
 
 /**
@@ -170,7 +168,29 @@ on_cham_t_callback_train_prediction_model(int32_t taskwait_counter)
 static double
 on_cham_t_callback_valid_prediction_model(int32_t taskwait_counter)
 {
-    double pred_load = 7.0;
+    // prepare the input
+    int rank = cham_t_get_rank_info()->comm_rank;
+    int num_features = 6;
+    int s_point = taskwait_counter - num_features;
+    int e_point = taskwait_counter;
+    double pred_load = 0.0;
+    arma::vec input_vec(num_features);
+    for (int i = s_point; i < e_point; i++){
+        input_vec[i-s_point] = double(profiled_task_list.avg_load_list[i]);
+    }
+    std::cout << "[CHAM_TOOL] R" << rank << " valid_pred_model: input_vec from iter-"
+              << s_point << " to iter-" << e_point-1 << std::endl;
+    std::cout << input_vec.t();
+
+    // call the pred_model
+    arma::mat x_mat(1, num_features);
+    x_mat = input_vec;
+    arma::rowvec p_load;
+    lr.Predict(x_mat, p_load);
+    pred_load = p_load[0];
+
+    // store to the arma::vector for writing logs
+    pre_load_per_iter_list[taskwait_counter] = pred_load;
 
     return pred_load;
 }

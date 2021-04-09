@@ -189,10 +189,10 @@ if __name__ == "__main__":
 
 
     # generate dataset by chain-on-chain runtimes per iter
-    if (len(sys.argv) < 3):
+    if (len(sys.argv) <= 3):
         rank = 0
     else:
-        rank = rank = int(sys.argv[3])
+        rank = int(sys.argv[3])
     num_features = 6
     cc_runtime_dataset_generator(stats_data, rank, num_features)
 

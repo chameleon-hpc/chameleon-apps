@@ -86,6 +86,7 @@ int main(int argc, char* argv[])
     // So, plit it by myself, note that armadillo stores data by row-major
 
     arma::mat trainData, validData;
+    const int RATIO = 0.3;  // 30% for training
     const int T_FROM_ROW = 0, T_TO_ROW = 6;
     const int T_FROM_COL = 0, T_TO_COL = 49;
     const int V_FROM_ROW = 0, V_TO_ROW = 6;

@@ -10,6 +10,10 @@
 #include "chameleon_tools.h"
 #include "request_manager.h"
 
+#ifndef MAX_EST_NUM_ITERS
+#define MAX_EST_NUM_ITERS 100
+#endif
+
 // communicator for remote task requests
 extern MPI_Comm chameleon_comm;
 // communicator for sending back mapped values
@@ -30,7 +34,6 @@ extern int chameleon_comm_size;
 
 // Communication tracking
 extern std::atomic<int32_t> _num_active_communications_overall;
-
 extern std::vector<intptr_t> _image_base_addresses;
 
 // list with local task entries
@@ -74,8 +77,14 @@ extern std::vector<int32_t> _outstanding_jobs_ranks;
 extern std::atomic<int32_t> _outstanding_jobs_local;
 extern std::atomic<int32_t> _outstanding_jobs_sum;
 
-// ====== Info about real load that is open or is beeing processed ======
+// ====== Info about real load that is open or is being processed ======
 extern std::vector<int32_t> _load_info_ranks;
+extern std::vector<double>  _list_real_load;
+extern std::vector<double> _total_load_info_ranks; // load after a finished iter
+
+// ====== Info about predicted load by the tool that is being processed ======
+extern std::vector<double> _list_predicted_load;
+extern std::vector<double> _predicted_load_info_ranks;
 
 // ====== Info about the number of taskwait count being processed ======
 extern std::atomic<int> _commthread_time_taskwait_count;
@@ -113,20 +122,25 @@ extern std::mutex _mtx_comm_progression;
 // a defined flag for checking the cham-tool prediction model is ready or not
 extern std::atomic<bool> _flag_model_is_trained;
 
+
+//================================================================
+// Class for commthread session data type
+//================================================================
 class chameleon_comm_thread_session_data_t {
     public:
     // =============== General Vars
     std::atomic<int> flag_thread_sleeping_set;
     std::atomic<int> num_threads_in_tw;
+
     // std::atomic<bool> has_not_replicated(true);
     std::atomic<double> time_last_load_exchange;
     std::atomic<double> time_gather_posted;
     std::atomic<bool> has_replicated;
     std::atomic<bool> is_migration_victim;
 
-    #if CHAM_STATS_RECORD
+#if CHAM_STATS_RECORD
     std::atomic<double> time_start_comm;
-    #endif
+#endif
 
     // =============== Send Thread Vars
     //int request_gather_created      = 0;
@@ -136,10 +150,24 @@ class chameleon_comm_thread_session_data_t {
     std::atomic<int> offload_triggered;
     std::atomic<int> last_known_sum_outstanding;
     
+    // =============== Monitoring load info
     int transported_load_values[3];
-    int * buffer_load_values;
+    int *buffer_load_values;
     std::vector<int32_t> tasks_to_offload;
 
+    // =============== Monitoring predicted load info
+    // could not need a flag for prediction, temporarily
+    // get it in the loop with request_gather_created in general
+    std::atomic<int> request_gather_prediction_created;
+    std::atomic<int> request_gather_realload_created;
+    MPI_Request request_gather_prediction_out;
+    MPI_Request request_gather_realload_out;
+    MPI_Status  status_gather_prediction_out;
+    MPI_Status  status_gather_realload_out;
+    double *buffer_predicted_load_values;
+    double *buffer_real_load_values;
+
+    // =============== Num migrated tasks at once
     int n_task_send_at_once = 1;
 
     // =============== Recv Thread Vars
@@ -152,6 +180,11 @@ class chameleon_comm_thread_session_data_t {
 };
 
 extern chameleon_comm_thread_session_data_t _session_data;
+
+
+//================================================================
+// Util Functions for CommThread
+//================================================================
 
 #ifdef __cplusplus
 extern "C" {
@@ -180,6 +213,10 @@ void action_communication_progression(int comm_thread);
 void cleanup_work_phase();
 
 int exit_condition_met(int from_taskwait, int print);
+
+void estimate_pred_load_diff(int tw_index);
+
+void estimate_real_load_diff(int tw_index);
 
 #ifdef __cplusplus
 }

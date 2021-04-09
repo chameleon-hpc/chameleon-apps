@@ -59,7 +59,7 @@ static int _tracing_enabled = 1;
 #endif
 
 #ifndef NUM_ITERATIONS
-#define DEF_ITERS 1000
+#define DEF_ITERS 100
 #endif
 
 #ifndef NUM_OMP_THREADS
@@ -115,7 +115,7 @@ typedef struct prof_task_info_t {
 class prof_task_list_t {
     public:
         std::vector<prof_task_info_t *> task_list;
-        std::vector<float> avg_load_list;
+        std::vector<double> avg_load_list;
         std::mutex m;
         std::atomic<size_t> tasklist_size;
         
@@ -163,8 +163,9 @@ class prof_task_list_t {
 
         void add_avgload(double avg_value){
             this->m.lock();
-            float f_value = (float) avg_value;
-            this->avg_load_list.push_back(f_value);
+            // this works for torch, but no need for mlpack from now
+            // float f_value = (float) avg_value;
+            this->avg_load_list.push_back(avg_value);
             this->m.unlock();
         }
 };
@@ -216,12 +217,16 @@ struct SimpleRegression:torch::nn::Module {
 prof_task_list_t profiled_task_list;
 std::vector<float> min_vec; // the last element is min_ground_truth
 std::vector<float> max_vec; // the last element is max_ground_truth
-bool is_model_trained = false;
 int num_samples = DEF_NUM_SAMPLE;
 int num_epochs = DEF_NUM_EPOCH;
 
 // Declare a general mlpack regression model
 mlpack::regression::LinearRegression lr;
+
+// Declare 2 vectors for storing avg_load & pre_load (predicted loads)
+const int REF_NUM_ITERS = 100;
+arma::vec avg_load_per_iter_list(REF_NUM_ITERS);
+arma::vec pre_load_per_iter_list(REF_NUM_ITERS);
 
 
 // ================================================================================
@@ -312,8 +317,9 @@ void chameleon_t_write_logs(prof_task_list_t& tasklist_ref, int mpi_rank){
     // write avg_load per iterations
     int num_iterations = tasklist_ref.avg_load_list.size();
     for (int i = 0; i < num_iterations; i++){
-        float load_val = tasklist_ref.avg_load_list[i];
-        std::string load_str = std::to_string(load_val) + "\n";
+        double load_val = tasklist_ref.avg_load_list[i];
+        double pred_val = pre_load_per_iter_list[i];
+        std::string load_str = std::to_string(load_val) + "\t" + std::to_string(pred_val) + "\n";
         outfile << load_str;
     }
 
@@ -551,7 +557,7 @@ bool gather_training_data(prof_task_list_t& tasklist_ref, int num_input_points, 
     mlpack::regression::LinearRegression lr_pred_model(trainX, trainY);
     lr = lr_pred_model;
 
-    printf("[CHAM_TOOL] the training is done\n");
+    std::cout << "[CHAM_TOOL] the training is done." << std::endl;
 
     return true;
 }

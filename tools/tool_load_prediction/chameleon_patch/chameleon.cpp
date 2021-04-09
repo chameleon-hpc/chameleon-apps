@@ -63,35 +63,6 @@ int32_t _total_created_tasks_per_rank = 0;
 
 #pragma endregion Variables
 
-// void char_p_f2c(const char* fstr, int len, char** cstr)
-// {
-//   const char* end;
-//   int i;
-//   /* Leading and trailing blanks are discarded. */
-//   end = fstr + len - 1;
-//   for (i = 0; (i < len) && (' ' == *fstr); ++i, ++fstr) {
-//     continue;
-//   }
-//   if (i >= len) {
-//     len = 0;
-//   } else {
-//     for (; (end > fstr) && (' ' == *end); --end) {
-//       continue;
-//     }
-//     len = end - fstr + 1;
-//   }
-//   /* Allocate space for the C string, if necessary. */
-//   if (*cstr == NULL) {
-//     if ((*cstr = (char*) malloc(len + 1)) == NULL) {
-//       return;
-//     }
-//   }
-//   /* Copy F77 string into C string and NULL terminate it. */
-//   if (len > 0) {
-//     strncpy(*cstr, fstr, len);
-//   }
-//   (*cstr)[len] = '\0';
-// }
 
 #ifdef __cplusplus
 extern "C" {
@@ -370,15 +341,30 @@ int32_t chameleon_init() {
     cham_t_init();
 #endif
 
+    // resize vectors for storing realtime info
     _num_replicated_local_tasks_per_victim.resize(chameleon_comm_size);
-
     _outstanding_jobs_ranks.resize(chameleon_comm_size);
     _load_info_ranks.resize(chameleon_comm_size);
-    for(int i = 0; i < chameleon_comm_size; i++) {
+    _total_load_info_ranks.resize(chameleon_comm_size);
+    _predicted_load_info_ranks.resize(chameleon_comm_size);
+
+    // resize the list of real and predicted load
+    _list_predicted_load.resize(MAX_EST_NUM_ITERS);
+    _list_real_load.resize(MAX_EST_NUM_ITERS);
+    for (int i = 0; i < MAX_EST_NUM_ITERS; i++){
+        _list_real_load[i] = 0.0;
+        _list_predicted_load[i] = 0.0;
+    }
+
+    // init all monitor-vectors
+    for (int i = 0; i < chameleon_comm_size; i++) {
         _outstanding_jobs_ranks[i] = 0;
         _load_info_ranks[i] = 0;
+        _total_load_info_ranks[i] = 0.0;
+        _predicted_load_info_ranks[i] = 0.0;
         _active_migrations_per_target_rank[i] = 0;
     }
+    
     _outstanding_jobs_sum = 0;
     _task_id_counter = 0;
 
@@ -618,13 +604,19 @@ void dtw_teardown() {
         _num_ranks_not_completely_idle          = INT_MAX;
         _total_created_tasks_per_rank           = 0;
 
-#if CHAMELEON_TOOL_SUPPORT
+        // check the load here
         int thread_id = omp_get_thread_num();
-        // make sure that the last thread call this callback???
+        int taskwait_counter = _commthread_time_taskwait_count.load();
+        // get real load and save it per iter
+        double r_load = _time_task_execution_local_sum.load();
+        if (taskwait_counter < MAX_EST_NUM_ITERS){
+            _list_real_load[taskwait_counter] = r_load;
+        }
+
+#if CHAMELEON_TOOL_SUPPORT
+        // make sure that the last thread call this callback
         if(cham_t_status.enabled && cham_t_status.cham_t_callback_get_load_stats_per_taskwait) {
-            int taskwait_counter = _commthread_time_taskwait_count.load();
-            double taskwait_load = _time_task_execution_local_sum.load();
-            double load_per_rank = cham_t_status.cham_t_callback_get_load_stats_per_taskwait(taskwait_counter, thread_id, taskwait_load);
+            double load_per_rank = cham_t_status.cham_t_callback_get_load_stats_per_taskwait(taskwait_counter, thread_id, r_load);
         }
         // increase the counter of taskwait
         _commthread_time_taskwait_count++;
