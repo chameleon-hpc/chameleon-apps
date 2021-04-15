@@ -16,7 +16,7 @@ At the current status, there're 2 dependencies:
 ## Package organization
 The code is simply organized with its utils as follow:
 * build/: a sample script to link and build the tool with Chameleon. TODO: need to adapt dependencies at your side.
-* chameleon_patch/: simple the src-code of the Chameleon lib (latest version) with some changes to fit the prediction tool. To avoid hurting the original version of Chameleon, so leave them here temporarily. Note: need to replace them with the original one when we compile.
+* chameleon_patch/: simply just the src-code of the Chameleon lib (latest version) with some changes to fit the prediction tool. To avoid hurting the original version of Chameleon, so leave them here temporarily. Note: need to replace them with the original one when we compile.
 * mlpack_utils/: some examples with mlpack library to build the regression models.
 * python_utils/: some examples with scikit-learn/mlpack lib in Python, to build and test the regression models.
 
@@ -24,10 +24,10 @@ The code is simply organized with its utils as follow:
 As the diagram above, the tool works as the plugin of Chameleon lib (sounds like the event-based working flow). When we need a callback event, we need to define it, determine when it's called and what should it return back to the chameleon-lib side or not. Therefore, it could be managed as:
 * Define the callback event associated with its function (action).
 * When it's called, should control who calls it (comm_thread or execution threads).
-* What should it return back to the cham-lib side.
+* What should it give back to the cham-lib side.
 
 ## Compiling the tool
-For example, could follow the sample compile-script in build/ folder, and need adapt the dependencies that are declared in CMakeLists.txt (at the src/ folder).
+For example, could follow the sample compile-script in build/ folder, and need to adapt the dependencies that are declared in CMakeLists.txt (at the src/ folder).
 
 ## Compiling Chameleon & Linking with the tool
 There could be a sample script to compile Chameleon with the callback tools (to be updated). Btw, there're some steps:
