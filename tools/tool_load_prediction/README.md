@@ -7,10 +7,10 @@ This is a callback tool for predicting task-runtime with an online/offline train
 ## Dependencies
 At the current status, there're 2 dependencies:
 * Pytorch C++ (https://pytorch.org/cppdocs/installing.html)
-  * Don't need to install, just download and point to where is it at the compiling phase with the tool.
+  * Don't need to install, just download and point to where is it at when compiling the tool.
   * E.g., as the sample compile-script in build/
 * Mlpack C++ (https://www.mlpack.org/getstarted.html)
-  * Need to install with its dependencies (Armadillo, Boost, ensmallen)
+  * Need to install it with the dependencies (Armadillo, Boost, ensmallen)
   * Could follow here https://www.mlpack.org/doc/mlpack-3.4.2/doxygen/build.html
 
 ## Package organization
@@ -28,7 +28,6 @@ As the diagram above, the tool works as the plugin of Chameleon lib (sounds like
 
 ## Compiling the tool
 For example, could follow the sample compile-script in build/ folder, and need adapt the dependencies that are declared in CMakeLists.txt (at the src/ folder).
-
 
 ## Compiling Chameleon & Linking with the tool
 There could be a sample script to compile Chameleon with the callback tools (to be updated). Btw, there're some steps:
