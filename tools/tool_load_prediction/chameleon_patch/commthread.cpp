@@ -111,6 +111,10 @@ std::vector<double> _predicted_load_info_ranks;
 
 // ====== Info about the number of taskwait count being processed ======
 std::atomic<int> _commthread_time_taskwait_count(0);
+// a flag in global for tracking the previous taskwait index
+// this is used in action_pred_migration
+int _global_flag_prev_taskwait_idx = 99999;
+bool _flag_is_new_iteration = false;
 
 // === Constants
 const int32_t MAX_BUFFER_SIZE_OFFLOAD_ENTRY = 20480; // 20 KB for testing
@@ -937,43 +941,60 @@ void activate_replicated_tasks_on_rank(int ntasks, int rank) {
 	_num_replicated_local_tasks_outstanding_compute = std::max(tmp, 0);
 }
 
-
+/**
+ * Offload tasks to rank - a wrapper of offload_action
+ *
+ * @param **tasks: an array of migrated tasks
+ * @param num_tasks: num tasks to migrate
+ * @param target_rank: the receiver
+ * @param mode: synchronous or not, default is false
+ * @return CHAM_SUCCESS or FAILED
+ */
 int32_t offload_tasks_to_rank(cham_migratable_task_t **tasks, int32_t num_tasks, int target_rank, bool use_synchronous_mode) {
-    #ifdef TRACE
+    
+#ifdef TRACE
     static int event_offload = -1;
     std::string event_offload_name = "offload_tasks";
     if(event_offload == -1) 
         int ierr = VT_funcdef(event_offload_name.c_str(), VT_NOCLASS, &event_offload);
     VT_BEGIN_CONSTRAINED(event_offload);
-    #endif /* TRACE */
+#endif /* TRACE */
 
-    //assert(tasks[0]->result_in_progress.load()==false);
-
-    #if CHAM_DEBUG
+#if CHAM_DEBUG
     std::string str_task_ids = std::to_string(tasks[0]->task_id);
     for(int i_task = 1; i_task < num_tasks; i_task++) {
         //assert(tasks[i_task]->result_in_progress.load()==false);
         str_task_ids.append("," + std::to_string(tasks[i_task]->task_id));
     }
     DBP("offload_tasks_to_rank (enter) - num_tasks: %d, target_rank: %d, task_ids: %s\n", num_tasks, target_rank, str_task_ids.c_str());
-    #endif
+#endif
 
-    
+    // call the offload function
     offload_action(tasks, num_tasks, target_rank, use_synchronous_mode);
-    //_num_offloaded_tasks_outstanding += num_tasks;
 
-    #if CHAM_STATS_RECORD
+#if CHAM_STATS_RECORD
     _num_tasks_offloaded += num_tasks;
-    #endif
+#endif
 
     DBP("offload_tasks_to_rank (exit)\n");
     
-    #ifdef TRACE
+#ifdef TRACE
     VT_END_W_CONSTRAINED(event_offload);
-    #endif
+#endif
+
     return CHAM_SUCCESS;
 }
 
+
+/**
+ * Action to offload
+ *
+ * @param **tasks: an array of migrated tasks
+ * @param num_tasks: num tasks to migrate
+ * @param target_rank: the receiver
+ * @param mode: synchronous or not, default is false
+ * @return CHAM_SUCCESS or FAILED
+ */
 void offload_action(cham_migratable_task_t **tasks, int32_t num_tasks, int target_rank, bool use_synchronous_mode) {
     // use unique tag for current offload in this sync cycle
     int tmp_tag = tag_counter_send_tasks++;
@@ -981,33 +1002,38 @@ void offload_action(cham_migratable_task_t **tasks, int32_t num_tasks, int targe
 
     // store target rank in task
     for(int i = 0; i < num_tasks; i++) {
-      if(!tasks[i]->is_replicated_task) {
-    	DBP("offloading_action - offloading migrated task\n"); assert(tasks[i]->is_migrated_task);
-    	//printf("offloading_action - offloading migrated task to %d\n", tasks[i]->target_mpi_rank); assert(tasks[i]->is_migrated_task);
-        tasks[i]->target_mpi_rank = target_rank;
-      }
-      else {
-    	  DBP("offload_action - offloading replicated task\n");
-          #if CHAM_STATS_RECORD
-          _num_tasks_replicated += 1;
-          #endif
-    	  //printf("offload_action - offloading replicated task to %d, is_migrated %d\n", target_rank, tasks[i]->is_migrated_task);
-    	  _num_replicated_local_tasks_outstanding_sends += tasks[i]->replication_ranks.size();
-    	  tasks[i]->num_outstanding_replication_sends = tasks[i]->replication_ranks.size();
-    	  if(!tasks[i]->is_migrated_task)
-    	    _num_replicated_local_tasks_outstanding_compute++; //we'll likely need to compute this on our own
-      }
+        if(!tasks[i]->is_replicated_task) {
+            DBP("offloading_action - offloading migrated task\n");
+            assert(tasks[i]->is_migrated_task);
+            tasks[i]->target_mpi_rank = target_rank;
+        }
+        else {
+    	    DBP("offload_action - offloading replicated task\n");
+          
+#if CHAM_STATS_RECORD
+            _num_tasks_replicated += 1;
+#endif
+            // printf("offload_action - offloading replicated task to %d, is_migrated %d\n", target_rank, tasks[i]->is_migrated_task);
+            _num_replicated_local_tasks_outstanding_sends += tasks[i]->replication_ranks.size();
+            tasks[i]->num_outstanding_replication_sends = tasks[i]->replication_ranks.size();
+            if(!tasks[i]->is_migrated_task)
+                _num_replicated_local_tasks_outstanding_compute++; //we'll likely need to compute this on our own
+        }
     }
 
     // encode buffer
     int32_t buffer_size = 0;
     void *buffer = NULL;
     int num_bytes_sent = 0;
+
 #if CHAM_STATS_RECORD
     double cur_time;
     cur_time = omp_get_wtime();
 #endif
+
+    // encode the tasks before migrating
     buffer = encode_send_buffer(tasks, num_tasks, &buffer_size);
+
 #if CHAM_STATS_RECORD
     cur_time = omp_get_wtime()-cur_time;
     atomic_add_dbl(_time_encode_sum, cur_time);
@@ -1015,11 +1041,10 @@ void offload_action(cham_migratable_task_t **tasks, int32_t num_tasks, int targe
 #endif
 
     double start_time_requests = 0;
+
 #if OFFLOAD_DATA_PACKING_TYPE == 0
-    // RELP("Packing Type: Buffer\n");
     int n_requests = 1;
-#elif OFFLOAD_DATA_PACKING_TYPE == 1
-    // RELP("Packing Type: Zero Copy\n");
+#elif OFFLOAD_DATA_PACKING_TYPE == 1    // zero copy
     int n_requests = 1;
     for(int i_task = 0; i_task < num_tasks; i_task++) {
         for(int tmp_i_arg = 0; tmp_i_arg < tasks[i_task]->arg_num; tmp_i_arg++) {
@@ -1028,34 +1053,37 @@ void offload_action(cham_migratable_task_t **tasks, int32_t num_tasks, int targe
                 n_requests++;
         }
     }
-#elif OFFLOAD_DATA_PACKING_TYPE == 2
-    // RELP("Packing Type: Zero Copy Single Message\n");
+#elif OFFLOAD_DATA_PACKING_TYPE == 2    // zero copy, single message
     int n_requests = 2;
 #endif
 
     // send data to target rank
     DBP("offload_action - sending data to target rank %d with mpi_tag: %d\n", target_rank, tmp_tag);
+
 #if CHAM_STATS_RECORD
     num_bytes_sent += buffer_size;
-    // #if OFFLOAD_DATA_PACKING_TYPE == 0
     _stats_bytes_send_per_message.add_stat_value((double)buffer_size);
-    // #endif
     start_time_requests = cur_time = omp_get_wtime();
 #endif
+
     MPI_Request *requests = new MPI_Request[n_requests];
-    #if MPI_BLOCKING
+
+#if MPI_BLOCKING
     MPI_Send(buffer, buffer_size, MPI_BYTE, target_rank, tmp_tag, chameleon_comm);
-    #else
+#else
     if(use_synchronous_mode)
         MPI_Issend(buffer, buffer_size, MPI_BYTE, target_rank, tmp_tag, chameleon_comm, &requests[0]);
     else
         MPI_Isend(buffer, buffer_size, MPI_BYTE, target_rank, tmp_tag, chameleon_comm, &requests[0]);
-    #endif
+#endif
+
 #if CHAM_STATS_RECORD
     cur_time = omp_get_wtime()-cur_time;
-    #if MPI_BLOCKING
+
+#if MPI_BLOCKING
     add_throughput_send(cur_time, buffer_size);
-    #endif
+#endif
+
 #endif
 
 #if OFFLOAD_DATA_PACKING_TYPE > 0 && CHAM_STATS_RECORD
@@ -1064,9 +1092,11 @@ void offload_action(cham_migratable_task_t **tasks, int32_t num_tasks, int targe
 
 #if OFFLOAD_DATA_PACKING_TYPE == 1
     int cur_req_index = 1;
-#if CHAM_STATS_RECORD
+
+    #if CHAM_STATS_RECORD
     int tmp_bytes_send = 0;
-#endif
+    #endif
+
     for(int i_task = 0; i_task < num_tasks; i_task++) {
         cham_migratable_task_t *task = tasks[i_task];
         for(int i=0; i<task->arg_num; i++) {
@@ -1093,22 +1123,25 @@ void offload_action(cham_migratable_task_t **tasks, int32_t num_tasks, int targe
                         MPI_Isend(task->arg_hst_pointers[i], task->arg_sizes[i], MPI_BYTE, target_rank, tmp_tag, chameleon_comm, &requests[cur_req_index]);
                     #endif
                 }
-#if CHAM_STATS_RECORD
+
+                #if CHAM_STATS_RECORD
                 tmp_bytes_send += task->arg_sizes[i];
                 _stats_bytes_send_per_message.add_stat_value((double)task->arg_sizes[i]);
-#endif
+                #endif
+
                 cur_req_index++;
                 print_arg_info("offload_action - sending argument", task, i);
             }
         }
     }
-#if CHAM_STATS_RECORD
+    #if CHAM_STATS_RECORD
     num_bytes_sent += tmp_bytes_send;
     cur_time = omp_get_wtime()-cur_time;
     #if MPI_BLOCKING
     add_throughput_send(cur_time, tmp_bytes_send);
     #endif
-#endif
+    #endif
+
 #elif OFFLOAD_DATA_PACKING_TYPE == 2
     int tmp_overall_arg_nums = 0;
     for(int i_task = 0; i_task < num_tasks; i_task++) {
@@ -1138,11 +1171,9 @@ void offload_action(cham_migratable_task_t **tasks, int32_t num_tasks, int targe
                 
                 if(is_lit) {
                     ierr = MPI_Get_address(&task->arg_hst_pointers[i], &(disp[tmp_count]));
-                    // assert(ierr==MPI_SUCCESS);
                 }
                 else {
                     ierr = MPI_Get_address(task->arg_hst_pointers[i], &(disp[tmp_count]));
-                    // assert(ierr==MPI_SUCCESS);
                 }
                 tmp_count++;
             }
@@ -1152,12 +1183,14 @@ void offload_action(cham_migratable_task_t **tasks, int32_t num_tasks, int targe
     assert(ierr==MPI_SUCCESS);
     ierr = MPI_Type_commit(&type_mapped_vars);
     assert(ierr==MPI_SUCCESS);
+
 #if CHAM_STATS_RECORD
     int size = 0;
     MPI_Type_size(type_mapped_vars, &size);
     num_bytes_sent += size;
     _stats_bytes_send_per_message.add_stat_value((double)size);
 #endif
+
     #if MPI_BLOCKING
     ierr = MPI_Send(MPI_BOTTOM, 1, type_mapped_vars, target_rank, tmp_tag, chameleon_comm);
     #else
@@ -1167,14 +1200,17 @@ void offload_action(cham_migratable_task_t **tasks, int32_t num_tasks, int targe
       ierr = MPI_Isend(MPI_BOTTOM, 1, type_mapped_vars, target_rank, tmp_tag, chameleon_comm, &requests[1]);
     #endif
     assert(ierr==MPI_SUCCESS);
+
 #if CHAM_STATS_RECORD
     cur_time = omp_get_wtime()-cur_time;
     #if MPI_BLOCKING
     add_throughput_send(cur_time, size);
     #endif
 #endif
+
     ierr = MPI_Type_free(&type_mapped_vars);
     assert(ierr==MPI_SUCCESS);
+
 #endif /* OFFLOAD_DATA_PACKING_TYPE */
 
     for(int i_task = 0; i_task < num_tasks; i_task++) {
@@ -1183,6 +1219,7 @@ void offload_action(cham_migratable_task_t **tasks, int32_t num_tasks, int targe
             _tasks_to_deallocate.push_back(task);
             _map_offloaded_tasks_with_outputs.insert(task->task_id, task);
             DBP("offload_action - inserted task with id %ld and pointer %p into offloaded map with outputs\n", task->task_id, task);
+
             assert(task->num_outstanding_recvbacks>=0);
             task->num_outstanding_recvbacks++;
             DBP("offload_action - increment outstanding recvbacks for task with id %ld new count: %d\n", task->task_id, task->num_outstanding_recvbacks);
@@ -1196,10 +1233,12 @@ void offload_action(cham_migratable_task_t **tasks, int32_t num_tasks, int targe
             #endif
         }
     }
+
     _active_migrations_per_target_rank[target_rank]++;
-    #if MPI_BLOCKING
+
+#if MPI_BLOCKING
     send_handler(buffer, tmp_tag, target_rank, nullptr, 0);
-    #else
+#else
     std::function<void(void*, int, int, cham_migratable_task_t**, int)> cur_handler = send_handler;
     request_manager_send.submitRequests(start_time_requests, tmp_tag, target_rank, n_requests, 
                                 requests,
@@ -1210,7 +1249,8 @@ void offload_action(cham_migratable_task_t **tasks, int32_t num_tasks, int targe
                                 buffer,
                                 tasks,
                                 num_tasks);
-    #endif
+#endif
+
     delete[] requests;
     DBP("offload_action (exit)\n");
 }
@@ -1696,9 +1736,13 @@ void estimate_real_load_diff(int tw_index){
  * Estimate predicted-load difference based on profile-info.
  *
  * @param the idx of current cycle/iteration.
- * @return showing predicted-load info
+ * @return showing predicted-load info. Now, this is just
+ *         useful for the case of 2 ranks
  */
 void estimate_pred_load_diff(int tw_index) {
+    // this estimation runs after the prediction is already active
+    // otherwise, pred-values are zero
+    int iter = tw_index;
     double pr0_load = _predicted_load_info_ranks[0];
     double pr1_load = _predicted_load_info_ranks[1];
     double diff     = 0.0;
@@ -1706,7 +1750,7 @@ void estimate_pred_load_diff(int tw_index) {
         diff = (pr0_load / pr1_load) * 100;
     else
         diff = (pr1_load / pr0_load) * 100;
-    RELP("Iter%d: pred load [R%d, R%d] = [%f, %f] | diff=%f\n", tw_index, 0, 1, pr0_load, pr1_load, diff);
+    RELP("[ESTIMATE_PRED_LOAD_DIFF] Iter%d: pred load [R%d, R%d] = [%f, %f] | diff=%f\n", iter, 0, 1, pr0_load, pr1_load, diff);
 }
 
 
@@ -2043,10 +2087,10 @@ inline void action_task_migration() {
                      	        //       printf("action_task_migratino, active migrations for %d = %d, num_to_migrate = %d, num_tasks_to_activate = %d load rank 0: %d load rank 1: %d\n", r , _active_migrations_per_target_rank[r], num_tasks_to_migrate, tasks_to_activate, _load_info_ranks[0], _load_info_ranks[1]);
                         	       DBP("action_task_migration - activating %d replicated tasks on rank %d\n", tasks_to_activate, r);
                         	       activate_replicated_tasks_on_rank(tasks_to_activate, r);
-                            	       _num_replicated_local_tasks_per_victim[r]-= tasks_to_activate;
-                            	       #if (CHAM_STATS_RECORD)  
-                                       _num_tasks_activated += tasks_to_activate;
-				       #endif
+                            	        _num_replicated_local_tasks_per_victim[r]-= tasks_to_activate;
+                            	        #if (CHAM_STATS_RECORD)  
+                                        _num_tasks_activated += tasks_to_activate;
+				                        #endif
                                        _session_data.offload_triggered = 1;
                                        num_tasks_to_migrate -= tasks_to_activate; //continue with task migration if it makes sense
                                        num_tasks_to_migrate = std::max(0, num_tasks_to_migrate);
@@ -2256,9 +2300,6 @@ inline void action_send_back_stolen_tasks(cham_migratable_task_t *cur_task, Requ
     delete[] requests;
     #endif /* OFFLOAD_DATA_PACKING_TYPE */
 
-    //_num_remote_tasks_outstanding--;
-    //DBP("send_back_stolen_tasks - decrement stolen outstanding count for task %ld new count: %ld\n", cur_task->task_id, _num_remote_tasks_outstanding.load());
-
     #ifdef TRACE
     VT_END_W_CONSTRAINED(event_send_back);
     #endif
@@ -2325,12 +2366,8 @@ inline void action_handle_activate_request(MPI_Status *cur_status_activate) {
 
 inline void action_post_recvback_requests(cham_migratable_task_t *task_entry, int mpi_source, int mpi_tag, RequestManager *request_manager_receive) {
     DBP("action_post_recvback_requests - posting receive requests for task with id %ld\n", task_entry->task_id);
-    //remove from replicated task queue -> corresponds to local task cancellation
-    //if(task_entry->is_replicated_task)
-    //  _replicated_local_tasks.remove(task_entry);
 
     //we can safely receive back as usual
-    
     double start_time_requests, cur_time;
     int num_bytes_received = 0;
     int ierr;
@@ -2544,25 +2581,25 @@ inline void action_handle_recvback_request(MPI_Status *cur_status_receiveBack, R
         assert(task_entry->num_outstanding_recvbacks>=0);
 
         // check if we still need to receive the task data back or replicated task is executed locally already
-        //bool expected = false;
-        //bool desired = true;
+        // bool expected = false;
+        // bool desired = true;
         // DBP("action_handle_recvback_request - performing CAS for task with id %ld, flag %d\n", task_entry->task_id, task_entry->sync_commthread_lock.load());
-        //assert(task_entry->sync_commthread_lock.load()==false);
-        //bool exchanged = task_entry->result_in_progress.compare_exchange_strong(expected, desired);
+        // assert(task_entry->sync_commthread_lock.load()==false);
+        // bool exchanged = task_entry->result_in_progress.compare_exchange_strong(expected, desired);
         bool post_receive = true;
         if(task_entry->is_replicated_task) {
-          //flush sending queue as otherwise race may occur where task has been sent, but is not in replicated_local_task queue
+          // flush sending queue as otherwise race may occur where task has been sent, but is not in replicated_local_task queue
           request_manager_send.progressRequests(0);
           cham_migratable_task_t *task_from_queue = _replicated_local_tasks.pop_task_by_id(task_entry->task_id);
           if(task_from_queue==nullptr) post_receive=false;
         }
-        //assert(exchanged);
+        // assert(exchanged);
         // DBP("action_handle_recvback_request - CAS: expected = %d, desired = %d, exchanged = %d\n", expected, desired, exchanged);
-        //atomic CAS   
+        // atomic CAS   
         double start_time_requests = 0;
         if(post_receive) {
             action_post_recvback_requests(task_entry, cur_status_receiveBack->MPI_SOURCE, cur_status_receiveBack->MPI_TAG, request_manager_receive);
-        }  //CAS
+        }  // CAS
         else // CAS didn't succeed -> we need to receive data into trash buffer
         {
             DBP("Late receive back occured for replicated task, task_id %ld\n", task_entry->task_id);
@@ -2791,7 +2828,6 @@ inline void action_handle_recv_request(MPI_Status *cur_status_receive, RequestMa
 }
 
 inline bool action_task_replication() {
-    //if (chameleon_comm_rank == 1) return false;
 
     if(_comm_thread_load_exchange_happend && _local_tasks.dup_size() >= MIN_LOCAL_TASKS_IN_QUEUE_BEFORE_MIGRATION ) {
     	DBP("action_task_replication - selecting tasks to replicate\n");
@@ -2868,10 +2904,148 @@ inline void action_task_replication_send() {
   }
 }
 
+/**
+ * Action migration with Prediction Callback Tool.
+ *
+ * @param None
+ * @return None
+ */
+void action_pred_migration() {
+    // Check flags for the original migration strategy
+    //  + flag of _comm_thread_load_exchange_happend: 1 after all gather_info collected,
+    //    also means that the monitoring info are arrived, if not we need to wait for the next cycle
+    //  + the amount of tasks in _local_tasks & _replicated_local_tasks >= a threshold
+    //  + _session_data.offload_triggered: must be 0, because 1 means a cycle of migration is done
+    //  
+    // Try a new strategy combing with a callback prediction tool
+    //  + flag of _comm_thread_load_exchange_happend: still remain
+    //  + flag of _check_new_iter_happend: compare with the previous iter
+    //  + _session_data.offload_triggered: still remain
+
+    // For the original migration strategy
+    // if(_comm_thread_load_exchange_happend &&
+    //     _local_tasks.dup_size() + _replicated_local_tasks.dup_size() >= MIN_LOCAL_TASKS_IN_QUEUE_BEFORE_MIGRATION &&
+    //     _session_data.offload_triggered.load() == 0) {
+    
+    // For the pre-migration strategy, combined with the prediction tool
+    // check the current taskwait index
+    int current_taskwait_index = _commthread_time_taskwait_count.load();
+
+    // check the flag _flag_is_new_iteration
+    // RELP("[ACTION_PRED_MIGRATION] check _flag_is_new_iteration=%d !!!\n", _flag_is_new_iteration);
+
+    if (_comm_thread_load_exchange_happend &&
+        _flag_is_new_iteration &&
+        _session_data.offload_triggered.load() == 0){
+        
+        // turn the flag into false immediately, because this action is
+        // just happened once when a new iter starts
+        _flag_is_new_iteration = false;
+
+        // declare the strategy_type
+        int strategy_type;
+        // RELP("[ACTION_PRED_MIGRATION] entered action_pred_migration at iter=%d !!!\n", current_taskwait_index);
+
+// #if CHAMELEON_TOOL_SUPPORT
+//         // if the model is ready, check the pre_load
+//         if(_flag_model_is_trained){
+//             estimate_pred_load_diff(current_taskwait_index);
+//         }
+// #endif
+
+        // reset monitor-values to zero
+        std::fill(_session_data.tasks_to_offload.begin(), _session_data.tasks_to_offload.end(), 0);
+        int32_t num_tasks_local = 0;
+        TYPE_TASK_ID* ids_local;
+        cham_t_migration_tupel_t *migration_tupels = nullptr;
+        int32_t num_tuples = 0;
+
+        // use different atomic for that to avoid to much contention (maybe _num_open_tasks_stolen)
+        // outstanding includes tasks that are currently in execution whereas, open means the tasks in queue only
+        int32_t num_tasks_stolen = _stolen_remote_tasks.dup_size();
+
+        // without other callback-strategies, simply set strategy_type = 0
+        strategy_type = 0;
+        num_tasks_local = _local_tasks.dup_size();
+#if CHAMELEON_TOOL_SUPPORT
+        pair_num_tasks_to_offload(_session_data.tasks_to_offload, _load_info_ranks, _predicted_load_info_ranks,
+                                    num_tasks_local, num_tasks_stolen);
+#else
+        compute_num_tasks_to_offload(_session_data.tasks_to_offload, _load_info_ranks,
+                                    num_tasks_local, num_tasks_stolen);
+#endif
+        // the results are returned to _session_data.tasks_to_offload, arranged by the rank orders
+        //      + ...
+        //      + ...
+
+        // flag to check offloading is done or not
+        bool offload_done = false;
+        double my_current_load = (double) _load_info_ranks[chameleon_comm_rank];
+
+        // because the trategy_type is zero
+        for (int r = 0; r < _session_data.tasks_to_offload.size(); r++){
+            
+            // traverse a list of victims, do this if r is not the current rank
+            if (r != chameleon_comm_rank){
+                // RELP("[CHECKING] _active_migrations_per_target_rank[%d]=%d !!!\n", r,
+                //                  _active_migrations_per_target_rank[r].load());
+
+                // block until no active offload for rank any more
+                if(_active_migrations_per_target_rank[r].load() == 0){
+                    int num_tasks_to_migrate = _session_data.tasks_to_offload[r];
+                    if (num_tasks_to_migrate == 0)
+                        continue;
+                    
+                    int num_tasks = 0;
+                    cham_migratable_task_t **cur_tasks = (cham_migratable_task_t**) malloc(sizeof(cham_migratable_task_t*)*num_tasks_to_migrate);
+                    for (int t = 0; t < num_tasks_to_migrate; t++){
+                        cham_migratable_task_t *task = _local_tasks.pop_front();
+                        if (task){
+                            cur_tasks[num_tasks] = task;
+                            cur_tasks[num_tasks]->is_migrated_task = 1;
+                            num_tasks++;
+                            
+                            // check the limit num_tasks for migrating at once
+                            if (num_tasks >= MAX_TASKS_PER_RANK_TO_MIGRATE_AT_ONCE){
+                                // RELP("num_tasks_count=%d, MAX_TASKS_PER_RANK_TO_MIGRATE_AT_ONCE=%f\n",
+                                //         num_tasks_count, MAX_TASKS_PER_RANK_TO_MIGRATE_AT_ONCE.load());
+                                break;
+                            }
+                        }
+                    }
+
+                    if (num_tasks > 0){
+                        // offload tasks to rank-r seperately
+                        for (int task_i = 0; task_i < num_tasks; task_i++){
+                            offload_tasks_to_rank(&cur_tasks[task_i], 1, r);
+                        }
+
+                        // set the offload_flag is done, but this is non-blocking,
+                        // so we don't know are they yet arrived or not
+                        offload_done = true;
+
+                    } else {
+                        free(cur_tasks);
+                    }
+                }
+            }
+        }
+        
+        // if the flag offload_done = 1, get out the condition of migration
+        if(offload_done) {
+            _session_data.offload_triggered = 1; 
+
+            #if CHAM_STATS_RECORD
+            _num_migration_done++;
+            #endif /* CHAM_STATS_RECORD */  
+        }
+    }
+}
+
 
 void action_communication_progression(int comm_thread) { 
 
-#if ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE>0
+#if ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE>0 || CHAM_PRED_MIGRATION
 
     // if REPL_MODE = 2 or 3, 4, there's request for canceling tasks
     #if CHAM_REPLICATION_MODE>=2
@@ -2989,7 +3163,7 @@ void action_communication_progression(int comm_thread) {
 #if CHAM_STATS_RECORD
         // save last time load exchange happend for current sync cycle
         _session_data.time_last_load_exchange = omp_get_wtime();
-#endif /* CHAM_STATS_RECORD */
+#endif
 
         // Handle exit condition here to avoid that iallgather is posted after iteration finished
         bool exit_true = exit_condition_met(0,1);
@@ -3003,7 +3177,7 @@ void action_communication_progression(int comm_thread) {
             atomic_add_dbl(_time_commthread_active_sum, time_commthread_elapsed);
             _time_commthread_active_count++;
             assert(_num_active_communications_overall.load()==0);
-#endif /* CHAM_STATS_RECORD */
+#endif
 
             assert(_remote_tasks_send_back.empty());
             assert(request_manager_cancel.getNumberOfOutstandingRequests()==0);
@@ -3027,9 +3201,16 @@ void action_communication_progression(int comm_thread) {
 #endif
 
 #if ENABLE_TASK_MIGRATION
-    // check conditions for migrating tasks & migrating them then
+    // check conditions for migrating
+    // tasks & migrating them then
     action_task_migration();
-#endif /* ENABLE_TASK_MIGRATION */
+#endif
+
+#if CHAM_PRED_MIGRATION
+    // check conditions for migrating task,
+    // combining with the prediction tool
+    action_pred_migration();
+#endif
 
 #if CHAM_REPLICATION_MODE>0
     if(!_session_data.has_replicated && _session_data.num_threads_in_tw == _num_threads_active_in_taskwait) {
@@ -3069,7 +3250,7 @@ void action_communication_progression(int comm_thread) {
     MPI_Status cur_status_activate;
     int flag_open_request_activate = 0;
 
-#if ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE>0
+#if ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE>0 || CHAM_PRED_MIGRATION
 
     #if CHAM_STATS_RECORD && SHOW_WARNING_SLOW_COMMUNICATION
     cur_time = omp_get_wtime();
@@ -3123,8 +3304,8 @@ void action_communication_progression(int comm_thread) {
         MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, chameleon_comm_mapped, &flag_open_request_receiveBack, &cur_status_receiveBack);
         #if CHAM_STATS_RECORD && SHOW_WARNING_SLOW_COMMUNICATION
         cur_time = omp_get_wtime()-cur_time;
-        if(cur_time>CHAM_SLOW_COMMUNICATION_THRESHOLD)
-        _num_slow_communication_operations++;
+        if(cur_time > CHAM_SLOW_COMMUNICATION_THRESHOLD)
+            _num_slow_communication_operations++;
         #endif
         if( flag_open_request_receiveBack ) {
             action_handle_recvback_request(&cur_status_receiveBack, &request_manager_receive);
@@ -3154,15 +3335,14 @@ void* comm_thread_action(void* arg) {
     _th_service_actions_created = 1;
     pthread_cond_signal( &_th_service_actions_cond );
     pthread_mutex_unlock( &_th_service_actions_mutex );
-
     DBP("comm_thread_action (enter)\n");
 
 #if CHAM_STATS_RECORD
     _session_data.time_start_comm = omp_get_wtime();
 #endif
 
-    // flag to check taskwait counters
-    int prev_taskwait_counter = 9999;
+    // internal flag for tracking previsous taskwait index
+    int _inter_flag_prev_taskwait_idx = 99999;
 
     while(true) {
         #if THREAD_ACTIVATION
@@ -3171,16 +3351,15 @@ void* comm_thread_action(void* arg) {
             // as only happening in comm thread idle state
             if(!_session_data.flag_thread_sleeping_set) {
                 _session_data.flag_thread_sleeping_set = 1;
+
                 #if CHAM_STATS_RECORD
                 double time_commthread_elapsed = omp_get_wtime()-_session_data.time_start_comm;
                 atomic_add_dbl(_time_commthread_active_sum, time_commthread_elapsed);
                 _time_commthread_active_count++;
                 assert(_num_active_communications_overall.load()==0);
                 #endif /* CHAM_STATS_RECORD */
-                assert(_remote_tasks_send_back.empty());
-                //if(request_manager_cancel.getNumberOfOutstandingRequests()!=0)
-                //  printf("outstanding cancel %d\n",request_manager_cancel.getNumberOfOutstandingRequests());
 
+                assert(_remote_tasks_send_back.empty());
                 assert(request_manager_cancel.getNumberOfOutstandingRequests()==0);
                 
                 // run routine to cleanup all things for current work phase
@@ -3203,9 +3382,11 @@ void* comm_thread_action(void* arg) {
 
         if(_session_data.flag_thread_sleeping_set) {
             DBP("comm_thread_action - woke up again\n");
+
             #if CHAM_STATS_RECORD
             _session_data.time_start_comm = omp_get_wtime();
             #endif
+
             _session_data.flag_thread_sleeping_set = 0;
             tag_counter_send_tasks = 0;
             _session_data.has_replicated = false;
@@ -3214,24 +3395,22 @@ void* comm_thread_action(void* arg) {
             assert(request_manager_cancel.getNumberOfOutstandingRequests()==0);
             _cancelled_task_ids.clear();
             _map_offloaded_tasks_with_outputs.clear();
+
             // reset last received ids
             for(int tmp_i = 0; tmp_i < chameleon_comm_size; tmp_i++)
                 _session_data.tracked_last_req_recv[tmp_i] = -1;
             _session_data.num_threads_in_tw = _num_threads_involved_in_taskwait.load();
         }
-        #endif
+        #endif /* THREAD_ACTIVATION */
 
         // check taskwait counter to trigger training the prediction model
         // happen when a new cycle is started to run
         int current_taskwait_counter = _commthread_time_taskwait_count.load();
-        if (current_taskwait_counter != prev_taskwait_counter){
-            // update the previous taskwait counter
-            prev_taskwait_counter = current_taskwait_counter;
+        if (current_taskwait_counter != _inter_flag_prev_taskwait_idx){
+            // update the flag of storing previous taskwait index
+            _inter_flag_prev_taskwait_idx = current_taskwait_counter;
 
 #if CHAMELEON_TOOL_SUPPORT
-            // get real load and predicted load for checking
-            estimate_pred_load_diff(current_taskwait_counter);
-
             // the trigger for training
             // TODO: more flexible configs here??? maybe ENV_VARS, ...
             if(current_taskwait_counter == 20) {
@@ -3251,6 +3430,9 @@ void* comm_thread_action(void* arg) {
                     // RELP("Comm_thread: The Predicted Load for Iter-%d = %f\n", current_taskwait_counter, pred_val);
                 }
             }
+
+            // get real load and predicted load for checking
+            // estimate_pred_load_diff(current_taskwait_counter);
 #endif
         }
 

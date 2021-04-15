@@ -50,7 +50,6 @@ extern std::atomic<int32_t> _num_remote_tasks_outstanding;
 extern thread_safe_task_list_t _replicated_local_tasks;
 extern std::atomic<int32_t> _num_replicated_local_tasks_outstanding_send;
 extern std::atomic<int32_t> _num_replicated_local_tasks_outstanding_compute;
-
 extern std::vector<int> _num_replicated_local_tasks_per_victim;
 
 extern thread_safe_task_list_t _replicated_remote_tasks;
@@ -80,7 +79,7 @@ extern std::atomic<int32_t> _outstanding_jobs_sum;
 // ====== Info about real load that is open or is being processed ======
 extern std::vector<int32_t> _load_info_ranks;
 extern std::vector<double>  _list_real_load;
-extern std::vector<double> _total_load_info_ranks; // load after a finished iter
+extern std::vector<double> _total_load_info_ranks; // load after an iter is finished
 
 // ====== Info about predicted load by the tool that is being processed ======
 extern std::vector<double> _list_predicted_load;
@@ -88,6 +87,8 @@ extern std::vector<double> _predicted_load_info_ranks;
 
 // ====== Info about the number of taskwait count being processed ======
 extern std::atomic<int> _commthread_time_taskwait_count;
+extern int _global_flag_prev_taskwait_idx;
+extern bool _flag_is_new_iteration;
 
 // list that holds task ids (created at the current rank) that are not finsihed yet
 extern thread_safe_list_t<TYPE_TASK_ID> _unfinished_locally_created_tasks;

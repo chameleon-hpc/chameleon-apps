@@ -388,6 +388,7 @@ double get_core_freq(int core_id){
 	return freq;
 }
 
+
 /**
  * Printing tensor values in Torch-CXX.
  *
@@ -471,7 +472,7 @@ void normalize_ground_truth(std::vector<float> &norm_ground_output)
  * Normalizing the features_input for training with Torch
  *
  * @param tasklist_ref, result: a ref to the tasklist_ref & a 2D vector
-        for saving the result.
+ *        for saving the result.
  */
 void normalize_input(prof_task_list_t& tasklist_ref, std::vector<std::vector<float>> result)
 {
@@ -515,9 +516,8 @@ void normalize_input(prof_task_list_t& tasklist_ref, std::vector<std::vector<flo
 /**
  * Gathering profiled-data for training with mlpack.
  *
- * @param tasklist_ref: a ref to the list of profiled tasks.
-        But currently work for the runtime list, no need arguments
-        of each task.
+ * @param tasklist_ref: a ref to the list of profiled tasks. But currently
+ *        work for the runtime list, no need arguments of each task.
  * @return a dataset matrix
  */
 bool gather_training_data(prof_task_list_t& tasklist_ref, int num_input_points, int num_iters)

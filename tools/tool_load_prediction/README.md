@@ -1,54 +1,49 @@
-## Chameleon Tool
-This is a tool for predicting task-runtime with an online trained model. The model is currently based on the argument sizes of each task and the CPU core frequency. The working flow is shown as follow:
-<p align="center">
-  <img src="./figures/working_flow.png" alt="The working flow of the prediction model" width="500">
+## Chameleon Prediction Tool
+This is a callback tool for predicting task-runtime with an online/offline trained model. Depending on each kind of application, we select the features for the model. For example, the current use-case is iterative simulation, named Sam(oa)2, the input features could be boundary-sizes per task, or list of boundary-sizes based on execution oders per iteration, or simply the previous points of load as time progress. The working flow of Chameleon and the tool, for example, as follow:
+<p align="left">
+  <img src="./figures/cham-tool-workflow.png" alt="The working flow of the prediction model" width="700">
 </p>
 
+## Dependencies
+At the current status, there're 2 dependencies:
+* Pytorch C++ (https://pytorch.org/cppdocs/installing.html)
+  * Don't need to install, just download and point to where is it at the compiling phase with the tool.
+  * E.g., as the sample compile-script in build/
+* Mlpack C++ (https://www.mlpack.org/getstarted.html)
+  * Need to install with its dependencies (Armadillo, Boost, ensmallen)
+  * Could follow here https://www.mlpack.org/doc/mlpack-3.4.2/doxygen/build.html
+
 ## Package organization
-The code is organized as follow:
-* build/: 
-* figures/:
-* python_utils/:
-* src/:
+The code is simply organized with its utils as follow:
+* build/: a sample script to link and build the tool with Chameleon. TODO: need to adapt dependencies at your side.
+* chameleon_patch/: simple the src-code of the Chameleon lib (latest version) with some changes to fit the prediction tool. To avoid hurting the original version of Chameleon, so leave them here temporarily. Note: need to replace them with the original one when we compile.
+* mlpack_utils/: some examples with mlpack library to build the regression models.
+* python_utils/: some examples with scikit-learn/mlpack lib in Python, to build and test the regression models.
 
 ## How it works
-As the principle of Chameleon lib, there is an additional thread for monitoring and scheduling all tasks with the strategy of work-offloading. This callback tool is loaded by the Cham-communication thread. So, three stages would be intefered by this callback tool:
-*   creating_tasks(): the callback of creating tasks would collect data
-*   execute_tasks(): after K tasks are done, this means that the prediction module would be called for training.
-*   After the model is trained, the remaining tasks from the (K+1) task could be predicted the runtime based on the trained model.
+As the diagram above, the tool works as the plugin of Chameleon lib (sounds like the event-based working flow). When we need a callback event, we need to define it, determine when it's called and what should it return back to the chameleon-lib side or not. Therefore, it could be managed as:
+* Define the callback event associated with its function (action).
+* When it's called, should control who calls it (comm_thread or execution threads).
+* What should it return back to the cham-lib side.
+
+## Compiling the tool
+For example, could follow the sample compile-script in build/ folder, and need adapt the dependencies that are declared in CMakeLists.txt (at the src/ folder).
 
 
-## Prerequisites
-*   Adapt the path of this callback-tool shared-lib file (libtool.so). The tool would be loaded in the src `~/chameleon/src/chameleon_tools.cpp`,
-```C
-  char * cham_tool_path = getenv("CHAM_TOOL_DIR");
-  if (cham_tool_path != NULL){
-        DBP("Found CHAM_TOOL at %s\n", cham_tool_path);
-  } else {
-        fprintf(stderr, "Error: couldn't find the tool!\n");
-        exit(EXIT_FAILURE);
-  }  
-  void *handle = dlopen(cham_tool_path, RTLD_LAZY|RTLD_LOCAL);
-```
-*   So, we could use an env-variable to adapt at the compiling step. Set CHAM_TOOL_DIR=`".../libtool.so"`
-*  To compile the tool, we use CMake (CMakeLists.txt in more detail). Please rememeber to export ENV for Chameleon lib and Pytorch-C++ lib-folder.
-    *   For Pytorch-C++, download here: https://pytorch.org/get-started/locally/. The version could be for Linux/LibTorch/C++, and with or without CUDA.
-    *   Specify the path to CMake for compiling the tool (e.g., like the script in `./build/cmake-script.sh`).
-
-## Compiling & Integrating with Chameleon
-If everything is fine as Prerequisites and `cmake-script.sh`, we could compile the tool by running the script.
-``` Bash
-# if the current location at ./build
-source cmake-script.sh
-# or
-./cmake-script.sh
-```
+## Compiling Chameleon & Linking with the tool
+There could be a sample script to compile Chameleon with the callback tools (to be updated). Btw, there're some steps:
+* Copy and replace the original version of Chameleon src-code with the files in chameleon_patch/, could use another separate folder quickly.
+* Loading dependencies: libffi, hwloc, and the corresponding compiler (e.g., Intel).
+* Set env-flags for Chameleon tool:
+  * CHAMELEON_TOOL=1
+  * CHAMELEON_TOOL_LIBRARIES=/path/to/the-compiled-tool (.so)
+* Regarding the Chameleon-lib internal flags (as migration, replication modes), please set:
+  * -DENABLE_COMM_THREAD=1 -DENABLE_TASK_MIGRATION=0 -DCHAM_REPLICATION_MODE=0 -DCHAMELEON_TOOL_SUPPORT
+  * A new variable is CHAM_PRED_MIGRATION (as another mode of migration), it should be turned into 1, e.g., -DCHAM_PRED_MIGRATION=1
+* If everything is fine, then compile Chameleon.
 
 ## Test the tool & Chameleon
-There are examples in ../examples/ that we could test the tool. Included some config-scripts for compiling and submitting jobs on SuperMUC-NG.
+Currently, the testcase is samoa-osc (the aderdg-opt version). TODO: merge the example of mxm.
 
-## Test with Samoa
-TODO
-
-## Evaluate the overhead and accuracy
-TODO
+## Evaluate the prediction tool
+TODO: to be updated.

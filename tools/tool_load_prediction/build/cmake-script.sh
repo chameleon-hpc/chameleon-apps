@@ -8,6 +8,7 @@ rm -r CMakeCache.txt CMakeFiles cmake_install.cmake libtool.so  Makefile
 module use ~/.modules
 module load chamtool_commthread
 module load libffi-3.3
+module load mlpack-3.4.2
 
 # export itac
 # export INCLUDE=/lrz/sys/intel/studio2019_u5/itac/2019.5.041/include:$INCLUDE
