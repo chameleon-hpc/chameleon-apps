@@ -5,10 +5,11 @@ This is a callback tool for predicting task-runtime with an online/offline train
 </p>
 
 ## Dependencies
-At the current status, there're 2 dependencies:
+At the current status, there're 2 options for machine-learning librabies:
 * Pytorch C++ (https://pytorch.org/cppdocs/installing.html)
   * Don't need to install, just download and point to where is it at when compiling the tool.
   * E.g., as the sample compile-script in build/
+  * Temporarily, I prefer mlpack c++ below, and turn this off.
 * Mlpack C++ (https://www.mlpack.org/getstarted.html)
   * Need to install it with the dependencies (Armadillo, Boost, ensmallen)
   * Could follow here https://www.mlpack.org/doc/mlpack-3.4.2/doxygen/build.html
