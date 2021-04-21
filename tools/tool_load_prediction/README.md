@@ -45,4 +45,7 @@ There could be a sample script to compile Chameleon with the callback tools (to 
 Currently, the testcase is samoa-osc (the aderdg-opt version). TODO: merge the example of mxm.
 
 ## Evaluate the prediction tool
-TODO: to be updated.
+The current usecase is Samoa-ADERDG-OPT (https://gitlab.lrz.de/samoa/samoa/-/tree/ADER-DG-opt) with Oscillating-Lake scenario. The following test was performed on CoolMUC2 (LRZ), 16 nodes, 2 ranks per node, 14 threads per rank. The line charts show the comparison between real-load and predicted-load by the tool. Note: the simulation was running with 100 time-steps, i.e., R8 to R11 are shown below, the results of other ranks could find in /python_utils/figures/.
+<p align="left">
+  <img src="./figures/osc_samoa_pred_load.png" alt="Predicted load with real load" width="700">
+</p>

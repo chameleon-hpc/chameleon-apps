@@ -485,18 +485,15 @@ int32_t chameleon_determine_base_addresses(void * main_ptr) {
     int rc;
     link_map * map = (link_map *)malloc(1000*sizeof(link_map));
     void *start_ptr = (void*)map;
+
     // struct link_map map;
     rc = dladdr1(main_ptr, &info, (void**)&map, RTLD_DL_LINKMAP);
     // printf("main dli_fname=%s; dli_fbase=%p\n", info.dli_fname, info.dli_fbase);
+
     chameleon_set_image_base_address(99, (intptr_t)info.dli_fbase);    
     // TODO: keep it simply for now and assume that target function is in main binary
     // If it is necessary to apply different behavior each loaded library has to be covered and analyzed
 
-    // link_map * cur_entry = &map[0];
-    // while(cur_entry) {
-    //     printf("l_name = %s; l_addr=%ld; l_ld=%p\n", cur_entry->l_name, cur_entry->l_addr, (void*)cur_entry->l_ld);
-    //     cur_entry = cur_entry->l_next;
-    // }
     free(start_ptr);
     return CHAM_SUCCESS;
 }
@@ -551,7 +548,7 @@ int32_t chameleon_taskyield() {
  * _flag_dtw_active into 1 if it is active.
  */
 void dtw_startup() {
-
+    // if the dtw_flag is active, break the function
     if(_flag_dtw_active)
         return;
     
@@ -599,7 +596,6 @@ void dtw_startup() {
         _flag_is_new_iteration = true;
         _global_flag_prev_taskwait_idx = current_taskwait_index;
     }
-
 #else
     // need to set flags to ensure that exit condition is working with deactivated
     // comm thread and migration

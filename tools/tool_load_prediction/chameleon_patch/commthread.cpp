@@ -543,7 +543,8 @@ static void receive_handler_data(void* buffer, int tag, int source, cham_migrata
             free_migratable_task(task, 1);
             _num_replicated_remote_tasks_outstanding--;
             _num_remote_tasks_outstanding--;
-            DBP("receive_handler_data - late cancel, decrement stolen outstanding for task id: %d  new count %d\n", task->task_id, _num_remote_tasks_outstanding.load());
+            DBP("receive_handler_data - late cancel, decrement stolen outstanding for task id: %d  new count %d\n",
+                                                            task->task_id, _num_remote_tasks_outstanding.load());
             DBP("receive_handler_data - conducted late cancel for task id: %d\n", task->task_id);
 
             #if CHAM_STATS_RECORD
@@ -810,10 +811,9 @@ static void receive_back_handler(void* buffer, int tag, int source, cham_migrata
                 memcpy(task_entry->arg_hst_pointers[i], cur_ptr, task_entry->arg_sizes[i]);
                 cur_ptr += task_entry->arg_sizes[i];
             }
-       }
-       free(buffer);   
-       #endif
-        //_num_offloaded_tasks_outstanding--;
+        }
+        free(buffer);   
+        #endif
 
         // mark locally created task finished
         #if CHAMELEON_ENABLE_FINISHED_TASK_TRACKING
@@ -896,12 +896,9 @@ void cancel_offloaded_task(cham_migratable_task_t *task) {
     task->is_cancelled = 1;
     // we have sent the task already
     if(task->num_outstanding_recvbacks) {
-      //if(task->target_mpi_rank>=0) {
-      //  cancel_offloaded_task_on_rank(task, task->target_mpi_rank);
-      //}
-      for( auto rank : task->replication_ranks ) {
-        cancel_offloaded_task_on_rank(task, rank);
-      }
+        for( auto rank : task->replication_ranks ) {
+            cancel_offloaded_task_on_rank(task, rank);
+        }
     }
 }
 
@@ -3006,19 +3003,22 @@ void action_pred_migration() {
                             num_tasks++;
                             
                             // check the limit num_tasks for migrating at once
-                            if (num_tasks >= MAX_TASKS_PER_RANK_TO_MIGRATE_AT_ONCE){
-                                // RELP("num_tasks_count=%d, MAX_TASKS_PER_RANK_TO_MIGRATE_AT_ONCE=%f\n",
-                                //         num_tasks_count, MAX_TASKS_PER_RANK_TO_MIGRATE_AT_ONCE.load());
-                                break;
-                            }
+                            // if (num_tasks >= MAX_TASKS_PER_RANK_TO_MIGRATE_AT_ONCE){
+                            //     RELP("num_tasks_count=%d, MAX_TASKS_PER_RANK_TO_MIGRATE_AT_ONCE=%f\n",
+                            //             num_tasks_count, MAX_TASKS_PER_RANK_TO_MIGRATE_AT_ONCE.load());
+                            //     break;
+                            // }
                         }
                     }
 
                     if (num_tasks > 0){
                         // offload tasks to rank-r seperately
-                        for (int task_i = 0; task_i < num_tasks; task_i++){
-                            offload_tasks_to_rank(&cur_tasks[task_i], 1, r);
-                        }
+                        // for (int task_i = 0; task_i < num_tasks; task_i++){
+                        //     offload_tasks_to_rank(&cur_tasks[task_i], 1, r);
+                        // }
+
+                        // offload an array of tasks to rank-r
+                        offload_tasks_to_rank(&cur_tasks[0], num_tasks, r);
 
                         // set the offload_flag is done, but this is non-blocking,
                         // so we don't know are they yet arrived or not
@@ -3428,6 +3428,12 @@ void* comm_thread_action(void* arg) {
                     if (cur_tw_idx < MAX_EST_NUM_ITERS)
                         _list_predicted_load[cur_tw_idx] = pred_val;
                     // RELP("Comm_thread: The Predicted Load for Iter-%d = %f\n", current_taskwait_counter, pred_val);
+
+                    // update the pred-value for the statistic_info at chameleon-size
+                    // this value is updated every cycle if available, otherwise it's 0.0
+                    //      + just 1 comm_thread here, so it's safe to update the value
+                    atomic_add_dbl(_time_task_execution_pred_sum, pred_val);
+                    _time_task_execution_pred_count++;
                 }
             }
 

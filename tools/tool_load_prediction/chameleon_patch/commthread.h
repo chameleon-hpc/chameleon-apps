@@ -10,6 +10,13 @@
 #include "chameleon_tools.h"
 #include "request_manager.h"
 
+
+/* This constant depends on the settings of Sam(oa)2 before execution,
+ * e.g.,  running osc-aderdg-opt samoa with the defined num-time-steps = 50,
+ * then the num of simulation time-steps is 50 * 2 = 100.
+ * This could be safe here as the minimun one is 100, could be set at compiling
+ * with the env-variable. 
+ */
 #ifndef MAX_EST_NUM_ITERS
 #define MAX_EST_NUM_ITERS 100
 #endif
@@ -176,7 +183,7 @@ class chameleon_comm_thread_session_data_t {
 
     // =============== Constructor
     chameleon_comm_thread_session_data_t() {
-        
+        // do nothing
     }
 };
 

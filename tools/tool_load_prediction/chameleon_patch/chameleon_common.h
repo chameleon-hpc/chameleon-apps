@@ -153,6 +153,27 @@
 //#define REPLICATION_PRIORITIZE_MIGRATED 2 // migrated tasks have high priority
 #endif
 
+/* 
+ * This constant depends on the settings of Sam(oa)2 before execution,
+ * e.g.,  testing on my laptop (2 ranks, 3 threads/rank), samoa-num-sections=16
+ * then, the number of tasks per rank in total = 16 * 3 = 48 tasks/rank.
+ * This should be set more precisely at compiling-phase with the env-var.  
+ */
+#ifndef MAX_TASKS_PER_RANK
+#define MAX_TASKS_PER_RANK 48
+#endif
+
+/* 
+ * This constant depends on the settings of Sam(oa)2 before execution,
+ * e.g.,  running osc-aderdg-opt samoa with the defined num-time-steps = 50,
+ * then the num of simulation time-steps is 50 * 2 = 100.
+ * This could be safe here as the minimun one is 100, could be set at compiling
+ * with the env-variable. 
+ */
+#ifndef MAX_EST_NUM_ITERS
+#define MAX_EST_NUM_ITERS 100
+#endif
+
 #if CHAMELEON_TOOL_SUPPORT
 #include "chameleon_tools.h"
 #endif

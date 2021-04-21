@@ -7,19 +7,16 @@ project(pred_model_tool)
 # options for compiling with ITAC tracer
 option(COMP_TRACE_ITAC "Enable tracing with Intel Trace Analyzer " off)
 
-# include Chameleon
-set(CHAMELEON_LIB, "/dss/dsshome1/0A/di49mew/chameleon_tool_dev/install/chamtool_commthread/lib")
-set(CHAMELEON_INC, "/dss/dsshome1/0A/di49mew/chameleon_tool_dev/install/chamtool_commthread/include")
-include_directories(${CHAMELEON_INC})
+# require Chameleon-lib, already loaded by module
+# so, don't need to indicate it here
 
-# include MPI lib
+# require MPI_lib
+# used mpiicc/mpiicpc to compile, so cmake could find
 find_package(MPI REQUIRED)
-include_directories(${MPI_INCLUDE_PATH})
 set(MPI_CXX_LINK_FLAGS "-std=c++17 -lstdc++ -fopenmp -lm -lchameleon -L${CHAMELEON_LIB}")
 
 # link mlpack, armadillo, boost_serialization
 find_package(MLPACK REQUIRED)
-include_directories(${MLPACK_INCLUDE_PATH})
 set(MLPACK_FLAGS "-larmadillo -lboost_serialization -lmlpack")
 
 # include VTune if the flag is on

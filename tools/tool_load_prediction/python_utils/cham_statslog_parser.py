@@ -55,6 +55,36 @@ def parse_stats_iter_runtime(filename, num_ranks):
     return data_per_rank
 
 
+"""Read log-file and parse predicted_load per iter
+
+As the layout of data for storing predicted_load per rank. We define
+pred_load_list =    [ [r0_i0_predt, r0_i1_predt, ..., r0_iK_predt],
+                      [...          ...               ...        ],
+                      [rN_i0_predt, rN_i1_predt, ..., rN_iK_predt] ]
+"""
+def parse_predicted_load(filename, num_ranks):
+    # open the logfile
+    file = open(filename, 'r')
+
+    # for storing values
+    preddata_per_rank = []
+    for i in range(num_ranks):
+        preddata_per_rank.append([])
+
+    # getting total_load/iter
+    for line in file:
+        # just get the line with the content
+        if "_time_task_execution_pred_sum" in line:
+            data_per_line = line.split("\t")
+            get_rank = (data_per_line[0]).split(" ")[1]
+            rank = int(re.findall(r'\d+', get_rank)[0])
+            pred_runtime = float(data_per_line[3])
+            preddata_per_rank[rank].append(pred_runtime)
+
+    # return the result
+    return preddata_per_rank
+
+
 """Read log-file and parse load per rank in detail
 
 As the layout of data for storing stats-data per rank. We define 3 lists
@@ -108,6 +138,143 @@ def parse_stats_load_indetail(filename, num_ranks):
 
     # return the result
     return local_load_list, stole_load_list, repli_load_list
+
+
+"""Estimate loab-imbalance and num-tasks should be migrated
+
+Input is a list of runtime-data per rank. Use them per iter
+to calculate and estimate the load-difference. Just work for the
+chameleon baseline without migration/replication.
+"""
+def estimate_appro_mig_tasks_for_lb(stats_data, num_tasks_per_rank):
+    # get num iters by the len of 1st-rank data
+    num_iters = len(stats_data[0])
+    num_ranks = len(stats_data)
+
+    # create a list for the return-values
+    ret_arr = []
+    
+    # traverse iter by iter data per rank
+    for i in range(num_iters):
+        # a np-arr for storing load per rank
+        load_per_rank_arr = np.arange(num_ranks, dtype=float)
+
+        # for printing the vals
+        statement_pr = "Iter-" + str(i) + ": "
+
+        # get load of all ranks for the iter-i
+        for r in range(num_ranks):
+            rank_data = stats_data[r] # at the data of rank-r
+            load_per_rank_arr[r] = rank_data[i] # at iter-i
+
+            # for printing values
+            formated_val = float("{:.3f}".format(rank_data[i]))
+            statement_pr += str(formated_val) + "\t"
+        
+        # sort the load_per_rank_arr by load
+        s_load_arr = sorted((e, i) for i, e in enumerate(load_per_rank_arr))
+
+        # pair ranks and estimate lb-load
+        est_lb_load_arr = []
+        n = int(num_ranks / 2)
+        for j in range(n):
+            R_vic_idx = (s_load_arr[j])[1]
+            R_src_idx = (s_load_arr[num_ranks - 1 - j])[1]
+            L_vic = (s_load_arr[j])[0]
+            L_src = (s_load_arr[num_ranks - 1 - j])[0]
+            L_dif = L_src - L_vic
+            l_1_task_src = L_src / num_tasks_per_rank
+            re_num_mig_tasks = int((L_dif / l_1_task_src) / 2)
+            L_mig_tas = re_num_mig_tasks * l_1_task_src
+            L_vic_new = L_vic + L_mig_tas
+            L_src_new = L_src - L_mig_tas
+
+            # put all together into a tuple
+            tmp_tuple = (R_src_idx, R_vic_idx, re_num_mig_tasks, L_src_new, L_vic_new)
+            est_lb_load_arr.append(tmp_tuple)
+
+        # put them to the ret_arr
+        ret_arr.append(est_lb_load_arr)
+        
+        # print to check the load values per iter
+        # print(statement_pr)
+    # print(ret_arr)
+
+    return ret_arr
+
+
+"""Plot predicted lb-load by iters
+
+Input is a list of pred-lb load per rank per iter. Use them to plot
+a stack-bar chart for easily comparing the pred-load after 1-phase-lb.
+"""
+def plot_pred_lb_by_iters(est_lb_arr, output_folder):
+    # for the chart information
+    iter_idx = 0
+    plt.xlabel("Rank")
+    plt.ylabel("Total_Load (in seconds)")
+    plt.title("Pred-Load LB in detail by ranks [Iter-" + str(iter_idx) + "]")
+
+    # for x_index
+    num_ranks = 32
+    x_indices = np.arange(num_ranks)
+
+    # traverse the profile-data & plot
+    pred_lb_arr = np.arange(num_ranks, dtype=float)
+    iter_data = est_lb_arr[iter_idx]
+    n = int(num_ranks / 2)
+    for i in range(n):
+        tmp_tuple = iter_data[i]
+        src_rank = tmp_tuple[0]
+        vic_rank = tmp_tuple[1]
+        p_load_src = tmp_tuple[3]
+        p_load_vic = tmp_tuple[4]
+
+        # put lb-value to the arr
+        pred_lb_arr[src_rank] = p_load_src
+        pred_lb_arr[vic_rank] = p_load_vic
+
+    # plot the chart
+    
+    # plt.bar(x_indices, np.sort(pred_lb_arr))
+    plt.bar(x_indices, pred_lb_arr)
+    
+    plt.grid(True)
+    # plt.legend(loc='best')
+    # plt.show()
+
+    # save the figure
+    fig_filename = "pred_lb_iter" + str(iter_idx) + "_" + str(num_ranks) + "_ranks_from_chamstats_logs" + ".pdf"
+    plt.savefig(os.path.join(output_folder, fig_filename), bbox_inches='tight')
+
+
+"""Plot predicted-load by ranks
+
+Input is a list of pred-load-data per rank. Use them to plot
+a line chart about real-load and predicted load.
+"""
+def plot_pred_load_by_ranks(real_load_arr, pred_load_arr, s_rank, e_rank, output_folder):
+
+    # configue sub-figures
+    num_ranks = 4 # len(real_load_arr)
+    fig, axs = plt.subplots(num_ranks, sharex=True)
+    fig.suptitle('Predicted Load per Rank by Iters')
+
+    # plot multiple sub-figs
+    x_indices = np.arange(len(real_load_arr[0]))
+    for i in range(num_ranks):
+        realload_arr = np.array(real_load_arr[i+s_rank])
+        predload_arr = np.array(pred_load_arr[i+s_rank])
+        axs[i].set_ylabel("R" + str(i+s_rank))
+        axs[i].plot(x_indices, realload_arr, label="real-load")
+        axs[i].plot(x_indices, predload_arr, label="pred-load")
+        if i == 0:
+            axs[i].legend(loc='best')
+        axs[i].grid(True)
+    
+    # plt.show()
+    fig_filename = "pred_load_from_R" + str(s_rank) + "_to_R" + str(e_rank) + ".pdf"
+    plt.savefig(os.path.join(output_folder, fig_filename), bbox_inches='tight')
 
 
 """Plot runtime-by-iters
@@ -298,6 +465,7 @@ def display_stats_data(stats_data, num_ranks):
             statement += str(formated_val) + "\t"
         print(statement)
 
+
 """Display the difference of load & num_mig_tasks recommendation
 
 Input is num of ranks in the dataset, the raw stats_data
@@ -332,36 +500,47 @@ if __name__ == "__main__":
     # num ranks
     num_ranks = int(sys.argv[2])
 
-    # read and parse values from the input
-    stats_data = parse_stats_iter_runtime(cham_stats_file, num_ranks)
+    # out folder for plotting
+    out_folder = "./figures/"
 
-    # display stats_data
-    # display_stats_data(stats_data, num_ranks)
+    """ read and parse values from the input """
+    total_load_arr = parse_stats_iter_runtime(cham_stats_file, num_ranks)
+
+    """ display stats_data """
+    # display_stats_data(total_load_arr, num_ranks)
     
-    # display the diff of load & recommendation
-    # display_load_diff_recomm(stats_data, num_ranks)
+    """ display the diff of load & recommendation """
+    # display_load_diff_recomm(total_load_arr, num_ranks)
 
-    # generate dataset by chain-on-chain runtimes per iter
+    """ generate dataset by chain-on-chain runtimes per iter (for a single rank, default is rank 0) """
     if (len(sys.argv) <= 3):
         rank = 0
     else:
         rank = int(sys.argv[3])
     # num_features = 6
-    # cc_runtime_dataset_generator(stats_data, rank, num_features)
+    # cc_runtime_dataset_generator(total_load_arr, rank, num_features)
     
-    # plot the load-data by stacked-rank per iter
-    # stacked_rank_folder = "./figures/"
-    # plot_runtime_by_iters(stats_data, stacked_rank_folder)
+    """ plot the load-data by stacked-rank per iter """
+    # plot_runtime_by_iters(total_load_arr, out_folder)
 
-    # read and parse values from the input in detail
-    loc_load_list,sto_load_list,rep_load_list = parse_stats_load_indetail(cham_stats_file, num_ranks)
+    """ estimate num tasks that should be migrated for load-balancing """
+    total_tasks_per_rank = 208
+    # lb_est_load_arr = estimate_appro_mig_tasks_for_lb(total_load_arr, total_tasks_per_rank)
+    # plot_pred_lb_by_iters(lb_est_load_arr, out_folder)
 
-    # plot the load-diff by stacked-load types in a single iter
-    stacked_loadtypes_folder = "./figures/"
-    iter_idx = 199
-    plot_stackedload_by_ranks(loc_load_list, sto_load_list, rep_load_list, iter_idx, stacked_loadtypes_folder)
+    """ read and check the predicted load per iter values """
+    pred_load_arr = parse_predicted_load(cham_stats_file, num_ranks)
+    s_rank, e_rank = 28, 31
+    plot_pred_load_by_ranks(total_load_arr, pred_load_arr, s_rank, e_rank, out_folder)
 
-    # plot a single-rank runtime-list
+    """ read and parse values from the input in detail """
+    # loc_load_list,sto_load_list,rep_load_list = parse_stats_load_indetail(cham_stats_file, num_ranks)
+
+    """ plot the load-diff by stacked-load types in a single iter """
+    # iter_idx = 0
+    # plot_stackedload_by_ranks(loc_load_list, sto_load_list, rep_load_list, iter_idx, out_folder)
+
+    """ plot a single-rank runtime-list """
     # rank = 25
     # rank_data = stats_data[rank]
     # runtime_data = rank_data[1]

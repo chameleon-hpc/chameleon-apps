@@ -54,6 +54,11 @@ on_cham_t_callback_task_create(cham_migratable_task_t * task, std::vector<int64_
     cur_task->que_time          = queued_time;
     cur_task->code_ptr          = codeptr_ra;
 
+    // try to get cpu-core frequency here
+    int core_id = sched_getcpu();
+    double freq = get_core_freq(core_id);
+    cur_task->core_freq = freq;
+
     // get arg_sizes
     cur_task->args_list.resize(num_args);
     for (int i = 0; i < num_args; i++){
@@ -178,9 +183,9 @@ on_cham_t_callback_valid_prediction_model(int32_t taskwait_counter)
     for (int i = s_point; i < e_point; i++){
         input_vec[i-s_point] = double(profiled_task_list.avg_load_list[i]);
     }
-    std::cout << "[CHAM_TOOL] R" << rank << " valid_pred_model: input_vec from iter-"
-              << s_point << " to iter-" << e_point-1 << std::endl;
-    std::cout << input_vec.t();
+    // std::cout << "[CHAM_TOOL] R" << rank << " valid_pred_model: input_vec from iter-"
+    //           << s_point << " to iter-" << e_point-1 << std::endl;
+    // std::cout << input_vec.t();
 
     // call the pred_model
     arma::mat x_mat(1, num_features);

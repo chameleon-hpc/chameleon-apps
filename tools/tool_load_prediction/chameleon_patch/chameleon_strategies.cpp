@@ -221,8 +221,8 @@ void pair_num_tasks_to_offload(std::vector<int32_t>& tasks_to_offload_per_rank,
             //                            vic_pos, vic_rank, vic_pred_load, load_diff_percentage);
 
             // check the absolute condition with the constant of diff_load to migrate tasks
-            RELP("[PAIR_TASKS_OFFLOAD] load_diff between src=R%d & vic=R%d is %.3f %\n",
-                                    chameleon_comm_rank, vic_rank, load_diff_percentage);
+            // RELP("[PAIR_TASKS_OFFLOAD] load_diff between src=R%d & vic=R%d is %.3f %\n",
+            //                         chameleon_comm_rank, vic_rank, load_diff_percentage);
             if (load_diff_ratio < MIN_LOAD_DIFF_PERCENTAGE_TO_MIGRATION)
                 return;
 
@@ -233,7 +233,8 @@ void pair_num_tasks_to_offload(std::vector<int32_t>& tasks_to_offload_per_rank,
                 //       + currently, this is being checked on a note with 2 ranks, 3 threads / rank
                 //       + the use-case: samoa-osc (aderdg-opt version), section=16, num time-steps = 20/25
                 //       + so, the total amount of tasks per rank is 48, total num iters <= 100
-                double avg_load_per_task_on_victim = vic_pred_load / 48;
+                const int max_tasks_per_rank = MAX_TASKS_PER_RANK;
+                double avg_load_per_task_on_victim = vic_pred_load / max_tasks_per_rank;
 
                 // from the load_diff, compute the max number of tasks could be migrated at the victim side
                 int max_num_tasks = (int)(load_diff / avg_load_per_task_on_victim);
@@ -241,18 +242,20 @@ void pair_num_tasks_to_offload(std::vector<int32_t>& tasks_to_offload_per_rank,
                 // set a threshold, an approriate number of tasks should be migrated
                 //      + currently, try to set 70%
                 //      + TODO: which % should be good?
-                int app_num_tasks = (int)(max_num_tasks * 0.7);
+                int app_num_tasks = (int)(max_num_tasks * 0.6);
+                if (app_num_tasks >= max_tasks_per_rank)
+                    app_num_tasks = 1;
 
                 // check the estimation
-                RELP("[PAIR_TASKS_OFFLOAD] src(R%d) should migrate %d tasks to victim(R%d)\n",
-                                            chameleon_comm_rank, app_num_tasks, vic_rank);
+                RELP("[PAIR_TASKS_OFFLOAD] src(R%d) [max_num_tasks_to_offload=%d] should migrate %d tasks to victim(R%d)\n",
+                                            max_num_tasks, chameleon_comm_rank, app_num_tasks, vic_rank);
 
                 // prevent the num_tasks < 1
                 if (app_num_tasks < 1)
                     app_num_tasks = 1;
                 
                 // return the results
-                tasks_to_offload_per_rank[vic_rank] = app_num_tasks;
+                tasks_to_offload_per_rank[vic_rank] = 0; // app_num_tasks;
             }
         }
     }

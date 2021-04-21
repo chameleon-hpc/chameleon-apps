@@ -103,6 +103,7 @@ typedef struct prof_task_info_t {
     double mig_time;    // migrated time
     double exe_time;    // runtime
     intptr_t code_ptr;  // code pointer
+    double core_freq;   // cpu-core frequency
 } prof_task_info_t;
 
 
@@ -307,7 +308,8 @@ void chameleon_t_write_logs(prof_task_list_t& tasklist_ref, int mpi_rank){
 #endif
 
         std::string line = std::to_string((*it)->tid) + "\t"
-                            + prob_sizes_statement + "\n";
+                            + prob_sizes_statement + "\t"
+                            + std::to_string((*it)->core_freq) + "\n";
                             // + std::to_string((*it)->exe_time) + "\n";
         
         // writing logs
@@ -524,8 +526,8 @@ bool gather_training_data(prof_task_list_t& tasklist_ref, int num_input_points, 
 {
     // the current list of finished tasks
     int size_tasklist = tasklist_ref.tasklist_size;
-    std::cout << "[CHAM_TOOL] gather_train_data: num finished tasks=" << size_tasklist
-              << ", num finished iters=" << num_iters <<std::endl;
+    // std::cout << "[CHAM_TOOL] gather_train_data: num finished tasks=" << size_tasklist
+    //           << ", num finished iters=" << num_iters <<std::endl;
 
     // preparing data
     arma::vec runtime_list(num_iters);
@@ -540,8 +542,8 @@ bool gather_training_data(prof_task_list_t& tasklist_ref, int num_input_points, 
     int n_cols_X = num_iters - num_input_points;
     int n_rows_Y = 1;
     int n_cols_Y = n_cols_X;
-    std::cout << "[CHAM_TOOL] gather_train_data: trainX_size=" << n_rows_X << "x" << n_cols_X
-              << ", trainY_size=" << n_rows_Y << "x" << n_cols_Y << std::endl;
+    // std::cout << "[CHAM_TOOL] gather_train_data: trainX_size=" << n_rows_X << "x" << n_cols_X
+    //           << ", trainY_size=" << n_rows_Y << "x" << n_cols_Y << std::endl;
     arma::mat trainX(n_rows_X, n_cols_X);
     arma::mat trainY(n_rows_Y, n_cols_Y);
     for (int i = num_input_points; i < num_iters; i++){
