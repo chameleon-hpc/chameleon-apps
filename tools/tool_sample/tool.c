@@ -29,6 +29,8 @@ static cham_t_get_callback_t cham_t_get_callback;
 static cham_t_get_rank_data_t cham_t_get_rank_data;
 static cham_t_get_thread_data_t cham_t_get_thread_data;
 static cham_t_get_rank_info_t cham_t_get_rank_info;
+static cham_t_get_task_param_info_t cham_t_get_task_param_info;
+static cham_t_get_task_param_info_by_id_t cham_t_get_task_param_info_by_id;
 static cham_t_get_task_data_t cham_t_get_task_data;
 
 // sample struct to save some information for a task
@@ -39,7 +41,6 @@ typedef struct my_task_data_t {
 } my_task_data_t;
 
 // static cham_t_get_state_t cham_t_get_state;
-// static cham_t_get_task_info_t cham_t_get_task_info;
 // static cham_t_get_thread_data_t cham_t_get_thread_data;
 // static cham_t_get_parallel_info_t cham_t_get_parallel_info;
 // static cham_t_get_unique_id_t cham_t_get_unique_id;
@@ -126,7 +127,16 @@ on_cham_t_callback_task_create(
     cham_t_data_t * rank_data       = cham_t_get_rank_data();
     cham_t_data_t * thread_data     = cham_t_get_thread_data();
 
-    printf("on_cham_t_callback_task_create ==> task_id=%" PRIu64 ";codeptr_ra=" DPxMOD ";rank_data=%" PRIu64 ";thread_data=%" PRIu64 ";task_data=" DPxMOD "\n", internal_task_id, DPxPTR(codeptr_ra), rank_data->value, thread_data->value, DPxPTR(task_data->ptr));
+    // access to parameter information from task
+    cham_t_task_param_info_t p_info = cham_t_get_task_param_info(task);
+
+    printf("on_cham_t_callback_task_create ==> task_id=%" PRIu64 ";codeptr_ra=" DPxMOD ";rank_data=%" PRIu64 ";thread_data=%" PRIu64 ";task_data=" DPxMOD ";num_args=%d;arg_sizes=" DPxMOD ";arg_types=" DPxMOD ";arg_pointers=" DPxMOD "\n", internal_task_id, DPxPTR(codeptr_ra), rank_data->value, thread_data->value, DPxPTR(task_data->ptr), p_info.num_args, DPxPTR(p_info.arg_sizes), DPxPTR(p_info.arg_types), DPxPTR(p_info.arg_pointers));
+
+    // === DEBUG
+    // for(i = 0; i < p_info.num_args; i++) {
+    //     printf("on_cham_t_callback_task_create ==> task_id=%" PRIu64 ";param=%d;size=%ld;param_type=%ld;param_ptr=" DPxMOD "\n", internal_task_id, i, p_info.arg_sizes[i], p_info.arg_types[i], DPxPTR(p_info.arg_pointers[i]));
+    // }
+    // === DEBUG
 #ifdef TRACE
     VT_end(event_tool_task_create);
 #endif
@@ -520,18 +530,19 @@ int cham_t_initialize(
     cham_t_function_lookup_t lookup,
     cham_t_data_t *tool_data)
 {
-    cham_t_set_callback = (cham_t_set_callback_t) lookup("cham_t_set_callback");
-    cham_t_get_callback = (cham_t_get_callback_t) lookup("cham_t_get_callback");
-    cham_t_get_rank_data = (cham_t_get_rank_data_t) lookup("cham_t_get_rank_data");
-    cham_t_get_thread_data = (cham_t_get_thread_data_t) lookup("cham_t_get_thread_data");
-    cham_t_get_rank_info = (cham_t_get_rank_info_t) lookup("cham_t_get_rank_info");
-    cham_t_get_task_data = (cham_t_get_task_data_t) lookup("cham_t_get_task_data");
+    cham_t_set_callback             = (cham_t_set_callback_t)               lookup("cham_t_set_callback");
+    cham_t_get_callback             = (cham_t_get_callback_t)               lookup("cham_t_get_callback");
+    cham_t_get_rank_data            = (cham_t_get_rank_data_t)              lookup("cham_t_get_rank_data");
+    cham_t_get_thread_data          = (cham_t_get_thread_data_t)            lookup("cham_t_get_thread_data");
+    cham_t_get_rank_info            = (cham_t_get_rank_info_t)              lookup("cham_t_get_rank_info");
+    cham_t_get_task_param_info      = (cham_t_get_task_param_info_t)        lookup("cham_t_get_task_param_info");
+    cham_t_get_task_param_info_by_id= (cham_t_get_task_param_info_by_id_t)  lookup("cham_t_get_task_param_info_by_id");
+    cham_t_get_task_data            = (cham_t_get_task_data_t)              lookup("cham_t_get_task_data");
 
     // cham_t_get_unique_id = (cham_t_get_unique_id_t) lookup("cham_t_get_unique_id");
     // cham_t_get_num_procs = (cham_t_get_num_procs_t) lookup("cham_t_get_num_procs");
 
     // cham_t_get_state = (cham_t_get_state_t) lookup("cham_t_get_state");
-    // cham_t_get_task_info = (cham_t_get_task_info_t) lookup("cham_t_get_task_info");
     // cham_t_get_thread_data = (cham_t_get_thread_data_t) lookup("cham_t_get_thread_data");
     // cham_t_get_parallel_info = (cham_t_get_parallel_info_t) lookup("cham_t_get_parallel_info");
     // cham_t_get_num_places = (cham_t_get_num_places_t) lookup("cham_t_get_num_places");
