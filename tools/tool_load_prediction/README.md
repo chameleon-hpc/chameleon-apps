@@ -20,6 +20,7 @@ The code is simply organized with its utils as follow:
 * chameleon_patch/: simply just the src-code of the Chameleon lib (latest version) with some changes to fit the prediction tool. To avoid hurting the original version of Chameleon, so leave them here temporarily. Note: need to replace them with the original one when we compile.
 * mlpack_utils/: some examples with mlpack library to build the regression models.
 * python_utils/: some examples with scikit-learn/mlpack lib in Python, to build and test the regression models.
+* src/: the src-code of the tool.
 
 ## How it works
 As the diagram above, the tool works as the plugin of Chameleon lib (sounds like the event-based working flow). When we need a callback event, we need to define it, determine when it's called and what should it return back to the chameleon-lib side or not. Therefore, it could be managed as:
