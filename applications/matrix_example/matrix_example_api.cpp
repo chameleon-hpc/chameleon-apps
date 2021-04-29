@@ -15,8 +15,12 @@
 #define PARALLEL_INIT 1
 #endif
 
-#ifndef VERY_VERBOSE
-#define VERY_VERBOSE 0
+#ifndef VERBOSE_MSG
+#define VERBOSE_MSG 0
+#endif
+
+#ifndef VERBOSE_MATRIX
+#define VERBOSE_MATRIX 0
 #endif
 
 #ifndef CHECK_GENERATED_TASK_ID
@@ -176,11 +180,11 @@ void compute_matrix_matrix(double * SPEC_RESTRICT a, double * SPEC_RESTRICT b, d
     }
 }
 
-bool check_test_matrix(double *c, double val, int matrixSize) {
+bool check_test_matrix(double *c, int matrix_idx, double val, int matrixSize) {
 	for(int i=0;i<matrixSize;i++) {
 		for(int j=0;j<matrixSize;j++) {
 			if(fabs(c[i*matrixSize+j] - val) > 1e-3) {
-				printf("#R%d (OS_TID:%ld): Error in matrix entry (%d,%d) expected:%f but value is %f\n", my_rank_id, syscall(SYS_gettid),i,j,val,c[i*matrixSize+j]);
+				printf("#R%d (OS_TID:%ld): Error in matrix %03d entry (%d,%d) expected:%f but value is %f\n", my_rank_id, syscall(SYS_gettid),matrix_idx,i,j,val,c[i*matrixSize+j]);
 				return false;
 			}
 		}
@@ -235,7 +239,7 @@ void printArray(int rank, double * SPEC_RESTRICT array, char* arr_name, int n) {
 }
 
 void matrixMatrixKernel(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, double * SPEC_RESTRICT C, int matrixSize, int i) {
-#if VERY_VERBOSE
+#if VERBOSE_MATRIX
     int iMyRank2;
     MPI_Comm_rank(MPI_COMM_WORLD, &iMyRank2);
     printArray(iMyRank2, A, "A", 10);
@@ -385,7 +389,6 @@ int main(int argc, char **argv)
 #endif
 
 #if COMPILE_CHAMELEON
-    // chameleon_init();
     #pragma omp parallel
     {
         chameleon_thread_init();
@@ -445,7 +448,7 @@ int main(int argc, char **argv)
     		initialize_matrix_test_A(matrices_b[i], cur_size);
     		initialize_matrix_zero(matrices_c[i], cur_size);
     	}
-#if VERY_VERBOSE
+#if VERBOSE_MATRIX
         printArray(iMyRank, matrices_a[i], "A", 10);
         printArray(iMyRank, matrices_b[i], "B", 10);
         printArray(iMyRank, matrices_c[i], "C", 10);
@@ -476,11 +479,13 @@ int main(int argc, char **argv)
                 if(matrix_size_mode == matrix_size_mode_non_uniform) {
                     cur_size = non_uniform_full_array_matrix_sizes[i];
                 }
-
+#if VERBOSE_MSG
+                printf("R#%d: Chameleon: MxM multiplication %03d working with matrix size %d\n", iMyRank, i, cur_size);
+#endif
 				double * SPEC_RESTRICT A = matrices_a[i];
 		        double * SPEC_RESTRICT B = matrices_b[i];
 		        double * SPEC_RESTRICT C = matrices_c[i];
-#if VERY_VERBOSE	
+#if VERBOSE_MATRIX
                 printArray(iMyRank, A, "A", 10);
                 printArray(iMyRank, B, "B", 10);
                 printArray(iMyRank, C, "C", 10);
@@ -591,7 +596,10 @@ int main(int argc, char **argv)
             if(matrix_size_mode == matrix_size_mode_non_uniform) {
                 cur_size = non_uniform_full_array_matrix_sizes[t];
             }
-            pass &= check_test_matrix(matrices_c[t], cur_size, cur_size);
+#if VERBOSE_MSG
+            printf("R#%d: Chameleon: Validating resulting matrix %03d with matrix size %d\n", iMyRank, t, cur_size);
+#endif
+            pass &= check_test_matrix(matrices_c[t], t, cur_size, cur_size);
         }
         if(pass)
             LOG(iMyRank, "TEST SUCCESS");
@@ -619,6 +627,9 @@ int main(int argc, char **argv)
             if(matrix_size_mode == matrix_size_mode_non_uniform) {
                 cur_size = non_uniform_full_array_matrix_sizes[i];
             }
+#if VERBOSE_MSG
+            printf("R#%d: OpenMP Tasking: MxM multiplication %03d working with matrix size %d\n", iMyRank, i, cur_size);
+#endif
             // double *A = matrices_a[i];
             // double *B = matrices_b[i];
             // double *C = matrices_c[i];
@@ -627,7 +638,7 @@ int main(int argc, char **argv)
             // #pragma omp target map(from: C[0:cur_size*cur_size]) map(to:cur_size, A[0:cur_size*cur_size], B[0:cur_size*cur_size]) device(1001)
             
             // uses normal tasks to have a fair comparison
-            #pragma omp task default(shared) firstprivate(i)
+            #pragma omp task default(shared) firstprivate(i,cur_size)
             {
                 compute_matrix_matrix(matrices_a[i], matrices_b[i], matrices_c[i], cur_size);
             }
@@ -655,7 +666,10 @@ int main(int argc, char **argv)
             if(matrix_size_mode == matrix_size_mode_non_uniform) {
                 cur_size = non_uniform_full_array_matrix_sizes[t];
             }
-            pass &= check_test_matrix(matrices_c[t], cur_size, cur_size);
+#if VERBOSE_MSG
+            printf("R#%d: OpenMP Tasking: Validating resulting matrix %03d with matrix size %d\n", iMyRank, t, cur_size);
+#endif
+            pass &= check_test_matrix(matrices_c[t], t, cur_size, cur_size);
         }
         if(pass)
             LOG(iMyRank, "TEST SUCCESS");
