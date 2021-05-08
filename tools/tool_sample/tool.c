@@ -132,11 +132,11 @@ on_cham_t_callback_task_create(
 
     printf("on_cham_t_callback_task_create ==> task_id=%" PRIu64 ";codeptr_ra=" DPxMOD ";rank_data=%" PRIu64 ";thread_data=%" PRIu64 ";task_data=" DPxMOD ";num_args=%d;arg_sizes=" DPxMOD ";arg_types=" DPxMOD ";arg_pointers=" DPxMOD "\n", internal_task_id, DPxPTR(codeptr_ra), rank_data->value, thread_data->value, DPxPTR(task_data->ptr), p_info.num_args, DPxPTR(p_info.arg_sizes), DPxPTR(p_info.arg_types), DPxPTR(p_info.arg_pointers));
 
-    // === DEBUG
+    // === Example how to access per argument information. Note: Parameter map types are bit representations of types that can be found in chameleon.h
     // for(i = 0; i < p_info.num_args; i++) {
     //     printf("on_cham_t_callback_task_create ==> task_id=%" PRIu64 ";param=%d;size=%ld;param_type=%ld;param_ptr=" DPxMOD "\n", internal_task_id, i, p_info.arg_sizes[i], p_info.arg_types[i], DPxPTR(p_info.arg_pointers[i]));
     // }
-    // === DEBUG
+    // ===
 #ifdef TRACE
     VT_end(event_tool_task_create);
 #endif
