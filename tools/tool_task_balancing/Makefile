@@ -8,3 +8,6 @@ trace:
 
 debug:
 	$(CC) -g -O0 -shared -fPIC -o $(TOOL_NAME).so $(TOOL_NAME).cpp
+
+
+###### -std=gnu++11
