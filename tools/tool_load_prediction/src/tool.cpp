@@ -158,7 +158,7 @@ on_cham_t_callback_train_prediction_model(int32_t taskwait_counter)
     printf("[CHAM_TOOL] R%d: starts training pred_model at iter-%d\n", rank, taskwait_counter);
     int num_points = 6;
     int num_finished_iters = taskwait_counter-1;
-    is_trained = gather_training_data(profiled_task_list, num_points, num_finished_iters);
+    is_trained = online_mlpack_training(profiled_task_list, num_points, num_finished_iters);
 
     return is_trained;
 }

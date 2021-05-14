@@ -31,9 +31,12 @@ cham_t_start_tool_result_t * cham_t_start_tool(unsigned int cham_version) {
     // don't override weak symbols that have been found before unless the user
     // sets the environment variable LD_DYNAMIC_WEAK.
     cham_t_start_tool_t next_tool = (cham_t_start_tool_t)dlsym(RTLD_NEXT, "cham_t_start_tool");
+
     if (next_tool) {
+        RELP("cham_t_init: success!\n");
         ret = next_tool(cham_version);
     }
+
     return ret;
 }
 
@@ -57,6 +60,7 @@ static cham_t_start_tool_result_t * cham_t_try_start_tool(unsigned int cham_vers
         split_string(str, libs, sep);
 
         for (auto &cur_lib : libs) {
+            // RELP("cham_t_init: try to load the tool at %s\n", cur_lib.c_str());
             void *h = dlopen(cur_lib.c_str(), RTLD_LAZY);
             if (h) {
                 start_tool = (cham_t_start_tool_t)dlsym(h, "cham_t_start_tool");
@@ -64,6 +68,8 @@ static cham_t_start_tool_result_t * cham_t_try_start_tool(unsigned int cham_vers
                     break;
                 else
                     dlclose(h);
+            }else{
+                RELP("cham_t_init: dlopen() failed - %s\n", dlerror());
             }
         }
     }
@@ -74,8 +80,8 @@ void cham_t_init() {
     if(_ch_t_initialized)
         return;
     
+    // set the lock and double check it
     _mtx_ch_t_initialized.lock();
-    // need to check again
     if(_ch_t_initialized) {
         _mtx_ch_t_initialized.unlock();
         return;
@@ -91,14 +97,15 @@ void cham_t_init() {
         cham_t_status.enabled = 0;
     else if (!strcmp(cham_t_env_var, "0"))
         cham_t_status.enabled = 0;
-
-    DBP("cham_t_init: CHAMELEON_TOOL = %s\n", cham_t_env_var);
     
     if(cham_t_status.enabled)
     {
         // try to load tool
         cham_t_start_tool_result = cham_t_try_start_tool(CHAMELEON_VERSION);
+
+        // check the tool which is turned on or not
         if (cham_t_start_tool_result) {
+
             cham_t_status.enabled = !!cham_t_start_tool_result->initialize(cham_t_fn_lookup, &(cham_t_start_tool_result->tool_data));
             if (!cham_t_status.enabled) {
                 return;
@@ -108,6 +115,7 @@ void cham_t_init() {
         }
     }
 
+    // unset the lock
     _ch_t_initialized = 1;
     _mtx_ch_t_initialized.unlock();
 }

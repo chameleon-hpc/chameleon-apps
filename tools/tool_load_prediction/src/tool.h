@@ -79,7 +79,7 @@ static int _tracing_enabled = 1;
 #endif
 
 #ifndef NUM_THREADS
-#define NUM_THREADS 3
+#define NUM_THREADS 3 // for testing on laptop
 #endif
 
 // ================================================================================
@@ -281,6 +281,9 @@ void chameleon_t_write_logs(prof_task_list_t& tasklist_ref, int mpi_rank){
     else
         log_dir = DEF_LOG_DIR;
 
+    // check output-path for writing logfile
+    // printf("[TOOL] log_dir: %s\n", log_dir.c_str());
+
     // declare output file
     std::ofstream outfile;
     outfile.open(log_dir + "/logfile_rank_" + std::to_string(mpi_rank) + "_" + std::to_string(num_samples) + "samples_" + std::to_string(num_epochs) + "epochs" + ".csv");
@@ -448,81 +451,13 @@ void normalize_2dvector_by_column(std::vector<std::vector<float>> &vec)
 
 
 /**
- * Normalizing the groundtruth for training with Torch.
- *
- * @param vec: a ref to the groundtruth vector
- */
-void normalize_ground_truth(std::vector<float> &norm_ground_output)
-{
-    // // find min-max values
-    // const auto [min, max] = std::minmax_element(runtime_list.begin(), runtime_list.end());
-
-    // // add min-max to the global min-max_vec
-    // min_vec.push_back(*min);
-    // max_vec.push_back(*max);
-
-    // // normalize the vector
-    // int vec_size = runtime_list.size();
-    // for (int i = 0; i < vec_size; i++) {
-    //     float norm_val = (runtime_list[i] - *min) / (*max - *min);
-    //     norm_ground_truth.push_back(norm_val);
-    // }
-}
-
-
-/**
- * Normalizing the features_input for training with Torch
- *
- * @param tasklist_ref, result: a ref to the tasklist_ref & a 2D vector
- *        for saving the result.
- */
-void normalize_input(prof_task_list_t& tasklist_ref, std::vector<std::vector<float>> result)
-{
-//     // find min-max in arg_sizes
-//     int num_args = 0;
-
-//     // create an iterator to traverse the list
-//     std::list<cham_tool_profiled_task_t *>::iterator it = tasklist_ptr->task_list.begin();
-
-//     // get through the list of profiled_tasks
-//     for (int i = 0; i < num_samples; i++) {
-
-//         // create a vector of args
-//         std::vector<float> task_arg_sizes;
-
-// #if SAMOA_EXAMPLE==1
-//         num_args = 14;
-//         int selected_arg = 10;
-//         for (int j = selected_arg; j < num_args; j++)
-//             task_arg_sizes.push_back(float((*it)->arg_sizes.at(j)));
-// #else
-//         num_args = 5;
-//         const int selected_arg = 0;
-//         task_arg_sizes.push_back(float((*it)->arg_sizes.at(selected_arg)));
-// #endif
-
-//         // add core_freq
-//         // task_arg_sizes.push_back(float(list_of_tasks[i]->processed_freq));
-        
-//         // push back the vector of args to a norm_input vector
-//         norm_input.push_back(task_arg_sizes);
-
-//         ++it;
-//     }
-
-//     // normalized 2d-vector by column
-//     normalize_2dvector_by_column(norm_input);
-}
-
-
-/**
- * Gathering profiled-data for training with mlpack.
+ * Gathering profiled-data and training with mlpack.
  *
  * @param tasklist_ref: a ref to the list of profiled tasks. But currently
  *        work for the runtime list, no need arguments of each task.
  * @return a dataset matrix
  */
-bool gather_training_data(prof_task_list_t& tasklist_ref, int num_input_points, int num_iters)
+bool online_mlpack_training(prof_task_list_t& tasklist_ref, int num_input_points, int num_iters)
 {
     // the current list of finished tasks
     int size_tasklist = tasklist_ref.tasklist_size;
@@ -562,60 +497,4 @@ bool gather_training_data(prof_task_list_t& tasklist_ref, int num_input_points, 
     std::cout << "[CHAM_TOOL] the training is done." << std::endl;
 
     return true;
-}
-
-
-/**
- * Offline regression training.
- *
- * @param mat
- */
-
-
-/**
- * Online regression training.
- *
- * @param mat
- */
-auto online_training_model(std::vector<std::vector<float>> input, std::vector<float> ground_truth)
-{
-    // // measure time
-    // double train_start_time = omp_get_wtime();
-
-    // // convert input to tensor type
-    // const int num_rows = input.size();
-    // const int num_cols = input[0].size();
-    // auto tensor_input = torch::from_blob(input.data(), {num_rows,num_cols});
-    // auto ground_truth_tensor = torch::from_blob(ground_truth.data(), {num_rows,1});
-
-    // // generate seed & learning_rate
-    // torch::manual_seed(1);
-    // const double learning_rate = 0.01;
-    // auto final_loss = 0.0;
-
-    // // create the model
-    // torch::optim::SGD optimizer(net->parameters(), torch::optim::SGDOptions(learning_rate));
-
-    // for (int epoch = 1; epoch <= num_epochs; epoch++) {
-    //     auto out = net->forward(tensor_input);
-
-    //     auto loss = torch::nn::functional::mse_loss(out, ground_truth_tensor);
-
-    //     optimizer.zero_grad();
-
-    //     loss.backward();
-
-    //     optimizer.step();
-
-    //     final_loss = loss.item<float>();
-    // }
-
-    // // change the global flag, the pre-model was trained
-    // is_model_trained = true;
-
-    // // get the measured time
-    // double train_end_time = omp_get_wtime();
-    // printf("Elapsed Time for training Pred-Model with N_SAMPLES=%d, N_EPOCH=%d: %.5f (s), LOSS= %.5f\n", num_rows, num_epochs, (train_end_time-train_start_time), final_loss);
-
-    // return net;
 }

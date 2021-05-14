@@ -80,6 +80,10 @@ def parse_predicted_load(filename, num_ranks):
             rank = int(re.findall(r'\d+', get_rank)[0])
             pred_runtime = float(data_per_line[3])
             preddata_per_rank[rank].append(pred_runtime)
+        
+        # print the est-pred-mig-load of the tool
+        if "PAIR_TASKS_OFFLOAD" in line:
+            print(line)
 
     # return the result
     return preddata_per_rank
@@ -272,9 +276,9 @@ def plot_pred_load_by_ranks(real_load_arr, pred_load_arr, s_rank, e_rank, output
             axs[i].legend(loc='best')
         axs[i].grid(True)
     
-    # plt.show()
-    fig_filename = "pred_load_from_R" + str(s_rank) + "_to_R" + str(e_rank) + ".pdf"
-    plt.savefig(os.path.join(output_folder, fig_filename), bbox_inches='tight')
+    plt.show()
+    # fig_filename = "pred_load_from_R" + str(s_rank) + "_to_R" + str(e_rank) + ".pdf"
+    # plt.savefig(os.path.join(output_folder, fig_filename), bbox_inches='tight')
 
 
 """Plot runtime-by-iters
@@ -386,11 +390,11 @@ def plot_stackedload_by_ranks(local_load, stole_load, repli_load, iter_idx, out_
     
     plt.grid(True)
     plt.legend(loc='best')
-    # plt.show()
+    plt.show()
 
     # save the figure
-    fig_filename = "load_diff_iter" + str(iter_idx) + "_" + str(num_ranks) + "_ranks_from_chamstats_logs" + ".pdf"
-    plt.savefig(os.path.join(out_folder, fig_filename), bbox_inches='tight')
+    # fig_filename = "load_diff_iter" + str(iter_idx) + "_" + str(num_ranks) + "_ranks_from_chamstats_logs" + ".pdf"
+    # plt.savefig(os.path.join(out_folder, fig_filename), bbox_inches='tight')
 
 
 """ Dataset generator 1
@@ -524,29 +528,28 @@ if __name__ == "__main__":
     # plot_runtime_by_iters(total_load_arr, out_folder)
 
     """ estimate num tasks that should be migrated for load-balancing """
-    total_tasks_per_rank = 208
+    # total_tasks_per_rank = 208
     # lb_est_load_arr = estimate_appro_mig_tasks_for_lb(total_load_arr, total_tasks_per_rank)
     # plot_pred_lb_by_iters(lb_est_load_arr, out_folder)
 
     """ read and check the predicted load per iter values """
-    pred_load_arr = parse_predicted_load(cham_stats_file, num_ranks)
-    s_rank, e_rank = 28, 31
-    plot_pred_load_by_ranks(total_load_arr, pred_load_arr, s_rank, e_rank, out_folder)
+    # pred_load_arr = parse_predicted_load(cham_stats_file, num_ranks)
+    # s_rank, e_rank = 0, 3
+    # plot_pred_load_by_ranks(total_load_arr, pred_load_arr, s_rank, e_rank, out_folder)
 
     """ read and parse values from the input in detail """
-    # loc_load_list,sto_load_list,rep_load_list = parse_stats_load_indetail(cham_stats_file, num_ranks)
+    loc_load_list,sto_load_list,rep_load_list = parse_stats_load_indetail(cham_stats_file, num_ranks)
 
     """ plot the load-diff by stacked-load types in a single iter """
-    # iter_idx = 0
-    # plot_stackedload_by_ranks(loc_load_list, sto_load_list, rep_load_list, iter_idx, out_folder)
+    iter_idx = 21
+    plot_stackedload_by_ranks(loc_load_list, sto_load_list, rep_load_list, iter_idx, out_folder)
 
     """ plot a single-rank runtime-list """
     # rank = 25
-    # rank_data = stats_data[rank]
-    # runtime_data = rank_data[1]
-    # x_indices = np.arange(len(runtime_data))
+    # rank_data = total_load_arr[rank]
+    # x_indices = np.arange(len(rank_data))
     # plt.xlabel("Iterations")
     # plt.ylabel("Total_Load (in seconds)")
-    # plt.plot(x_indices, runtime_data)
+    # plt.plot(x_indices, rank_data)
     # plt.grid(True)
     # plt.show()

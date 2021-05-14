@@ -81,8 +81,8 @@
 
 // determines how data (arguments) is packed and send during offloading
 #ifndef OFFLOAD_DATA_PACKING_TYPE
-//#define OFFLOAD_DATA_PACKING_TYPE 0     // 0 = pack meta data and arguments together and send it with a single message (requires copy to buffer)
-//#define OFFLOAD_DATA_PACKING_TYPE 1     // 1 = zero copy approach, only pack meta data (num_args, arg types ...) + separat send for each mapped argument
+//#define OFFLOAD_DATA_PACKING_TYPE 0   // 0 = pack meta data and arguments together and send it with a single message (requires copy to buffer)
+//#define OFFLOAD_DATA_PACKING_TYPE 1   // 1 = zero copy approach, only pack meta data (num_args, arg types ...) + separat send for each mapped argument
 #define OFFLOAD_DATA_PACKING_TYPE 2     // 2 = zero copy approach, only pack meta data (num_args, arg types ...) + ONE separat send for with mapped arguments
 #endif
 
@@ -101,17 +101,17 @@
 #endif
 
 #ifndef CHAM_REPLICATION_MODE
-#define CHAM_REPLICATION_MODE 0 //no replication
-// #define CHAM_REPLICATION_MODE 1 //replicated tasks may be processed locally if needed, however, no remote task cancellation is used
-// #define CHAM_REPLICATION_MODE 2 //replicated tasks may be processed locally if needed; remote replica task is cancelled
-// #define CHAM_REPLICATION_MODE 3 //mode 2 + migrated tasks will be kept locally as replicated tasks
+#define CHAM_REPLICATION_MODE 0     // no replication
+// #define CHAM_REPLICATION_MODE 1  // replicated tasks may be processed locally if needed, however, no remote task cancellation is used
+// #define CHAM_REPLICATION_MODE 2  // replicated tasks may be processed locally if needed; remote replica task is cancelled
+// #define CHAM_REPLICATION_MODE 3  // mode 2 + migrated tasks will be kept locally as replicated tasks
 // #define CHAM_REPLICATION_MODE 4
 #endif
 
 // specify the strategy of work-stealing with prediction tool
 #ifndef CHAM_PRED_MIGRATION
-// #define CHAM_PRED_MIGRATION 0
-#define CHAM_PRED_MIGRATION 1
+// #define CHAM_PRED_MIGRATION 0    // no prediction with migration
+#define CHAM_PRED_MIGRATION 1       // prediction tool is on
 #endif
 
 //Specify whether tasks should be offloaded aggressively after one performance update
@@ -149,30 +149,10 @@
 
 #ifndef REPLICATION_PRIORITIZE_MIGRATED
 //#define REPLICATION_PRIORITIZE_MIGRATED 0 // migrated tasks have same priority as a-priori replicated tasks, Todo(Philipp): should be removed, 1 should be default
-#define REPLICATION_PRIORITIZE_MIGRATED 1 // migrated tasks have low priority but higher priority than a-priori replicated tasks
+#define REPLICATION_PRIORITIZE_MIGRATED 1   // migrated tasks have low priority but higher priority than a-priori replicated tasks
 //#define REPLICATION_PRIORITIZE_MIGRATED 2 // migrated tasks have high priority
 #endif
 
-/* 
- * This constant depends on the settings of Sam(oa)2 before execution,
- * e.g.,  testing on my laptop (2 ranks, 3 threads/rank), samoa-num-sections=16
- * then, the number of tasks per rank in total = 16 * 3 = 48 tasks/rank.
- * This should be set more precisely at compiling-phase with the env-var.  
- */
-#ifndef MAX_TASKS_PER_RANK
-#define MAX_TASKS_PER_RANK 48
-#endif
-
-/* 
- * This constant depends on the settings of Sam(oa)2 before execution,
- * e.g.,  running osc-aderdg-opt samoa with the defined num-time-steps = 50,
- * then the num of simulation time-steps is 50 * 2 = 100.
- * This could be safe here as the minimun one is 100, could be set at compiling
- * with the env-variable. 
- */
-#ifndef MAX_EST_NUM_ITERS
-#define MAX_EST_NUM_ITERS 100
-#endif
 
 #if CHAMELEON_TOOL_SUPPORT
 #include "chameleon_tools.h"
@@ -938,6 +918,7 @@ extern std::atomic<double> MAX_PERCENTAGE_REPLICATED_TASKS;
 // settings to enable / disable tracing only for specific range of synchronization cycles
 extern std::atomic<int> ENABLE_TRACE_FROM_SYNC_CYCLE;
 extern std::atomic<int> ENABLE_TRACE_TO_SYNC_CYCLE;
+
 #pragma endregion
 
 #pragma region Functions
