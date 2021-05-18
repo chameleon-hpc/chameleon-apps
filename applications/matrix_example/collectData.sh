@@ -1,6 +1,6 @@
 #!/usr/local_rwth/bin/zsh
 
-#SBATCH --time=00:02:00
+#SBATCH --time=02:00:00
 #SBATCH --exclusive
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
@@ -13,18 +13,20 @@ module use -a /home/ey186093/.modules
 module load chameleon
 
 export CHAMELEON_TOOL_LIBRARIES=/home/ey186093/GitLab/jusch_chameleon-apps/tools/tool_task_balancing/tool.so;
-export OMP_NUM_THREADS=6;
+export OMP_NUM_THREADS=4;
 export OMP_PLACES=cores;
 export OMP_PROC_BIND=close;
 export I_MPI_PIN=1;
 export I_MPI_PIN_DOMAIN=auto;
 
 mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')";
+mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')/node";
+mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')/runtime";
 
 ### 100.600.100
-for matrix_size in {700..1000..100}; do
+for matrix_size in {100..600..100}; do
   ### 10..50..10
-  for workload in {10..100..10}; do
+  for workload in {10..50..10}; do
     for SEQUENCE in {1..13..1}; do
 
       if [ $SEQUENCE -eq 1 ]
@@ -114,13 +116,17 @@ for matrix_size in {700..1000..100}; do
         break;
       fi
 
-      touch "RESULT_S${matrix_size}W_${a}_${b}_${c}_${d}.csv";
-      cat "/home/ey186093/output/HEAD.csv" >> "RESULT_S${matrix_size}W_${a}_${b}_${c}_${d}.csv";
-      rm "/home/ey186093/output/HEAD.csv";
+      touch "RESULT_S_${matrix_size}_W_${a}_${b}_${c}_${d}.csv";
+      touch "RESULT_S_${matrix_size}_W_${a}_${b}_${c}_${d}_N.csv";
+
+      cat "/home/ey186093/output/.head/HEAD.csv" >> "RESULT_S_${matrix_size}_W_${a}_${b}_${c}_${d}.csv";
+      cat "/home/ey186093/output/.head/HEAD_N.csv" >> "RESULT_S_${matrix_size}_W_${a}_${b}_${c}_${d}_N.csv";
+      rm "/home/ey186093/output/.head/HEAD.csv";
+      rm "/home/ey186093/output/.head/HEAD_N.csv";
 
       ####echo 'RUNTIME_ms;RMIN;RMAX;RMEAN;#ARGS;#IARGS;SIARGS;SIMIN;SIMAX;SIMEAN;SIOVER;#OARGS;SOARGS;SOMIN;SOMAX;SOMEAN;SOVER;OVSITA;#NOTA;ROVER;' >> "RESULT_S${matrix_size}W_${a}_${b}_${c}_${d}.csv";
 
-      for file in /home/ey186093/output/*.csv; do
+      for file in /home/ey186093/output/.runtime/*.csv; do
         ###if [[ "${file}" == *"R0"* ]]; then
           ###echo "----R0---" >> "RESULT_S${matrix_size}W_${a}_${b}_${c}_${d}.csv";
         ####elif [[ "${file}" == *"R1"* ]]; then
@@ -131,11 +137,27 @@ for matrix_size in {700..1000..100}; do
           ###echo "---R3---" >> "RESULT_S${matrix_size}W_${a}_${b}_${c}_${d}.csv";
         ###fi
 
-        cat "${file}" >> "RESULT_S${matrix_size}W_${a}_${b}_${c}_${d}.csv";
+        cat "${file}" >> "RESULT_S_${matrix_size}_W_${a}_${b}_${c}_${d}.csv";
         rm "${file}";
       done
 
-      mv "RESULT_S${matrix_size}W_${a}_${b}_${c}_${d}.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')";
+      for file in /home/ey186093/output/.node/*.csv; do
+        ###if [[ "${file}" == *"R0"* ]]; then
+          ###echo "----R0---" >> "RESULT_S${matrix_size}W_${a}_${b}_${c}_${d}.csv";
+        ####elif [[ "${file}" == *"R1"* ]]; then
+          ###echo "---R1---" >> "RESULT_S${matrix_size}W_${a}_${b}_${c}_${d}.csv";
+        ###elif [[ "{$file}" == *"R2"* ]]; then
+          ###echo "---R2---" >> "RESULT_S${matrix_size}W_${a}_${b}_${c}_${d}.csv";
+        ###elif [[ "{$file}" == *"R3"* ]]; then
+          ###echo "---R3---" >> "RESULT_S${matrix_size}W_${a}_${b}_${c}_${d}.csv";
+        ###fi
+
+        cat "${file}" >> "RESULT_S_${matrix_size}_W_${a}_${b}_${c}_${d}_N.csv";
+        rm "${file}";
+      done
+
+      mv "RESULT_S_${matrix_size}_W_${a}_${b}_${c}_${d}.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')/runtime";
+      mv "RESULT_S_${matrix_size}_W_${a}_${b}_${c}_${d}_N.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')/node";
 
     done
   done

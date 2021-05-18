@@ -13,19 +13,21 @@ module use -a /home/ey186093/.modules
 module load chameleon
 
 export CHAMELEON_TOOL_LIBRARIES=/home/ey186093/GitLab/jusch_chameleon-apps/tools/tool_task_balancing/tool.so;
-export OMP_NUM_THREADS=6;
+export OMP_NUM_THREADS=4;
 export OMP_PLACES=cores;
 export OMP_PROC_BIND=close;
 export I_MPI_PIN=1;
 export I_MPI_PIN_DOMAIN=auto;
 
 mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')_NU";
+mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')_NU/node";
+mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')_NU/runtime";
 
 
 ### Number of matrices
 export NOM=50;
 
-for iterator in {221..255..1}; do
+for iterator in {0..255..1}; do
   mS=(50 100 150 200 450 500 550 600);
   nOM=(0 0 0 0 0 0 0 0);
 
@@ -74,10 +76,15 @@ for iterator in {221..255..1}; do
     ##echo $nOM >> log.txt;
     ##echo "${sort[@]}" >> log.txt;
     touch "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv";
-    cat "/home/ey186093/output/HEAD.csv" >> "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv";
-    rm "/home/ey186093/output/HEAD.csv";
+    touch "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}_N.csv";
 
-    for file in /home/ey186093/output/*.csv; do
+    cat "/home/ey186093/output/.head/HEAD.csv" >> "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv";
+    cat "/home/ey186093/output/.head/HEAD_N.csv" >> "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}_N.csv";
+
+    rm "/home/ey186093/output/.head/HEAD.csv";
+    rm "/home/ey186093/output/.head/HEAD_N.csv";
+
+    for file in /home/ey186093/output/.runtime/*.csv; do
       ###if [[ "${file}" == *"R0"* ]]; then
         ###echo "---R0---" >> "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv";
       ###elif [[ "${file}" == *"R1"* ]]; then
@@ -91,7 +98,22 @@ for iterator in {221..255..1}; do
       rm "${file}";
     done
 
-    mv "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')_NU";
+    for file in /home/ey186093/output/.node/*.csv; do
+      ###if [[ "${file}" == *"R0"* ]]; then
+        ###echo "---R0---" >> "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv";
+      ###elif [[ "${file}" == *"R1"* ]]; then
+        ###echo "---R1---" >> "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv";
+      ###elif [[ "${file}" == *"R2"* ]]; then
+        ###echo "---R2---" >> "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv";
+      ###elif [[ "${file}" == *"R3"* ]]; then
+        ###echo "---R3---" >> "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv";
+      ###fi
+      cat "${file}" >> "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}_N.csv";
+      rm "${file}";
+    done
+
+    mv "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}_N.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')_NU/node";
+    mv "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')_NU/runtime";
   done
 done
 

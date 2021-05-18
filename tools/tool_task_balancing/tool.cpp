@@ -218,117 +218,124 @@ int cham_t_initialize(
 void cham_t_finalize(cham_t_data_t *tool_data) {
     cham_t_data_t *rank_data = cham_t_get_rank_data();
 
-    //std::sort(runtimes_v.begin(), runtimes_v.end());
-    //std::sort(args_v.begin(), args_v.end());
-
     std::vector<long double> inSize;
     std::vector<long double> outSize;
 
-    int numberOfTasks;
-    long double tmp;
-    long double runtimeMin = std::numeric_limits<long double>::max(), runtimeMax = std::numeric_limits<long double>::min(), runtimeOverall = 0;
-    long double inputMin = std::numeric_limits<long double>::max(), inputMax = std::numeric_limits<long double>::min(), inputOverall = 0;
-    long double outputMin = std::numeric_limits<long double>::max(), outputMax = std::numeric_limits<long double>::min(), outputOverall = 0;
-    long double runtimeMean, inputMean, outputMean;
+    long double runtimeMin = std::numeric_limits<long double>::max(), runtimeMax = std::numeric_limits<long double>::min();
+    long double runtimeOverall = 0;
+    long double runtimeMean;
 
-    double numberOfArgsInput = 0, numberOfArgsOutput = 0;
+    std::vector<double> inputSize, outputSize, ovSize;
+    std::vector<double> inputMean, outputMean;
+    std::vector<double> inputMin, outputMin;
+    std::vector<double> inputMax, outputMax;
 
-    numberOfTasks = runtimes_v.size();
+    long double inSi=0, ouSi=0, ovSi=0;
+    long double inMin=0, ouMin=0;
+    long double inMax=0, ouMax=0;
+    long double val;
+
 
     for (int i = 0; i < runtimes_v.size(); ++i) {
         inSize = std::get<1>(args_v.at(i));
         outSize = std::get<2>(args_v.at(i));
 
-        tmp = runtimes_v.at(i);
-        if (tmp < runtimeMin)
-            runtimeMin = tmp;
-        else if (tmp > runtimeMax)
-            runtimeMax = tmp;
-        runtimeOverall += tmp;
+        // For each Task: input - min, max, mean,  Overall size in KB, output - min, max, mean, overall size in KB
+        for (int j = 0; j < inSize.size(); ++j) {
+            val = inSize.at(j);
+            inSi += val;
+            ovSi += val;
 
-        for (int j = 0; j < inSize.size(); j++) {
-            tmp = inSize.at(j);
-            if (tmp < inputMin)
-                inputMin = tmp;
-            else if (tmp > inputMax)
-                inputMax = tmp;
-            inputOverall += tmp;
-            numberOfArgsInput++;
+            if (inMin > val)
+                inMin = val;
+            if (inMax < val)
+                inMax = val;
         }
+        inputMin.push_back(inMin);
+        inputMax.push_back(inMax);
+        inputMean.push_back((long double) inSi/inSize.size());
+        inputSize.push_back(inSi);
 
-        for (int j = 0; j < outSize.size(); j++) {
-            tmp = inSize.at(j);
-            if (tmp < outputMin)
-                outputMin = tmp;
-            else if (tmp > outputMax)
-                outputMax = tmp;
-            outputOverall += tmp;
-            numberOfArgsOutput++;
+        // For each Task: output - min, max, mean,  Overall size in KB, output - min, max, mean, overall size in KB
+        for (int j = 0; j < outSize.size(); ++j) {
+            val = outSize.at(j);
+            ouSi += val;
+            ovSi +=0;
+
+            if (ouMin > val)
+                ouMin = val;
+            if (ouMax < val)
+                ouMax = val;
         }
+        outputMin.push_back(ouMin);
+        outputMax.push_back(ouMax);
+        outputMean.push_back((long double) ouSi/outSize.size());
+        outputSize.push_back(ouSi);
+        ovSize.push_back((long double) ovSi/(inSize.size() + outSize.size()));
+
+        // clear up all temporary values
+        inSi=0;
+        inMin=std::numeric_limits<long double>::max();
+        inMax=std::numeric_limits<long double>::min();
+        ouSi=0;
+        ouMin=std::numeric_limits<long double>::max();
+        ouMax=std::numeric_limits<long double>::min();
+
+
+        // calculate node specific runtime - min, max, mean, overall
+        val = runtimes_v.at(i);
+        if (val < runtimeMin)
+            runtimeMin = val;
+        else if (val > runtimeMax)
+            runtimeMax = val;
+        runtimeOverall += val;
 
         inSize.clear();
         outSize.clear();
     }
 
-    runtimeMean = (long double) runtimeOverall / numberOfTasks;
-    inputMean = (long double) inputOverall / numberOfArgsInput;
-    outputMean = (long double) outputOverall / numberOfArgsOutput;
+    runtimeMean = (long double) runtimeOverall / runtimes_v.size();
 
     // Write to file
     // TODO: possible this section creates multiple files if seconds overlap (not likely)
-    std::string path = "/rwthfs/rz/cluster/home/ey186093/output/runtime_R" + std::to_string(rank_data->value) + '_' +
+    std::string path = "/rwthfs/rz/cluster/home/ey186093/output/.runtime/runtime_R" + std::to_string(rank_data->value) + '_' +
                        currentTime() + ".csv";
     std::ofstream file(path, std::ios_base::app);
 
+    std::string path_N = "/rwthfs/rz/cluster/home/ey186093/output/.node/node_R" + std::to_string(rank_data->value) + '_' +
+                       currentTime() + ".csv";
+    std::ofstream file_N(path_N, std::ios_base::app);
+
+
+    // TODO: 'RMIN', 'RMAX', 'RMEAN' not mentioned - maybe collect them until actual task
+    // TODO: fix writing data into right files
+    // TODO: First changes not tested
+
     if(rank_data->value == 0){
-        std::string config = "/rwthfs/rz/cluster/home/ey186093/output/HEAD.csv";
+        std::string config = "/rwthfs/rz/cluster/home/ey186093/output/.head/HEAD.csv";
         std::ofstream configFile(config, std::ios_base::app);
 
-        configFile << "RUNTIME_ms;RMIN;RMAX;RMEAN;#ARGS;#IARGS;";
-        for (int i = 0; i < std::get<1>(args_v.at(1)).size(); ++i)
-            configFile << "SIARGS_" << i <<";";
+        std::string config_N = "/rwthfs/rz/cluster/home/ey186093/output/.head/HEAD_N.csv";
+        std::ofstream configFile_N(config_N, std::ios_base::app);
 
-        configFile << "SIMIN;SIMAX;SIMEAN;SIOVER;#OARGS;";
-
-        for (int i = 0; i < std::get<2>(args_v.at(1)).size(); ++i)
-            configFile << "SOARGS_" << i << ";";
-
-        configFile << "SOMIN;SOMAX;SOMEAN;SOVER;OVSITA;#NOTA;ROVER\n";
+        configFile << "RUNTIME_ms;SIMIN;SIMAX;SIMEAN;SIOVER;SOMIN;SOMAX;SOMEAN;SOOVER;SOVER\n";
+        configFile_N << "RMIN;RMAX;RMEAN;#NOTA;ROVER\n";
 
         configFile.close();
-    }
+        configFile_N.close();
 
+    }
 
     for (int i = 0; i < runtimes_v.size(); ++i) {
-        inSize = std::get<1>(args_v.at(i));
-        outSize = std::get<2>(args_v.at(i));
+        file << std::scientific << runtimes_v.at(i) << ";" << inputMin.at(i) << ";" << inputMax.at(i) << ";"\
+        << inputMean.at(i) << ";" << inputSize.at(i) << ";" << outputMin.at(i) << ";" << outputMax.at(i) << ";"\
+        << outputMean.at(i) << ";" << outputSize.at(i) << ";" << ovSize.at(i)<< "\n";
 
-        // runtime, min, max, mean
-        file << std::scientific << runtimes_v.at(i) << ";" << runtimeMin << ";" << runtimeMax << ";" << runtimeMean << ";";
-
-        // write #arguments, #input arguments, size of input arguments, min, max, sum, mean, overall
-        file << std::scientific << std::get<0>(args_v.at(i)) << ";" << inSize.size() << ";";
-        for (int j = 0; j < inSize.size(); j++)
-            file << std::scientific   << inSize.at(j) << ";";
-        file << std::scientific << inputMin << ";" << inputMax << ";" << inputMean << ";" << inputOverall << ";";
-
-        // write #outout arguments, size of output arguments , min, max, sum, mean, overall
-        file << std::scientific << outSize.size() << ";";
-        for (int j = 0; j < outSize.size(); j++)
-            file << std::scientific <<outSize.at(j) << ";";
-        file << std::scientific << outputMin << ";" << outputMax << ";" << outputMean << ";" << outputOverall << ";";
-
-        // write overall size of all arguments
-        file << std::scientific << std::get<3>(args_v.at(i)) << ";";
-
-        // #nodeTasks, runtimeOverall
-        file << std::scientific << numberOfTasks << ";" << runtimeOverall << "\n";
-
-        inSize.clear();
-        outSize.clear();
+        file_N << std::scientific << runtimeMin << ";" << runtimeMax << ";" << runtimeMean << ";" \
+        << runtimes_v.size() << ";" << runtimeOverall << "\n";
     }
     file.close();
-
+    file_N.close();
 
     printf("0: cham_t_event_runtime_shutdown\n");
 }
