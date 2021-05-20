@@ -182,29 +182,37 @@ void pair_num_tasks_to_offload(std::vector<int32_t>& tasks_to_offload_per_rank,
                                 std::vector<double>& predicted_load_info_ranks,
                                 int32_t num_tasks_local,
                                 int32_t num_tasks_stolen) {
+
+    // check pred_info list before sorting it
+    int num_ranks = predicted_load_info_ranks.size();
+    int tw_idx = _commthread_time_taskwait_count.load();
+
     // sort ranks by predicted load
     std::vector<size_t> tmp_sorted_idx = sort_indexes(predicted_load_info_ranks);
     double pred_min_load = predicted_load_info_ranks[tmp_sorted_idx[0]];
     double pred_max_load = predicted_load_info_ranks[tmp_sorted_idx[chameleon_comm_size-1]];
     double pred_cur_load = predicted_load_info_ranks[chameleon_comm_rank];
 
+    // check pred-log info
+    std::string rank_orders = "[";
+    std::string pred_load_arr = "[";
+    for (int i = 0; i < num_ranks; i++){
+        int r = tmp_sorted_idx[i];
+        rank_orders += "R" + std::to_string(r) + " ";
+        pred_load_arr += std::to_string(predicted_load_info_ranks[r]) + " ";
+    }
+    rank_orders += "]";
+    pred_load_arr += "]";
+    // RELP("[PAIR_DBG] Iter%d: %s = %s\n", tw_idx, rank_orders.c_str(), pred_load_arr.c_str());
+
     // init and compute the ratio of load-balancing
     double ratio_lb = 0.0;  // 1.0 is high, 0.0 is no imbalance
     if (pred_max_load > 0)
         ratio_lb = (pred_max_load - pred_min_load) / pred_max_load;
-    // RELP("[PAIR_TASKS_OFFLOAD] ratio_lb = %f\n", ratio_lb);
-
-    // check the absolute condition
-    // if ((pred_cur_load - pred_min_load) < MIN_ABS_LOAD_IMBALANCE_BEFORE_MIGRATION)
-    //     return;
 
     if (ratio_lb >= MIN_REL_LOAD_IMBALANCE_BEFORE_MIGRATION){
         // determine the postition of the current rank in progress
         int cur_pos = std::find(tmp_sorted_idx.begin(), tmp_sorted_idx.end(), chameleon_comm_rank) - tmp_sorted_idx.begin();
-
-        // check the current position in the sorted list
-        // RELP("[PAIR_TASKS_OFFLOAD] ratio_lb=%f | rank %d: cur_rank_pos=%d, load=%.3f\n",
-        //                     ratio_lb, chameleon_comm_rank, cur_pos, pred_cur_load);
 
         // decide to offload, but for safe, only offload the upper side
         if ( cur_pos >= ((double)chameleon_comm_size / 2.0) ) {
@@ -234,28 +242,28 @@ void pair_num_tasks_to_offload(std::vector<int32_t>& tasks_to_offload_per_rank,
                 //       + the use-case: samoa-osc (aderdg-opt version), section=16, num time-steps = 20/25
                 //       + so, the total amount of tasks per rank is 48, total num iters <= 100
                 const int max_tasks_per_rank = MAX_TASKS_PER_RANK;
-                double avg_load_per_task_on_victim = vic_pred_load / max_tasks_per_rank;
+                double avg_load_per_task_on_src = pred_cur_load / max_tasks_per_rank;
 
                 // from the load_diff, compute the max number of tasks could be migrated at the victim side
-                int max_num_tasks = (int)(load_diff / avg_load_per_task_on_victim);
+                int max_num_tasks = (int)(load_diff / avg_load_per_task_on_src);
 
                 // set a threshold, an approriate number of tasks should be migrated
-                //      + currently, try to set 70%
+                //      + currently, try to set 40% of the diff-load
                 //      + TODO: which % should be good?
-                int app_num_tasks = (int)(max_num_tasks * 0.6);
-                if (app_num_tasks >= max_tasks_per_rank)
-                    app_num_tasks = 1;
+                int appro_num_tasks = (int)(max_num_tasks * 0.4);
+                if (appro_num_tasks >= max_tasks_per_rank)
+                    appro_num_tasks = 1;
 
                 // check the estimation
-                RELP("[PAIR_TASKS_OFFLOAD] src(R%d) [max_num_tasks_to_offload=%d] should migrate %d tasks to victim(R%d)\n",
-                                            max_num_tasks, chameleon_comm_rank, app_num_tasks, vic_rank);
+                RELP("[PAIR_DBG] Iter%d: src(R%d) [max_migtasks=%d] should migrate %d tasks to victim(R%d)\n",
+                                            tw_idx, chameleon_comm_rank, max_num_tasks, appro_num_tasks, vic_rank);
 
                 // prevent the num_tasks < 1
-                if (app_num_tasks < 1)
-                    app_num_tasks = 1;
+                if (appro_num_tasks < 1)
+                    appro_num_tasks = 1;
                 
                 // return the results
-                tasks_to_offload_per_rank[vic_rank] = 0; // app_num_tasks;
+                tasks_to_offload_per_rank[vic_rank] = appro_num_tasks; // app_num_tasks;
             }
         }
     }

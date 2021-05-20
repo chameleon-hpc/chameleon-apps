@@ -10,17 +10,6 @@
 #include "chameleon_tools.h"
 #include "request_manager.h"
 
-
-/* This constant depends on the settings of Sam(oa)2 before execution,
- * e.g.,  running osc-aderdg-opt samoa with the defined num-time-steps = 50,
- * then the num of simulation time-steps is 50 * 2 = 100.
- * This could be safe here as the minimun one is 100, could be set at compiling
- * with the env-variable. 
- */
-#ifndef MAX_EST_NUM_ITERS
-#define MAX_EST_NUM_ITERS 100
-#endif
-
 // communicator for remote task requests
 extern MPI_Comm chameleon_comm;
 // communicator for sending back mapped values
@@ -88,10 +77,6 @@ extern std::vector<int32_t> _load_info_ranks;
 extern std::vector<double>  _list_real_load;
 extern std::vector<double> _total_load_info_ranks; // load after an iter is finished
 
-// ====== Info about predicted load by the tool that is being processed ======
-extern std::vector<double> _list_predicted_load;
-extern std::vector<double> _predicted_load_info_ranks;
-
 // ====== Info about the number of taskwait count being processed ======
 extern std::atomic<int> _commthread_time_taskwait_count;
 extern int _global_flag_prev_taskwait_idx;
@@ -102,6 +87,21 @@ extern thread_safe_list_t<TYPE_TASK_ID> _unfinished_locally_created_tasks;
 
 // Threading section
 extern std::atomic<int> _comm_thread_load_exchange_happend;
+
+#if CHAMELEON_TOOL_SUPPORT && CHAM_PRED_MIGRATION
+// ====== Info about predicted load by the tool that is being processed ======
+extern std::vector<double> _list_predicted_load;
+extern std::vector<double> _predicted_load_info_ranks;
+
+// ====== Flag to allow the predict-load exchange that could happen ======
+extern std::atomic<int> _comm_thread_predload_exchange_happend;
+
+// ====== Flags to mark the actions, i.e., create_gather pred_load, handle_gather pred_load
+//        should do 1 once time when a new iter/cycle starts,
+extern int _flag_create_gather_predload_happened;
+extern int _flag_handle_gather_predload_happened;
+
+#endif
 
 // variables to indicate when it is save to break out of taskwait
 extern std::mutex _mtx_taskwait;
@@ -123,6 +123,12 @@ extern int event_offload_decision;
 extern int event_send_back;
 extern int event_progress_send;
 extern int event_progress_recv;
+
+// setting for chameleon tool, default could be follows, but they are updated in
+// the chameleon_init function by getting the environment vars
+extern int MAX_TASKS_PER_RANK;
+extern int MAX_EST_NUM_ITERS;
+extern int TIME_TO_TRAIN_MODEL;
 
 // lock used to ensure that currently only a single thread is doing communication progression
 extern std::mutex _mtx_comm_progression;
@@ -159,21 +165,28 @@ class chameleon_comm_thread_session_data_t {
     std::atomic<int> last_known_sum_outstanding;
     
     // =============== Monitoring load info
+    std::vector<int32_t> tasks_to_offload;
     int transported_load_values[3];
     int *buffer_load_values;
-    std::vector<int32_t> tasks_to_offload;
+
+#if CHAMELEON_TOOL_SUPPORT && CHAM_PRED_MIGRATION
+    double *buffer_predicted_load_values;
 
     // =============== Monitoring predicted load info
     // could not need a flag for prediction, temporarily
     // get it in the loop with request_gather_created in general
-    std::atomic<int> request_gather_prediction_created;
-    std::atomic<int> request_gather_realload_created;
     MPI_Request request_gather_prediction_out;
-    MPI_Request request_gather_realload_out;
     MPI_Status  status_gather_prediction_out;
-    MPI_Status  status_gather_realload_out;
-    double *buffer_predicted_load_values;
-    double *buffer_real_load_values;
+#endif
+
+// #if CHAMELEON_TOOL_SUPPORT && CHAM_PRED_MIGRATION
+//     double transported_load_values[4];
+//     double *buffer_load_values;
+//     double *buffer_predicted_load_values;
+// #else
+//     int transported_load_values[3];
+//     int *buffer_load_values;
+// #endif
 
     // =============== Num migrated tasks at once
     int n_task_send_at_once = 1;

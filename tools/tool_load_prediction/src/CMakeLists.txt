@@ -16,7 +16,7 @@ find_package(MPI REQUIRED)
 set(MPI_CXX_LINK_FLAGS "-std=c++17 -lstdc++ -fopenmp -lm -lchameleon -L${CHAMELEON_LIB}")
 
 # link mlpack, armadillo, boost_serialization
-find_package(MLPACK REQUIRED)
+# find_package(MLPACK REQUIRED)
 set(MLPACK_FLAGS "-larmadillo -lboost_serialization -lmlpack")
 
 # include VTune if the flag is on
