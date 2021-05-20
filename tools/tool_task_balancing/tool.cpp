@@ -35,6 +35,8 @@
 #include <iomanip>
 #include <limits>
 
+#define UNIFORM
+
 #ifdef TRACE
 #include "VT.h"
 static int event_tool_task_create = -1;
@@ -297,6 +299,7 @@ void cham_t_finalize(cham_t_data_t *tool_data) {
     runtimeMean = (long double) runtimeOverall / runtimes_v.size();
 
     // Write to file
+#ifdef UNIFORM
     // TODO: possible this section creates multiple files if seconds overlap (not likely)
     std::string path = "/rwthfs/rz/cluster/home/ey186093/output/.runtime/runtime_R" + std::to_string(rank_data->value) + '_' +
                        currentTime() + ".csv";
@@ -305,18 +308,35 @@ void cham_t_finalize(cham_t_data_t *tool_data) {
     std::string path_N = "/rwthfs/rz/cluster/home/ey186093/output/.node/node_R" + std::to_string(rank_data->value) + '_' +
                        currentTime() + ".csv";
     std::ofstream file_N(path_N, std::ios_base::app);
+#ifndef UNIFORM
+    // TODO: possible this section creates multiple files if seconds overlap (not likely)
+    std::string path = "/rwthfs/rz/cluster/home/ey186093/output/.runtime_NU/runtime_R" + std::to_string(rank_data->value) + '_' +
+                       currentTime() + ".csv";
+    std::ofstream file(path, std::ios_base::app);
 
+    std::string path_N = "/rwthfs/rz/cluster/home/ey186093/output/.node_NU/node_R" + std::to_string(rank_data->value) + '_' +
+                       currentTime() + ".csv";
+    std::ofstream file_N(path_N, std::ios_base::app);
+#endif
 
     // TODO: 'RMIN', 'RMAX', 'RMEAN' not mentioned - maybe collect them until actual task
     // TODO: fix writing data into right files
     // TODO: First changes not tested
 
     if(rank_data->value == 0){
+#ifdef UNIFORM
         std::string config = "/rwthfs/rz/cluster/home/ey186093/output/.head/HEAD.csv";
         std::ofstream configFile(config, std::ios_base::app);
 
         std::string config_N = "/rwthfs/rz/cluster/home/ey186093/output/.head/HEAD_N.csv";
         std::ofstream configFile_N(config_N, std::ios_base::app);
+#ifndef UNIFORM
+        std::string config = "/rwthfs/rz/cluster/home/ey186093/output/.head_NU/HEAD.csv";
+        std::ofstream configFile(config, std::ios_base::app);
+
+        std::string config_N = "/rwthfs/rz/cluster/home/ey186093/output/.head_NU/HEAD_N.csv";
+        std::ofstream configFile_N(config_N, std::ios_base::app);
+#endif
 
         configFile << "RUNTIME_ms;SIMIN;SIMAX;SIMEAN;SIOVER;SOMIN;SOMAX;SOMEAN;SOOVER;SOVER\n";
         configFile_N << "RMIN;RMAX;RMEAN;#NOTA;ROVER\n";

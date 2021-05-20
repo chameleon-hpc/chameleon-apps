@@ -75,16 +75,16 @@ for iterator in {0..255..1}; do
     ##echo "${mS[@]}" >> log.txt;
     ##echo $nOM >> log.txt;
     ##echo "${sort[@]}" >> log.txt;
-    touch "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv";
-    touch "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}_N.csv";
+    touch "NU_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv";
+    touch "NU_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}_N.csv";
 
-    cat "/home/ey186093/output/.head/HEAD.csv" >> "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv";
-    cat "/home/ey186093/output/.head/HEAD_N.csv" >> "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}_N.csv";
+    cat "/home/ey186093/output/.head_NU/HEAD.csv" >> "NU_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv";
+    cat "/home/ey186093/output/.head_NU/HEAD_N.csv" >> "NU_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}_N.csv";
 
-    rm "/home/ey186093/output/.head/HEAD.csv";
-    rm "/home/ey186093/output/.head/HEAD_N.csv";
+    rm "/home/ey186093/output/.head_NU/HEAD.csv";
+    rm "/home/ey186093/output/.head_NU/HEAD_N.csv";
 
-    for file in /home/ey186093/output/.runtime/*.csv; do
+    for file in /home/ey186093/output/.runtime_NU/*.csv; do
       ###if [[ "${file}" == *"R0"* ]]; then
         ###echo "---R0---" >> "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv";
       ###elif [[ "${file}" == *"R1"* ]]; then
@@ -94,11 +94,11 @@ for iterator in {0..255..1}; do
       ###elif [[ "${file}" == *"R3"* ]]; then
         ###echo "---R3---" >> "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv";
       ###fi
-      cat "${file}" >> "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv";
+      cat "${file}" >> "NU_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv";
       rm "${file}";
     done
 
-    for file in /home/ey186093/output/.node/*.csv; do
+    for file in /home/ey186093/output/.node_NU/*.csv; do
       ###if [[ "${file}" == *"R0"* ]]; then
         ###echo "---R0---" >> "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv";
       ###elif [[ "${file}" == *"R1"* ]]; then
@@ -108,12 +108,12 @@ for iterator in {0..255..1}; do
       ###elif [[ "${file}" == *"R3"* ]]; then
         ###echo "---R3---" >> "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv";
       ###fi
-      cat "${file}" >> "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}_N.csv";
+      cat "${file}" >> "NU_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}_N.csv";
       rm "${file}";
     done
 
-    mv "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}_N.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')_NU/node";
-    mv "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')_NU/runtime";
+    mv "NU_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}_N.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')_NU/node";
+    mv "NU_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')_NU/runtime";
   done
 done
 

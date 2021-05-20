@@ -116,11 +116,11 @@ for matrix_size in {100..600..100}; do
         break;
       fi
 
-      touch "RESULT_S_${matrix_size}_W_${a}_${b}_${c}_${d}.csv";
-      touch "RESULT_S_${matrix_size}_W_${a}_${b}_${c}_${d}_N.csv";
+      touch "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}.csv";
+      touch "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}_N.csv";
 
-      cat "/home/ey186093/output/.head/HEAD.csv" >> "RESULT_S_${matrix_size}_W_${a}_${b}_${c}_${d}.csv";
-      cat "/home/ey186093/output/.head/HEAD_N.csv" >> "RESULT_S_${matrix_size}_W_${a}_${b}_${c}_${d}_N.csv";
+      cat "/home/ey186093/output/.head/HEAD.csv" >> "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}.csv";
+      cat "/home/ey186093/output/.head/HEAD_N.csv" >> "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}_N.csv";
       rm "/home/ey186093/output/.head/HEAD.csv";
       rm "/home/ey186093/output/.head/HEAD_N.csv";
 
@@ -137,7 +137,7 @@ for matrix_size in {100..600..100}; do
           ###echo "---R3---" >> "RESULT_S${matrix_size}W_${a}_${b}_${c}_${d}.csv";
         ###fi
 
-        cat "${file}" >> "RESULT_S_${matrix_size}_W_${a}_${b}_${c}_${d}.csv";
+        cat "${file}" >> "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}.csv";
         rm "${file}";
       done
 
@@ -152,12 +152,12 @@ for matrix_size in {100..600..100}; do
           ###echo "---R3---" >> "RESULT_S${matrix_size}W_${a}_${b}_${c}_${d}.csv";
         ###fi
 
-        cat "${file}" >> "RESULT_S_${matrix_size}_W_${a}_${b}_${c}_${d}_N.csv";
+        cat "${file}" >> "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}_N.csv";
         rm "${file}";
       done
 
-      mv "RESULT_S_${matrix_size}_W_${a}_${b}_${c}_${d}.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')/runtime";
-      mv "RESULT_S_${matrix_size}_W_${a}_${b}_${c}_${d}_N.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')/node";
+      mv "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')/runtime";
+      mv "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}_N.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')/node";
 
     done
   done
