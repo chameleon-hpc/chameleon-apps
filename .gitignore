@@ -1,0 +1,14 @@
+.idea/
+applications/matrix_example/*.log
+applications/matrix_example/main
+applications/matrix_example/output_*
+applications/matrix_example/test*
+
+
+applications/matrix_example/THESIS_*
+applications/matrix_example/core/
+applications/matrix_example/log*
+applications/matrix_example/scriptsFrontend/
+
+*.so
+
