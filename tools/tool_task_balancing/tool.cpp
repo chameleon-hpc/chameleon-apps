@@ -308,7 +308,7 @@ void cham_t_finalize(cham_t_data_t *tool_data) {
     std::string path_N = "/rwthfs/rz/cluster/home/ey186093/output/.node/node_R" + std::to_string(rank_data->value) + '_' +
                        currentTime() + ".csv";
     std::ofstream file_N(path_N, std::ios_base::app);
-#ifndef UNIFORM
+#else
     // TODO: possible this section creates multiple files if seconds overlap (not likely)
     std::string path = "/rwthfs/rz/cluster/home/ey186093/output/.runtime_NU/runtime_R" + std::to_string(rank_data->value) + '_' +
                        currentTime() + ".csv";
@@ -330,7 +330,7 @@ void cham_t_finalize(cham_t_data_t *tool_data) {
 
         std::string config_N = "/rwthfs/rz/cluster/home/ey186093/output/.head/HEAD_N.csv";
         std::ofstream configFile_N(config_N, std::ios_base::app);
-#ifndef UNIFORM
+#else
         std::string config = "/rwthfs/rz/cluster/home/ey186093/output/.head_NU/HEAD.csv";
         std::ofstream configFile(config, std::ios_base::app);
 
