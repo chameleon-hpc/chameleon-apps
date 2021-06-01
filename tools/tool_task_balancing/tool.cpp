@@ -338,8 +338,8 @@ void cham_t_finalize(cham_t_data_t *tool_data) {
         std::ofstream configFile_N(config_N, std::ios_base::app);
 #endif
 
-        configFile << "RUNTIME_ms;SIMIN;SIMAX;SIMEAN;SIOVER;SOMIN;SOMAX;SOMEAN;SOOVER;SOVER\n";
-        configFile_N << "RMIN;RMAX;RMEAN;#NOTA;ROVER\n";
+        configFile << "RUNTIME_ms;SIZE_IN_min;SIZE_IN_max;SIZE_IN_mean;SIZE_IN_overall;SIZE_OUT_min;SIZE_OUT_max;SIZE_OUT_mean;SIZE_OUT_overall;SIZE_overall\n";
+        configFile_N << "RUNTIME_min;RUNTIME_max;RUNTIME_mean;#TASKS;RUNTIME_overall\n";
 
         configFile.close();
         configFile_N.close();
