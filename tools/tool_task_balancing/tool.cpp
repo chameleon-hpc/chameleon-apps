@@ -35,7 +35,7 @@
 #include <iomanip>
 #include <limits>
 
-#define UNIFORM
+//#define UNIFORM
 
 #ifdef TRACE
 #include "VT.h"
@@ -141,7 +141,7 @@ on_cham_t_callback_task_schedule(
         curr_task_log->time = std::chrono::high_resolution_clock::now();
         task_data->ptr = (void *) curr_task_log;
 
-    } else {
+    } else if (schedule_type == cham_t_task_end){
         my_task_log_t *cur_task_data = (my_task_log_t *) task_data->ptr;
 
         auto beginn_time = cur_task_data->time;
