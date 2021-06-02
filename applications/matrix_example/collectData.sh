@@ -1,6 +1,6 @@
 #!/usr/local_rwth/bin/zsh
 
-#SBATCH --time=02:00:00
+#SBATCH --time=04:00:00
 #SBATCH --exclusive
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
@@ -11,6 +11,7 @@
 
 module use -a /home/ey186093/.modules
 module load chameleon
+echo "$(pwd)"
 
 export CHAMELEON_TOOL_LIBRARIES=/home/ey186093/GitLab/jusch_chameleon-apps/tools/tool_task_balancing/tool.so;
 export OMP_NUM_THREADS=4;
@@ -109,7 +110,7 @@ for matrix_size in {100..600..100}; do
           d=$a;
       fi
 
-      mpiexec.hydra -np 4 -genvall main $matrix_size $a $b $c $d 2>&1 | tee log.log;
+      mpiexec.hydra -np 4 -genvall ./main $matrix_size $a $b $c $d 2>&1 | tee log.log;
 
       if grep -q "FAILED" "log.log"; then
         echo "ERROR: One test failed";
