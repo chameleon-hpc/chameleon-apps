@@ -35,7 +35,7 @@
 #include <iomanip>
 #include <limits>
 
-//#define UNIFORM
+#define UNIFORM
 
 #ifdef TRACE
 #include "VT.h"
@@ -61,7 +61,7 @@ static std::vector<std::tuple<int, std::vector < long double>, std::vector<long 
 args_v;
 
 typedef struct my_task_log_t {
-    std::chrono::time_point <std::chrono::high_resolution_clock> time;
+    std::chrono::steady_clock::time_point start;
 } my_task_log_t;
 
 
@@ -136,21 +136,22 @@ on_cham_t_callback_task_schedule(
     //int found = chameleon_get_annotation_int(ann, "TID", &tmp_validation_id);
     //assert(found == 1 && tmp_validation_id == (int)internal_task_id);
 
-    if (schedule_type == cham_t_task_start) {
-        my_task_log_t *curr_task_log = (my_task_log_t *) malloc(sizeof(my_task_log_t));
-        curr_task_log->time = std::chrono::high_resolution_clock::now();
-        task_data->ptr = (void *) curr_task_log;
+    if (cham_t_task_start == schedule_type) {
+        my_task_log_t *cur_task_data = (my_task_log_t *) malloc(sizeof(my_task_log_t));
+        cur_task_data->start = std::chrono::steady_clock::now();
+        task_data->ptr = (void *) cur_task_data;
 
-    } else if (schedule_type == cham_t_task_end){
+    }
+    else if (cham_t_task_end == schedule_type){
+        std::chrono::steady_clock::time_point end_time = std::chrono::steady_clock::now();
+
         my_task_log_t *cur_task_data = (my_task_log_t *) task_data->ptr;
-
-        auto beginn_time = cur_task_data->time;
-        auto end_time = std::chrono::high_resolution_clock::now();
+        auto start_time = cur_task_data->start;
 
         rv.lock();
         runtimes_v.push_back(
-                double(std::chrono::duration<long double, std::milli>(
-                        end_time - beginn_time).count()));
+                double(std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(end_time - start_time).count())
+        );
         rv.unlock();
 
         cham_t_task_param_info_t p_info = cham_t_get_task_param_info(task);
@@ -159,7 +160,7 @@ on_cham_t_callback_task_schedule(
 
         for (int i = 0; i < p_info.num_args; ++i) {
 
-            overallSize += (long double) p_info.arg_sizes[i] /1000;
+            overallSize += (long double) p_info.arg_sizes[i]/1000;
 
             if ((p_info.arg_types[i] & 1) == 1)
                 inSizes.push_back((long double) p_info.arg_sizes[i]/1000);
