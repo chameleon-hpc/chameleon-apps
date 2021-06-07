@@ -13,7 +13,7 @@ module use -a /home/ey186093/.modules
 module load chameleon
 echo "$(pwd)"
 
-export CHAMELEON_TOOL_LIBRARIES=/home/ey186093/GitLab/jusch_chameleon-apps/tools/tool_task_balancing/tool.so;
+export CHAMELEON_TOOL_LIBRARIES=/home/ey186093/GitLab/jusch_chameleon-apps/tools/tool_task_balancing/tool_NU.so;
 export OMP_NUM_THREADS=4;
 export OMP_PLACES=cores;
 export OMP_PROC_BIND=close;

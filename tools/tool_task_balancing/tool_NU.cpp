@@ -30,12 +30,12 @@
 #include <tuple>
 #include <algorithm>
 
-#include <ctime>
-#include <chrono>
+#include <time.h>
 #include <iomanip>
 #include <limits>
 
-#define UNIFORM
+#include "tool_likwid.h"
+const int MAX_EVENT_SIZE = 10000;
 
 #ifdef TRACE
 #include "VT.h"
@@ -54,14 +54,17 @@ static cham_t_get_task_data_t cham_t_get_task_data;
 
 // @jusch static variables
 
-static std::mutex rv, av;
+static std::mutex m, mID;
 static std::vector<long double> runtimes_v;
+static std::vector<int> id_v;
+static int ID=0;
 // true = TO, false = FROM
 static std::vector<std::tuple<int, std::vector < long double>, std::vector<long double>, long double>>
 args_v;
 
 typedef struct my_task_log_t {
-    std::chrono::steady_clock::time_point start;
+    struct timespec start;
+    int id;
 } my_task_log_t;
 
 
@@ -124,6 +127,7 @@ on_cham_t_callback_task_schedule(
     }
 #endif
     TYPE_TASK_ID internal_task_id = chameleon_get_task_id(task);
+    cham_t_data_t *rank_data = cham_t_get_rank_data();
 
     char val_task_flag[50];
     char val_prior_task_flag[50];
@@ -137,22 +141,34 @@ on_cham_t_callback_task_schedule(
     //assert(found == 1 && tmp_validation_id == (int)internal_task_id);
 
     if (cham_t_task_start == schedule_type) {
+
+        mID.lock();
+        int tmpID = ID;
+        ID++;
+        mID.unlock();
+        auto tag = std::to_string(rank_data->value) + "R" + std::to_string(tmpID);
+        LIKWID_MARKER_START(tag.c_str());
+
+        struct timespec t;
+        clock_gettime(CLOCK_MONOTONIC, &t);
+
         my_task_log_t *cur_task_data = (my_task_log_t *) malloc(sizeof(my_task_log_t));
-        cur_task_data->start = std::chrono::steady_clock::now();
+        cur_task_data->start = t;
+        cur_task_data->id = tmpID;
         task_data->ptr = (void *) cur_task_data;
+
 
     }
     else if (cham_t_task_end == schedule_type){
-        std::chrono::steady_clock::time_point end_time = std::chrono::steady_clock::now();
+        struct timespec end_time;
+        clock_gettime(CLOCK_MONOTONIC, &end_time);
 
         my_task_log_t *cur_task_data = (my_task_log_t *) task_data->ptr;
         auto start_time = cur_task_data->start;
+        int tmpID = cur_task_data->id;
 
-        rv.lock();
-        runtimes_v.push_back(
-                double(std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(end_time - start_time).count())
-        );
-        rv.unlock();
+        auto tag = std::to_string(rank_data->value) + "R" + std::to_string(tmpID);
+        LIKWID_MARKER_STOP(tag.c_str());
 
         cham_t_task_param_info_t p_info = cham_t_get_task_param_info(task);
         std::vector<long double> inSizes, outSizes;
@@ -170,12 +186,30 @@ on_cham_t_callback_task_schedule(
 
         }
 
-        av.lock();
+        int nevents;
+        int count;
+        double time;
+        double events[MAX_EVENT_SIZE];
+        LIKWID_MARKER_GET(tag.c_str(), &nevents, events, &time, &count);
+
+        if(nevents > 0){
+            printf("Region tag - %i\n", (int) internal_task_id);
+            printf("Region example measures %d events, total measurement time is %f\n", nevents, time);
+            printf("The region was called %d times\n", count);
+        }
+        for (int i = 0; i < nevents; i++)
+        {
+            printf("Event %d: %f\n", i, events[i]);
+        }
+
+        m.lock();
+        id_v.push_back(tmpID);
+        runtimes_v.push_back(double(1000.0*end_time.tv_sec + 1e-6*end_time.tv_nsec - (1000.0*start_time.tv_sec + 1e-6*start_time.tv_nsec)));
         args_v.push_back(std::tuple < int, std::vector < long double > , std::vector < long double > , long double >
-                                                                                             {(int) p_info.num_args,
-                                                                                              inSizes, outSizes,
-                                                                                              overallSize});
-        av.unlock();
+                                                                                                       {(int) p_info.num_args,
+                                                                                                        inSizes, outSizes,
+                                                                                                        overallSize});
+        m.unlock();
 
         // dont need tool data any more ==> clean up
         free(task_data->ptr);
@@ -198,6 +232,9 @@ do{                                                                             
 int cham_t_initialize(
         cham_t_function_lookup_t lookup,
         cham_t_data_t *tool_data) {
+
+    LIKWID_MARKER_INIT;
+
     cham_t_set_callback = (cham_t_set_callback_t) lookup("cham_t_set_callback");
     cham_t_get_callback = (cham_t_get_callback_t) lookup("cham_t_get_callback");
     cham_t_get_rank_data = (cham_t_get_rank_data_t) lookup("cham_t_get_rank_data");
@@ -215,11 +252,14 @@ int cham_t_initialize(
     cham_t_rank_info_t *r_info = cham_t_get_rank_info();
     cham_t_data_t *r_data = cham_t_get_rank_data();
     r_data->value = r_info->comm_rank;
+
     return 1; //success
 }
 
 void cham_t_finalize(cham_t_data_t *tool_data) {
     cham_t_data_t *rank_data = cham_t_get_rank_data();
+
+    LIKWID_MARKER_CLOSE;
 
     std::vector<long double> inSize;
     std::vector<long double> outSize;
@@ -307,7 +347,7 @@ void cham_t_finalize(cham_t_data_t *tool_data) {
     std::ofstream file(path, std::ios_base::app);
 
     std::string path_N = "/rwthfs/rz/cluster/home/ey186093/output/.node/node_R" + std::to_string(rank_data->value) + '_' +
-                       currentTime() + ".csv";
+                         currentTime() + ".csv";
     std::ofstream file_N(path_N, std::ios_base::app);
 #else
     // TODO: possible this section creates multiple files if seconds overlap (not likely)
@@ -339,8 +379,8 @@ void cham_t_finalize(cham_t_data_t *tool_data) {
         std::ofstream configFile_N(config_N, std::ios_base::app);
 #endif
 
-        configFile << "RUNTIME_ms;SIZE_IN_min;SIZE_IN_max;SIZE_IN_mean;SIZE_IN_overall;SIZE_OUT_min;SIZE_OUT_max;SIZE_OUT_mean;SIZE_OUT_overall;SIZE_overall\n";
-        configFile_N << "RUNTIME_min;RUNTIME_max;RUNTIME_mean;#TASKS;RUNTIME_overall\n";
+        configFile << "TASK_ID;RUNTIME_ms;SIZE_IN_min;SIZE_IN_max;SIZE_IN_mean;SIZE_IN_overall;SIZE_OUT_min;SIZE_OUT_max;SIZE_OUT_mean;SIZE_OUT_overall;SIZE_overall\n";
+        configFile_N << "TASK_ID;RUNTIME_min;RUNTIME_max;RUNTIME_mean;#TASKS;RUNTIME_overall\n";
 
         configFile.close();
         configFile_N.close();
@@ -348,11 +388,11 @@ void cham_t_finalize(cham_t_data_t *tool_data) {
     }
 
     for (int i = 0; i < runtimes_v.size(); ++i) {
-        file << std::scientific << runtimes_v.at(i) << ";" << inputMin.at(i) << ";" << inputMax.at(i) << ";"\
-        << inputMean.at(i) << ";" << inputSize.at(i) << ";" << outputMin.at(i) << ";" << outputMax.at(i) << ";"\
+        file << std::scientific << std::to_string(rank_data->value) << 'R' << id_v.at(i) << ";" << runtimes_v.at(i) << ";" << inputMin.at(i) << ";" << inputMax.at(i) << ";"\
+        << inputMean.at(i) << ";" << std::to_string(rank_data->value) << inputSize.at(i) << ";" << outputMin.at(i) << ";" << outputMax.at(i) << ";"\
         << outputMean.at(i) << ";" << outputSize.at(i) << ";" << ovSize.at(i)<< "\n";
 
-        file_N << std::scientific << runtimeMin << ";" << runtimeMax << ";" << runtimeMean << ";" \
+        file_N << std::scientific << std::to_string(rank_data->value) << 'R' << id_v.at(i) << ";" << runtimeMin << ";" << runtimeMax << ";" << runtimeMean << ";" \
         << runtimes_v.size() << ";" << runtimeOverall << "\n";
     }
     file.close();

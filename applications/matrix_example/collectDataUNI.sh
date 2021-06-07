@@ -1,6 +1,6 @@
 #!/usr/local_rwth/bin/zsh
 
-#SBATCH --time=04:00:00
+#SBATCH --time=02:00:00
 #SBATCH --exclusive
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
@@ -13,7 +13,7 @@ module use -a /home/ey186093/.modules
 module load chameleon
 echo "$(pwd)"
 
-export CHAMELEON_TOOL_LIBRARIES=/home/ey186093/GitLab/jusch_chameleon-apps/tools/tool_task_balancing/tool.so;
+export CHAMELEON_TOOL_LIBRARIES=/home/ey186093/GitLab/jusch_chameleon-apps/tools/tool_task_balancing/tool_UNI.so;
 export OMP_NUM_THREADS=4;
 export OMP_PLACES=cores;
 export OMP_PROC_BIND=close;
@@ -25,7 +25,8 @@ mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')/node";
 mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')/runtime";
 
 ### 100.600.100
-for matrix_size in {100..600..100}; do
+###for matrix_size in {100..600..100}; do
+for matrix_size in 50 100 150 200 450 500 550 600; do
   ### 10..50..10
   for workload in {10..50..10}; do
     for SEQUENCE in {1..13..1}; do
