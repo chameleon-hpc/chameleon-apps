@@ -25,11 +25,12 @@ cham_t_start_tool_result_t *cham_t_start_tool_result = NULL;
  * Functions
  ****************************************************************************/
 cham_t_start_tool_result_t * cham_t_start_tool(unsigned int cham_version) {
-    cham_t_start_tool_result_t *ret = NULL;
+    
     // Search next symbol in the current address space. This can happen if the
     // runtime library is linked before the tool. Since glibc 2.2 strong symbols
     // don't override weak symbols that have been found before unless the user
     // sets the environment variable LD_DYNAMIC_WEAK.
+    cham_t_start_tool_result_t *ret = NULL;
     cham_t_start_tool_t next_tool = (cham_t_start_tool_t)dlsym(RTLD_NEXT, "cham_t_start_tool");
 
     if (next_tool) {
@@ -41,19 +42,20 @@ cham_t_start_tool_result_t * cham_t_start_tool(unsigned int cham_version) {
 }
 
 static cham_t_start_tool_result_t * cham_t_try_start_tool(unsigned int cham_version) {
+
     cham_t_start_tool_result_t *ret = NULL;
     cham_t_start_tool_t start_tool = NULL;
-
     const char sep = ':';
 
+    // start the cham-callback tool
     ret = cham_t_start_tool(cham_version);
-
     if (ret)
         return ret;
 
     // Try tool-libraries-var ICV
     const char *tool_libs = getenv("CHAMELEON_TOOL_LIBRARIES");
     if (tool_libs) {
+
         RELP("CHAMELEON_TOOL_LIBRARIES = %s\n", tool_libs);
         std::string str(tool_libs);
         std::vector<std::string> libs;
@@ -98,8 +100,8 @@ void cham_t_init() {
     else if (!strcmp(cham_t_env_var, "0"))
         cham_t_status.enabled = 0;
     
-    if(cham_t_status.enabled)
-    {
+    if(cham_t_status.enabled) {
+
         // try to load tool
         cham_t_start_tool_result = cham_t_try_start_tool(CHAMELEON_VERSION);
 

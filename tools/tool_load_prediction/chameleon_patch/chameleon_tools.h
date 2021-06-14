@@ -297,8 +297,9 @@ typedef bool (*cham_t_callback_train_prediction_model_t)(
     int32_t taskwait_counter
 );
 
-typedef double (*cham_t_callback_valid_prediction_model_t)(
-    int32_t taskwait_counter
+typedef std::vector<double> (*cham_t_callback_valid_prediction_model_t)(
+    int32_t taskwait_counter,
+    int prediction_mode
 );
 
 #pragma endregion

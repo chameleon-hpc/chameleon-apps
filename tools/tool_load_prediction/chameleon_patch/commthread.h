@@ -88,11 +88,21 @@ extern thread_safe_list_t<TYPE_TASK_ID> _unfinished_locally_created_tasks;
 // Threading section
 extern std::atomic<int> _comm_thread_load_exchange_happend;
 
-#if CHAMELEON_TOOL_SUPPORT && CHAM_PRED_MIGRATION
+#if CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE > 0
 // ====== Info about predicted load by the tool that is being processed ======
-extern std::vector<double> _list_predicted_load;
-extern std::vector<double> _predicted_load_info_ranks;
+extern std::vector<double> _list_predicted_load;    // array of all pred-loads per iteration
+extern std::vector<double> _predicted_load_info_ranks; // just keep the pred-load of the current iteration
 
+// a defined flag for checking the cham-tool prediction model is ready or not
+extern std::atomic<bool> _flag_model_is_trained;
+
+// setting for chameleon tool, default could be follows, but they are updated in
+// the chameleon_init function by getting the environment vars
+extern int MAX_TASKS_PER_RANK;
+extern int MAX_EST_NUM_ITERS;
+extern int TIME_TO_TRAIN_MODEL;
+
+#if CHAM_PRED_MIGRATION > 0
 // ====== Flag to allow the predict-load exchange that could happen ======
 extern std::atomic<int> _comm_thread_predload_exchange_happend;
 
@@ -100,6 +110,12 @@ extern std::atomic<int> _comm_thread_predload_exchange_happend;
 //        should do 1 once time when a new iter/cycle starts,
 extern int _flag_create_gather_predload_happened;
 extern int _flag_handle_gather_predload_happened;
+
+#if CHAM_PRED_MIGRATION==2
+extern int _flag_predict_for_the_whole_future;
+#endif
+
+#endif /* CHAM_PRED_MIGRATION > 0 */
 
 #endif
 
@@ -124,17 +140,8 @@ extern int event_send_back;
 extern int event_progress_send;
 extern int event_progress_recv;
 
-// setting for chameleon tool, default could be follows, but they are updated in
-// the chameleon_init function by getting the environment vars
-extern int MAX_TASKS_PER_RANK;
-extern int MAX_EST_NUM_ITERS;
-extern int TIME_TO_TRAIN_MODEL;
-
 // lock used to ensure that currently only a single thread is doing communication progression
 extern std::mutex _mtx_comm_progression;
-
-// a defined flag for checking the cham-tool prediction model is ready or not
-extern std::atomic<bool> _flag_model_is_trained;
 
 
 //================================================================
@@ -169,7 +176,8 @@ class chameleon_comm_thread_session_data_t {
     int transported_load_values[3];
     int *buffer_load_values;
 
-#if CHAMELEON_TOOL_SUPPORT && CHAM_PRED_MIGRATION
+#if CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE > 0 && CHAM_PRED_MIGRATION > 0
+    // for storing predicted values over iters
     double *buffer_predicted_load_values;
 
     // =============== Monitoring predicted load info
@@ -178,15 +186,6 @@ class chameleon_comm_thread_session_data_t {
     MPI_Request request_gather_prediction_out;
     MPI_Status  status_gather_prediction_out;
 #endif
-
-// #if CHAMELEON_TOOL_SUPPORT && CHAM_PRED_MIGRATION
-//     double transported_load_values[4];
-//     double *buffer_load_values;
-//     double *buffer_predicted_load_values;
-// #else
-//     int transported_load_values[3];
-//     int *buffer_load_values;
-// #endif
 
     // =============== Num migrated tasks at once
     int n_task_send_at_once = 1;
