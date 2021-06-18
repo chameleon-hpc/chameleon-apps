@@ -25,6 +25,7 @@
 #include <fstream>
 
 #include <mutex>
+#include <atomic>
 
 #include <vector>
 #include <tuple>
@@ -39,6 +40,7 @@
 
 #define UNIFORM
 const int MAX_EVENT_SIZE = 10000;
+const int MAX_NUMBER_TASKS = 150;
 
 #ifdef TRACE
 #include "VT.h"
@@ -56,11 +58,11 @@ static cham_t_get_task_param_info_by_id_t cham_t_get_task_param_info_by_id;
 static cham_t_get_task_data_t cham_t_get_task_data;
 
 // @jusch static variables
-
-static std::mutex m, mID;
+static std::mutex m;
 static std::vector<long double> runtimes_v;
 static std::vector<int> id_v;
-static int ID=0;
+static std::vector<std::string> events_v;
+static std::atomic<int> ID=0;
 // true = TO, false = FROM
 static std::vector<std::tuple<int, std::vector < long double>, std::vector<long double>, long double>>
 args_v;
@@ -81,6 +83,103 @@ const std::string currentTime() {
     tstruct = *localtime(&now);
     strftime(buf, sizeof(buf), "%X", &tstruct);
     return buf;
+}
+
+std::vector<std::string> getEventnames(){
+    /* Group ID will let us get group and event names */
+    auto gid = perfmon_getIdOfActiveGroup();
+
+    /* Get group name and number of events */
+    auto group_name = perfmon_getGroupName(gid);
+    auto number_events = perfmon_getNumberOfEvents(gid);
+
+    std::vector<std::string> events;
+
+    for (int i=0; i<number_events; i++)
+        events.push_back(std::string(perfmon_getEventName(gid, i)));
+
+    return events;
+}
+
+static void printResults(){
+    const char *region_name, *group_name, *event_name, *metric_name;
+    double event_value, metric_value;
+    int gid = 0;
+    int t, i, k;
+
+    /* Read file output by likwid so that we can process results */
+    perfmon_readMarkerFile(getenv("LIKWID_FILEPATH"));
+
+    /* Get information like region name, number of events, and number of
+     * metrics. Notice that number of regions printed here is actually
+     * (num_regions*num_groups), because perfmon considers a region to be the
+     * region/group combo. In other words, each time a region is measured with
+     * a different group or event set, perfmon considers it a new region.
+     *
+     * Therefore, if we have two regions and 3 groups measured for each,
+     * perfmon_getNumberOfRegions() will return 6.
+     */
+    printf("Marker API measured %d regions\n", perfmon_getNumberOfRegions());
+    for (i=0;i<perfmon_getNumberOfRegions();i++)
+    {
+        gid = perfmon_getGroupOfRegion(i);
+        printf("Region %s with %d events and %d metrics\n",
+               perfmon_getTagOfRegion(i), perfmon_getEventsOfRegion(i),
+               perfmon_getMetricsOfRegion(i));
+    }
+    printf("\n");
+
+    /* Print per-thread results. */
+    printf("detailed results follow. Notice that the region \"calc_flops\"\n"
+           "will not appear, as it was reset after each time it was measured.\n");
+    printf("\n");
+
+    const char * result_header = "%6s : %15s : %10s : %6s : %40s : %30s \n";
+    const char * result_format = "%6d : %15s : %10s : %6s : %40s : %30f \n";
+    printf(result_header, "thread", "region", "group", "type",
+           "result name", "result value");
+
+    /* Uncomment the for loop if you'd like to inspect all threads */
+    t = 0;
+    //for (t = 0; t < NUM_THREADS; t++)
+    {
+        for (i = 0; i < perfmon_getNumberOfRegions(); i++)
+        {
+            /* Returns the user-supplied region name */
+            region_name = perfmon_getTagOfRegion(i);
+
+            /* gid is the group ID independent of region, where as i is the ID
+             * of the region/group combo
+             */
+            gid = perfmon_getGroupOfRegion(i);
+            /* Get the name of the group measured, like "FLOPS_DP" or "L2" */
+            group_name = perfmon_getGroupName(gid);
+
+            /* Get info for each event */
+            for (k = 0; k < perfmon_getNumberOfEvents(gid); k++)
+            {
+                /* Get the event name, like "INSTR_RETIRED_ANY" */
+                event_name = perfmon_getEventName(gid, k);
+                /* Get the associated value */
+                event_value = perfmon_getResultOfRegionThread(i, k, t);
+
+                printf(result_format, t, region_name, group_name, "event",
+                       event_name, event_value);
+            }
+
+            /* Get info for each metric */
+            for (k = 0; k < perfmon_getNumberOfMetrics(gid); k++)
+            {
+                /* Get the metric name, like "L2 bandwidth [MBytes/s]" */
+                metric_name = perfmon_getMetricName(gid, k);
+                /* Get the associated value */
+                metric_value = perfmon_getMetricOfRegionThread(i, k, t);
+
+                printf(result_format, t, region_name, group_name, "metric",
+                       metric_name, metric_value);
+            }
+        }
+    }
 }
 
 
@@ -145,10 +244,7 @@ on_cham_t_callback_task_schedule(
 
     if (cham_t_task_start == schedule_type) {
 
-        mID.lock();
-        int tmpID = ID;
-        ID++;
-        mID.unlock();
+        auto tmpID = ++ID;
         auto tag = std::to_string(rank_data->value) + "R" + std::to_string(tmpID);
         LIKWID_MARKER_START(tag.c_str());
 
@@ -177,6 +273,7 @@ on_cham_t_callback_task_schedule(
         std::vector<long double> inSizes, outSizes;
         long double overallSize = 0;
 
+
         for (int i = 0; i < p_info.num_args; ++i) {
 
             overallSize += (long double) p_info.arg_sizes[i]/1000;
@@ -189,23 +286,8 @@ on_cham_t_callback_task_schedule(
 
         }
 
-        int nevents;
-        int count;
-        double time;
-        double events[MAX_EVENT_SIZE];
-        LIKWID_MARKER_GET(tag.c_str(), &nevents, events, &time, &count);
-
-        if(nevents > 0){
-            printf("Region tag - %i\n", (int) internal_task_id);
-            printf("Region example measures %d events, total measurement time is %f\n", nevents, time);
-            printf("The region was called %d times\n", count);
-        }
-        for (int i = 0; i < nevents; i++)
-        {
-            printf("Event %d: %f\n", i, events[i]);
-        }
-
         m.lock();
+        events_v.push_back(tag);
         id_v.push_back(tmpID);
         runtimes_v.push_back(double(1000.0*end_time.tv_sec + 1e-6*end_time.tv_nsec - (1000.0*start_time.tv_sec + 1e-6*start_time.tv_nsec)));
         args_v.push_back(std::tuple < int, std::vector < long double > , std::vector < long double > , long double >
@@ -236,8 +318,6 @@ int cham_t_initialize(
         cham_t_function_lookup_t lookup,
         cham_t_data_t *tool_data) {
 
-    LIKWID_MARKER_INIT;
-
     cham_t_set_callback = (cham_t_set_callback_t) lookup("cham_t_set_callback");
     cham_t_get_callback = (cham_t_get_callback_t) lookup("cham_t_get_callback");
     cham_t_get_rank_data = (cham_t_get_rank_data_t) lookup("cham_t_get_rank_data");
@@ -255,13 +335,21 @@ int cham_t_initialize(
     cham_t_data_t *r_data = cham_t_get_rank_data();
     r_data->value = r_info->comm_rank;
 
+    setenv("LIKWID_FILEPATH", "/home/ey186093/output/likwid_marker.out", 1);
+
+    LIKWID_MARKER_INIT;
+
+    std::string tag;
+    for (int i=0; i< MAX_NUMBER_TASKS; i++){
+        tag = std::to_string(r_data->value) + "R" + std::to_string(i);
+        LIKWID_MARKER_REGISTER(tag.c_str());
+    }
+
     return 1; //success
 }
 
 void cham_t_finalize(cham_t_data_t *tool_data) {
     cham_t_data_t *rank_data = cham_t_get_rank_data();
-
-    LIKWID_MARKER_CLOSE;
 
     std::vector<long double> inSize;
     std::vector<long double> outSize;
@@ -279,7 +367,6 @@ void cham_t_finalize(cham_t_data_t *tool_data) {
     long double inMin=0, ouMin=0;
     long double inMax=0, ouMax=0;
     long double val;
-
 
     for (int i = 0; i < runtimes_v.size(); ++i) {
         inSize = std::get<1>(args_v.at(i));
@@ -348,7 +435,7 @@ void cham_t_finalize(cham_t_data_t *tool_data) {
                        currentTime() + ".csv";
     std::ofstream file(path, std::ios_base::app);
 
-    std::string path_N = "/rwthfs/rz/cluster/home/ey186093/output/.node/node_R" + std::to_string(rank_data->value) + '_' +
+    std::string path_N = "/rwthfs/rz/cluster/home/ey186093/output/.rank/rank_R" + std::to_string(rank_data->value) + '_' +
                        currentTime() + ".csv";
     std::ofstream file_N(path_N, std::ios_base::app);
 #else
@@ -357,7 +444,7 @@ void cham_t_finalize(cham_t_data_t *tool_data) {
                        currentTime() + ".csv";
     std::ofstream file(path, std::ios_base::app);
 
-    std::string path_N = "/rwthfs/rz/cluster/home/ey186093/output/.node_NU/node_R" + std::to_string(rank_data->value) + '_' +
+    std::string path_N = "/rwthfs/rz/cluster/home/ey186093/output/.rank_NU/rank_R" + std::to_string(rank_data->value) + '_' +
                        currentTime() + ".csv";
     std::ofstream file_N(path_N, std::ios_base::app);
 #endif
@@ -371,17 +458,22 @@ void cham_t_finalize(cham_t_data_t *tool_data) {
         std::string config = "/rwthfs/rz/cluster/home/ey186093/output/.head/HEAD.csv";
         std::ofstream configFile(config, std::ios_base::app);
 
-        std::string config_N = "/rwthfs/rz/cluster/home/ey186093/output/.head/HEAD_N.csv";
+        std::string config_N = "/rwthfs/rz/cluster/home/ey186093/output/.head/HEAD_R.csv";
         std::ofstream configFile_N(config_N, std::ios_base::app);
 #else
         std::string config = "/rwthfs/rz/cluster/home/ey186093/output/.head_NU/HEAD.csv";
         std::ofstream configFile(config, std::ios_base::app);
 
-        std::string config_N = "/rwthfs/rz/cluster/home/ey186093/output/.head_NU/HEAD_N.csv";
+        std::string config_N = "/rwthfs/rz/cluster/home/ey186093/output/.head_NU/HEAD_R.csv";
         std::ofstream configFile_N(config_N, std::ios_base::app);
 #endif
+        auto eventNames = getEventnames();
+        configFile << "TASK_ID;RUNTIME_ms;SIZE_IN_min;SIZE_IN_max;SIZE_IN_mean;SIZE_IN_overall;SIZE_OUT_min;SIZE_OUT_max;SIZE_OUT_mean;SIZE_OUT_overall;SIZE_overall";
 
-        configFile << "TASK_ID;RUNTIME_ms;SIZE_IN_min;SIZE_IN_max;SIZE_IN_mean;SIZE_IN_overall;SIZE_OUT_min;SIZE_OUT_max;SIZE_OUT_mean;SIZE_OUT_overall;SIZE_overall\n";
+        for (int i = 0; i < eventNames.size(); ++i)
+            configFile << ";" << eventNames[i].c_str();
+
+        configFile << "\n";
         configFile_N << "TASK_ID;RUNTIME_min;RUNTIME_max;RUNTIME_mean;#TASKS;RUNTIME_overall\n";
 
         configFile.close();
@@ -389,17 +481,39 @@ void cham_t_finalize(cham_t_data_t *tool_data) {
 
     }
 
+    int nevents;
+    double *events;
+    double time;
+    int count;
+
     for (int i = 0; i < runtimes_v.size(); ++i) {
+
+        nevents = MAX_EVENT_SIZE;
+        events = new double[MAX_EVENT_SIZE];
+        time = 0;
+        count = 0;
+
+        LIKWID_MARKER_GET(events_v.at(i).c_str(), &nevents, events, &time, &count);
+
         file << std::scientific << std::to_string(rank_data->value) << 'R' << id_v.at(i) << ";" << runtimes_v.at(i) << ";" << inputMin.at(i) << ";" << inputMax.at(i) << ";"\
         << inputMean.at(i) << ";" << std::to_string(rank_data->value) << inputSize.at(i) << ";" << outputMin.at(i) << ";" << outputMax.at(i) << ";"\
-        << outputMean.at(i) << ";" << outputSize.at(i) << ";" << ovSize.at(i)<< "\n";
+        << outputMean.at(i) << ";" << outputSize.at(i) << ";" << ovSize.at(i);
+
+        for (int j = 0; j < nevents; j++)
+            file << ";" << events[j];
+
+
+        file << "\n";
 
         file_N << std::scientific << std::to_string(rank_data->value) << 'R' << id_v.at(i) << ";" << runtimeMin << ";" << runtimeMax << ";" << runtimeMean << ";" \
         << runtimes_v.size() << ";" << runtimeOverall << "\n";
     }
+
     file.close();
     file_N.close();
 
+    LIKWID_MARKER_CLOSE;
+    
     printf("0: cham_t_event_runtime_shutdown\n");
 }
 
