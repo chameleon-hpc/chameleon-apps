@@ -346,7 +346,7 @@ void cham_t_finalize(cham_t_data_t *tool_data) {
                        currentTime() + ".csv";
     std::ofstream file(path, std::ios_base::app);
 
-    std::string path_N = "/rwthfs/rz/cluster/home/ey186093/output/.node/node_R" + std::to_string(rank_data->value) + '_' +
+    std::string path_N = "/rwthfs/rz/cluster/home/ey186093/output/.rank/rank_R" + std::to_string(rank_data->value) + '_' +
                          currentTime() + ".csv";
     std::ofstream file_N(path_N, std::ios_base::app);
 #else
@@ -355,7 +355,7 @@ void cham_t_finalize(cham_t_data_t *tool_data) {
                        currentTime() + ".csv";
     std::ofstream file(path, std::ios_base::app);
 
-    std::string path_N = "/rwthfs/rz/cluster/home/ey186093/output/.node_NU/node_R" + std::to_string(rank_data->value) + '_' +
+    std::string path_N = "/rwthfs/rz/cluster/home/ey186093/output/.rank_NU/rank_R" + std::to_string(rank_data->value) + '_' +
                        currentTime() + ".csv";
     std::ofstream file_N(path_N, std::ios_base::app);
 #endif

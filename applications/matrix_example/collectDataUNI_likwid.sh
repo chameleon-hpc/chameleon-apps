@@ -18,18 +18,19 @@ module load likwid
 echo "$(pwd)"
 
 CUR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" # get path of current script
-RESULT_DIR=${RESULT_DIR:-"${CUR_DIR}/results_likwid_$(date +"%Y%m%d_%H%M%S")"};
-LIKWID_GROUPS=("FLOPS_DP" "MEM_DP" "FLOPS_AVX" "L2CACHE" "L3CACHE" "DATA" "TLB_DATA" "CYCLE_ACTIVITY" "CYCLE_STALLS" "TMA");
+###RESULT_DIR=${RESULT_DIR:-"${CUR_DIR}/results_likwid_$(date +"%Y%m%d_%H%M%S")"};
+LIKWID_GROUPS=("CLOCK" "CYCLE_ACTIVITY" "CYCLE_STALLS" "DATA" "FLOPS_DP" "FLOPS_AVX" "L2" "L2CACHE" "L3" "L3CACHE" "MEM_DP" "TLB_DATA");
+###LIKWID_GROUPS=("FLOPS_DP" "MEM_DP" "FLOPS_AVX" "L2CACHE" "L3CACHE" "DATA" "TLB_DATA" "CYCLE_ACTIVITY" "CYCLE_STALLS" "TMA");
 ####LIKWID_GROUPS=("FLOPS_DP");
 
 mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')";
-mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')/node";
+mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')/rank";
 mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')/runtime";
-
+RESULT_DIR="/home/ey186093/output/$(date '+%Y-%m-%d')";
 
 echo "Script Dir: ${CUR_DIR}"
 echo "Result Dir: ${RESULT_DIR}"
-likwid-topology –g
+###likwid-topology –g
 
 mkdir -p ${RESULT_DIR}
 
@@ -128,27 +129,31 @@ for matrix_size in 200; do
           c=0;
           d=$a;
       fi
-      for tmp_grp in "${LIKWID_GROUPS[@]}"
-      do
-        ### -O -C N:0-47
+      ### -O -C N:0-47 S0:47
 
-        ###likwid-mpirun -np 4 -pin S0:0-3_S0:4-7_S0:8-11_S0:12-15 -g ${tmp_grp} -m ./main $matrix_size $a $b $c $d
-        mpiexec.hydra -np 4 likwid-perfctr -C S0:48 -g ${tmp_grp} -m -O -o ${RESULT_DIR}/output_${matrix_size}_W_${a}_${b}_${c}_${d}_${tmp_grp}_%h_%r.txt ./main $matrix_size $a $b $c $d | tee log.log;
+      likwid-mpirun -np 4 -m -g BRANCH -g CACHES -g CLOCK -g CYCLE_ACTIVITY -g CYCLE_STALLS -g DATA -g FLOPS_DP -g FLOPS_AVX -g L2 ./main $matrix_size $a $b $c $d
+      ###mpiexec.hydra -np 4 likwid-perfctr -T 100ms -c L:N:0  -g BRANCH -m -O -o ${RESULT_DIR}/UNI_${matrix_size}_W_${a}_${b}_${c}_${d}_%h_%r.txt ./main $matrix_size $a $b $c $d | tee log.log;
 
-        if grep -q "FAILED" "log.log"; then
-          echo "ERROR: One test failed";
-          break;
-        fi
+      if grep -q "FAILED" "log.log"; then
+        echo "ERROR: One test failed";
+        break;
+      fi
 
-        touch "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}.csv";
-        touch "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}_N.csv";
+      touch "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}.csv";
+      touch "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}_R.csv";
 
-        cat "/home/ey186093/output/.head/HEAD.csv" >> "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}.csv";
-        cat "/home/ey186093/output/.head/HEAD_N.csv" >> "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}_N.csv";
-        rm "/home/ey186093/output/.head/HEAD.csv";
-        rm "/home/ey186093/output/.head/HEAD_N.csv";
+      cat "/home/ey186093/output/.head/HEAD.csv" >> "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}.csv";
+      cat "/home/ey186093/output/.head/HEAD_R.csv" >> "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}_R.csv";
 
-        for file in /home/ey186093/output/.runtime/*.csv; do
+      rm "/home/ey186093/output/.head/HEAD.csv";
+      rm "/home/ey186093/output/.head/HEAD_R.csv";
+
+      #for file in ${RESULT_DIR}/.${tmp_grp}/*; do
+        #cat "${file}" >> "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}_C_${tmp_grp}.csv";
+        #rm "${file}";
+      #done
+
+      for file in /home/ey186093/output/.runtime/*.csv; do
           ###if [[ "${file}" == *"R0"* ]]; then
             ###echo "----R0---" >> "RESULT_S${matrix_size}W_${a}_${b}_${c}_${d}.csv";
           ####elif [[ "${file}" == *"R1"* ]]; then
@@ -159,11 +164,11 @@ for matrix_size in 200; do
             ###echo "---R3---" >> "RESULT_S${matrix_size}W_${a}_${b}_${c}_${d}.csv";
           ###fi
 
-          cat "${file}" >> "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}.csv";
-          rm "${file}";
-        done
+        cat "${file}" >> "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}.csv";
+        rm "${file}";
+      done
 
-      for file in /home/ey186093/output/.node/*.csv; do
+      for file in /home/ey186093/output/.rank/*.csv; do
         ###if [[ "${file}" == *"R0"* ]]; then
           ###echo "----R0---" >> "RESULT_S${matrix_size}W_${a}_${b}_${c}_${d}.csv";
         ####elif [[ "${file}" == *"R1"* ]]; then
@@ -174,13 +179,12 @@ for matrix_size in 200; do
           ###echo "---R3---" >> "RESULT_S${matrix_size}W_${a}_${b}_${c}_${d}.csv";
         ###fi
 
-        cat "${file}" >> "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}_N.csv";
+        cat "${file}" >> "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}_R.csv";
         rm "${file}";
       done
 
       mv "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')/runtime";
-      mv "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}_N.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')/node";
-      done
+      mv "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}_R.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')/rank";
     done
   done
 done

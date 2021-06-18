@@ -21,7 +21,7 @@ export I_MPI_PIN=1;
 export I_MPI_PIN_DOMAIN=auto;
 
 mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')_NU";
-mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')_NU/node";
+mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')_NU/rank";
 mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')_NU/runtime";
 
 touch "/home/ey186093/output/$(date '+%Y-%m-%d')_NU/config.log";
@@ -111,7 +111,7 @@ for iterator in {1..255..1}; do
       rm "${file}";
     done
 
-    for file in /home/ey186093/output/.node_NU/*.csv; do
+    for file in /home/ey186093/output/.rank_NU/*.csv; do
       ###if [[ "${file}" == *"R0"* ]]; then
         ###echo "---R0---" >> "RESULT_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv";
       ###elif [[ "${file}" == *"R1"* ]]; then
@@ -125,7 +125,7 @@ for iterator in {1..255..1}; do
       rm "${file}";
     done
 
-    mv "NU_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}_N.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')_NU/node";
+    mv "NU_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}_N.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')_NU/rank";
     mv "NU_S_${sort[1]}_${sort[2]}_${sort[3]}_${sort[4]}_MS_${NOM}_I_${iterator}.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')_NU/runtime";
   done
 done

@@ -21,7 +21,7 @@ export I_MPI_PIN=1;
 export I_MPI_PIN_DOMAIN=auto;
 
 mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')";
-mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')/node";
+mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')/rank";
 mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')/runtime";
 
 ### 100.600.100
@@ -143,7 +143,7 @@ for matrix_size in 50 100 150 200 450 500 550 600; do
         rm "${file}";
       done
 
-      for file in /home/ey186093/output/.node/*.csv; do
+      for file in /home/ey186093/output/.rank/*.csv; do
         ###if [[ "${file}" == *"R0"* ]]; then
           ###echo "----R0---" >> "RESULT_S${matrix_size}W_${a}_${b}_${c}_${d}.csv";
         ####elif [[ "${file}" == *"R1"* ]]; then
@@ -159,7 +159,7 @@ for matrix_size in 50 100 150 200 450 500 550 600; do
       done
 
       mv "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')/runtime";
-      mv "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}_N.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')/node";
+      mv "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}_N.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')/rank";
 
     done
   done
