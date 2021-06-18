@@ -37,7 +37,7 @@
 
 // flag which communication should be applied (load exchange & migration)
 #ifndef COMMUNICATION_MODE
-#define COMMUNICATION_MODE 0 // communication performed by communication thread (default)
+#define COMMUNICATION_MODE 0   // communication performed by communication thread (default)
 //#define COMMUNICATION_MODE 1 // communication performed only by threads inside distributed taskwait. Only a single thread active at a time.
 //#define COMMUNICATION_MODE 2 // communication performed only by threads inside distributed taskwait. All can do progress in parallel. Only one can do load exchange and migration decision at a time.
 //#define COMMUNICATION_MODE 3 // Hybrid mode. All can do progress. Only comm thread responsible for load exchange and migration decision. comm thread pinned.
@@ -81,8 +81,8 @@
 
 // determines how data (arguments) is packed and send during offloading
 #ifndef OFFLOAD_DATA_PACKING_TYPE
-//#define OFFLOAD_DATA_PACKING_TYPE 0   // 0 = pack meta data and arguments together and send it with a single message (requires copy to buffer)
-//#define OFFLOAD_DATA_PACKING_TYPE 1   // 1 = zero copy approach, only pack meta data (num_args, arg types ...) + separat send for each mapped argument
+// #define OFFLOAD_DATA_PACKING_TYPE 0   // 0 = pack meta data and arguments together and send it with a single message (requires copy to buffer)
+// #define OFFLOAD_DATA_PACKING_TYPE 1   // 1 = zero copy approach, only pack meta data (num_args, arg types ...) + separat send for each mapped argument
 #define OFFLOAD_DATA_PACKING_TYPE 2     // 2 = zero copy approach, only pack meta data (num_args, arg types ...) + ONE separat send for with mapped arguments
 #endif
 
@@ -108,13 +108,21 @@
 // #define CHAM_REPLICATION_MODE 4
 #endif
 
-// specify the strategy of work-stealing with prediction tool
-#ifndef CHAM_PRED_MIGRATION
-// #define CHAM_PRED_MIGRATION 0    // no prediction with migration
-#define CHAM_PRED_MIGRATION 1       // prediction tool is on
+// specify the method for predicting load by the callback tool
+#ifndef CHAM_PREDICTION_MODE
+#define CHAM_PREDICTION_MODE 0      // no prediction
+// #define CHAM_PREDICTION_MODE 1   // time-series load as the patterns for prediction
+// #define CHAM_PREDICTION_MODE 2   // task-characterization, args as the patterns for prediction
 #endif
 
-//Specify whether tasks should be offloaded aggressively after one performance update
+// specify the strategy of work-stealing with prediction tool
+#ifndef CHAM_PRED_MIGRATION
+#define CHAM_PRED_MIGRATION 0   // predict iter-by-iter, no migration action
+// #define CHAM_PRED_MIGRATION 1    // predict iter-by-iter, then migrate-actions 
+// #define CHAM_PRED_MIGRATION 2    // predict for the whole future, then migrate-actions
+#endif
+
+// specify whether tasks should be offloaded aggressively after one performance update
 #ifndef OFFLOADING_STRATEGY_AGGRESSIVE
 #define OFFLOADING_STRATEGY_AGGRESSIVE 0
 #endif
@@ -499,7 +507,6 @@ class thread_safe_task_list_t {
     
     std::list<cham_migratable_task_t*> task_list;
     std::mutex m;
-    // size_t list_size = 0;
     std::atomic<size_t> list_size;
     
     // duplicate to avoid contention on single atomic from comm thread and worker threads
@@ -770,10 +777,6 @@ class thread_safe_deque_t {
         *success = true;
         if(this->empty()) {
             *success = false;
-            // if (std::is_fundamental<T>::value)
-            //     return -1;
-            // else 
-            //     return NULL;
             return 0;
         }
 
@@ -787,10 +790,6 @@ class thread_safe_deque_t {
         } else {
             this->m.unlock();
             *success = false;
-            // if (std::is_fundamental<T>::value)
-            //     return -1;
-            // else 
-            //     return NULL;
             return 0;
         }
         this->m.unlock();
@@ -1079,26 +1078,32 @@ static void load_config_values() {
     }
 }
 
-static void print_config_values() {
-    RELP("COMMUNICATION_MODE=%d\n", COMMUNICATION_MODE);
-    RELP("ENABLE_COMM_THREAD=%d\n", ENABLE_COMM_THREAD);
-    RELP("ENABLE_TASK_MIGRATION=%d\n", ENABLE_TASK_MIGRATION);
-    RELP("ENABLE_EARLY_IRECVS=%d\n", ENABLE_EARLY_IRECVS);
-    RELP("OFFLOAD_DATA_PACKING_TYPE=%d\n", OFFLOAD_DATA_PACKING_TYPE);
-    RELP("MPI_BLOCKING=%d\n", MPI_BLOCKING);
-    RELP("OMP_NUM_THREADS=%d\n", OMP_NUM_THREADS_VAR.load());
-    RELP("MIN_ABS_LOAD_IMBALANCE_BEFORE_MIGRATION=%f\n", MIN_ABS_LOAD_IMBALANCE_BEFORE_MIGRATION.load());
-    RELP("MIN_REL_LOAD_IMBALANCE_BEFORE_MIGRATION=%f\n", MIN_REL_LOAD_IMBALANCE_BEFORE_MIGRATION.load());
-    RELP("TAG_NBITS_TASK_ID=%d\n", TAG_NBITS_TASK_ID.load());
-    RELP("MIN_LOCAL_TASKS_IN_QUEUE_BEFORE_MIGRATION=%f\n", MIN_LOCAL_TASKS_IN_QUEUE_BEFORE_MIGRATION.load());
-    RELP("MAX_TASKS_PER_RANK_TO_MIGRATE_AT_ONCE=%f\n", MAX_TASKS_PER_RANK_TO_MIGRATE_AT_ONCE.load());
-    RELP("MAX_TASKS_PER_RANK_TO_ACTIVATE_AT_ONCE=%f\n", MAX_TASKS_PER_RANK_TO_ACTIVATE_AT_ONCE.load());
-    RELP("PERCENTAGE_DIFF_TASKS_TO_MIGRATE=%f\n", PERCENTAGE_DIFF_TASKS_TO_MIGRATE.load());
-    RELP("ENABLE_TRACE_FROM_SYNC_CYCLE=%d\n", ENABLE_TRACE_FROM_SYNC_CYCLE.load());
-    RELP("ENABLE_TRACE_TO_SYNC_CYCLE=%d\n", ENABLE_TRACE_TO_SYNC_CYCLE.load());
-    RELP("MAX_PERCENTAGE_REPLICATED_TASKS=%f\n", MAX_PERCENTAGE_REPLICATED_TASKS.load());
-    if(CHAMELEON_STATS_FILE_PREFIX.load()) {
-        RELP("CHAMELEON_STATS_FILE_PREFIX=%s\n", CHAMELEON_STATS_FILE_PREFIX.load());
+static void print_config_values(int rank) {
+    if(rank == 0)   // print at the master rank
+    {
+        RELP("COMMUNICATION_MODE=%d\n", COMMUNICATION_MODE);
+        RELP("ENABLE_COMM_THREAD=%d\n", ENABLE_COMM_THREAD);
+        RELP("ENABLE_TASK_MIGRATION=%d\n", ENABLE_TASK_MIGRATION);
+        RELP("CHAM_REPLICATION_MODE=%d\n", CHAM_REPLICATION_MODE);
+        RELP("CHAM_PRED_MIGRATION=%d\n", CHAM_PRED_MIGRATION);
+        RELP("CHAM_PREDICTION_MODE=%d\n", CHAM_PREDICTION_MODE);
+        RELP("ENABLE_EARLY_IRECVS=%d\n", ENABLE_EARLY_IRECVS);
+        RELP("OFFLOAD_DATA_PACKING_TYPE=%d\n", OFFLOAD_DATA_PACKING_TYPE);
+        RELP("MPI_BLOCKING=%d\n", MPI_BLOCKING);
+        RELP("OMP_NUM_THREADS=%d\n", OMP_NUM_THREADS_VAR.load());
+        RELP("MIN_ABS_LOAD_IMBALANCE_BEFORE_MIGRATION=%f\n", MIN_ABS_LOAD_IMBALANCE_BEFORE_MIGRATION.load());
+        RELP("MIN_REL_LOAD_IMBALANCE_BEFORE_MIGRATION=%f\n", MIN_REL_LOAD_IMBALANCE_BEFORE_MIGRATION.load());
+        RELP("TAG_NBITS_TASK_ID=%d\n", TAG_NBITS_TASK_ID.load());
+        RELP("MIN_LOCAL_TASKS_IN_QUEUE_BEFORE_MIGRATION=%f\n", MIN_LOCAL_TASKS_IN_QUEUE_BEFORE_MIGRATION.load());
+        RELP("MAX_TASKS_PER_RANK_TO_MIGRATE_AT_ONCE=%f\n", MAX_TASKS_PER_RANK_TO_MIGRATE_AT_ONCE.load());
+        RELP("MAX_TASKS_PER_RANK_TO_ACTIVATE_AT_ONCE=%f\n", MAX_TASKS_PER_RANK_TO_ACTIVATE_AT_ONCE.load());
+        RELP("PERCENTAGE_DIFF_TASKS_TO_MIGRATE=%f\n", PERCENTAGE_DIFF_TASKS_TO_MIGRATE.load());
+        RELP("ENABLE_TRACE_FROM_SYNC_CYCLE=%d\n", ENABLE_TRACE_FROM_SYNC_CYCLE.load());
+        RELP("ENABLE_TRACE_TO_SYNC_CYCLE=%d\n", ENABLE_TRACE_TO_SYNC_CYCLE.load());
+        RELP("MAX_PERCENTAGE_REPLICATED_TASKS=%f\n", MAX_PERCENTAGE_REPLICATED_TASKS.load());
+        if(CHAMELEON_STATS_FILE_PREFIX.load()) {
+            RELP("CHAMELEON_STATS_FILE_PREFIX=%s\n", CHAMELEON_STATS_FILE_PREFIX.load());
+        }
     }
 }
 #pragma endregion

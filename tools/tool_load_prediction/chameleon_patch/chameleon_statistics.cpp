@@ -110,10 +110,18 @@ MinMaxAvgStats       _stats_throughput_send("_throughput_send", "MB/s, not relia
 MinMaxAvgStats       _stats_throughput_recv("_throughput_recv", "MB/s, not reliable");
 
 #if CHAMELEON_TOOL_SUPPORT
+
 std::atomic<double>  _time_tool_get_thread_data_sum(0.0);
 std::atomic<int>     _time_tool_get_thread_data_count(0);
 std::atomic<double>  _time_task_execution_pred_sum(0.0);
 std::atomic<int>     _time_task_execution_pred_count(0);
+
+// for estimating training_ or inferencing_time of prediction models
+std::atomic<double> _time_training_model_sum(0.0);
+std::atomic<int>    _time_training_model_count(0);
+std::atomic<double> _time_inferenc_model_sum(0.0);
+std::atomic<int>    _time_inferenc_model_count(0);
+
 #endif
 
 #ifdef __cplusplus
@@ -146,6 +154,11 @@ void cham_stats_reset_for_sync_cycle() {
 #if CHAMELEON_TOOL_SUPPORT
     _time_task_execution_pred_sum = 0.0;
     _time_task_execution_pred_count = 0;
+
+    _time_training_model_sum = 0.0;
+    _time_training_model_count = 0;
+    _time_inferenc_model_sum = 0.0;
+    _time_inferenc_model_count = 0;
 #endif
 
     _time_encode_sum = 0.0;
@@ -246,6 +259,8 @@ void cham_stats_print_stats() {
 #if CHAMELEON_TOOL_SUPPORT
     // cham_stats_print_stats_w_mean(cur_file, "_time_tool_get_thread_data_sum", _time_tool_get_thread_data_sum, _time_tool_get_thread_data_count, true);
     cham_stats_print_stats_w_mean(cur_file, "_time_task_execution_pred_sum", _time_task_execution_pred_sum, _time_task_execution_pred_count);
+    cham_stats_print_stats_w_mean(cur_file, "_time_training_model_sum", _time_training_model_sum, _time_training_model_count);
+    cham_stats_print_stats_w_mean(cur_file, "_time_inferenc_model_sum", _time_inferenc_model_sum, _time_inferenc_model_count);
 #endif
 
     // Something is wrong with these stat_info, so temporarily make them off

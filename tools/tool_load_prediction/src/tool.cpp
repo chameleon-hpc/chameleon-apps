@@ -84,7 +84,8 @@ on_cham_t_callback_task_begin(int thread_id, cham_migratable_task_t * task, doub
     std::vector<int64_t> arg_sizes, int taskwait_counter)
 {
     /**
-     * Not using yet.
+     * This has not been used yet. But, the purpose is to track the info when
+     * a task is dispatched to be executed.
      */
 
 }
@@ -133,7 +134,7 @@ on_cham_t_callback_get_load_stats_per_taskwait(int32_t taskwait_counter,
 {
     int rank = cham_t_get_rank_info()->comm_rank;
     int iter = taskwait_counter;
-    profiled_task_list.add_avgload(taskwait_load);
+    profiled_task_list.add_avgload(taskwait_load, iter);
 
     /**
      * Do something / try to add it to another arma::vector
@@ -146,8 +147,9 @@ on_cham_t_callback_get_load_stats_per_taskwait(int32_t taskwait_counter,
 /**
  * Callback get the trigger from comm_thread, then training the pred-model.
  *
- * @param taskwait_counter: id of the current iteration (cycle),
- *      now trigger this callack by the num of passed iters.
+ * @param taskwait_counter: id of the current iteration (cycle), now trigger this
+ *        callback by the num of passed iters.
+ * @return is_trained: a bool flag to notice the prediction model that has been trained.
  */
 static bool
 on_cham_t_callback_train_prediction_model(int32_t taskwait_counter)
@@ -167,48 +169,67 @@ on_cham_t_callback_train_prediction_model(int32_t taskwait_counter)
 /**
  * Callback get the trigger from comm_thread, then calling the trained pred-model.
  *
+ * This callback is used to validate or get the predicted values when cham_lib requests.
  * @param taskwait_counter: id of the current iteration (cycle).
  * @return predicted_value: for the load of the corresponding iter.
  */
-static double
-on_cham_t_callback_valid_prediction_model(int32_t taskwait_counter)
+static std::vector<double>
+on_cham_t_callback_valid_prediction_model(int32_t taskwait_counter, int prediction_mode)
 {
     // prepare the input
     int rank = cham_t_get_rank_info()->comm_rank;
     int num_features = 6;
     int s_point = taskwait_counter - num_features;
     int e_point = taskwait_counter;
-    double pred_load = 0.0;
-    arma::vec input_vec(num_features);
-    for (int i = s_point; i < e_point; i++){
-        input_vec[i-s_point] = double(profiled_task_list.avg_load_list[i]);
+    double pred_value = 0.0;
+    std::vector<double> pred_load_vec(1, 0.0);
+
+    /* Mode 0: predict iter-by-iter, no migrate-actions */
+    if (prediction_mode == 0){
+
+        // prepare the input vector for the model
+        arma::vec input_vec(num_features);
+        for (int i = s_point; i < e_point; i++){
+            input_vec[i-s_point] = profiled_task_list.avg_load_list[i];
+        }
+        // std::cout << "[CHAM_TOOL] R" << rank << " valid_pred_model: input_vec from iter-"
+        //           << s_point << " to iter-" << e_point-1 << std::endl;
+        // std::cout << input_vec.t();
+
+        // call the pred_model
+        arma::mat x_mat(1, num_features);
+        x_mat = input_vec;
+        arma::rowvec p_load;
+        lr.Predict(x_mat, p_load);
+        pred_value = p_load[0];
+
+        // store to the arma::vector for writing logs
+        pred_load_vec[0] = pred_value;
+        pre_load_per_iter_list[taskwait_counter] = pred_value;
     }
-    // std::cout << "[CHAM_TOOL] R" << rank << " valid_pred_model: input_vec from iter-"
-    //           << s_point << " to iter-" << e_point-1 << std::endl;
-    // std::cout << input_vec.t();
+    /* Mode 1: predict the whole future, then migrate-actions */
+    else if (prediction_mode == 1) {
+        pred_load_vec.resize(pre_load_per_iter_list.size(), 0.0);
+        get_whole_future_prediction(rank, s_point, e_point, pred_load_vec);
+    }
+    /* Mode 2: predict iter-by-iter, then migrate-actions */
+    else {
+        get_iter_by_iter_prediction(s_point, e_point, pred_load_vec);
+    }
 
-    // call the pred_model
-    arma::mat x_mat(1, num_features);
-    x_mat = input_vec;
-    arma::rowvec p_load;
-    lr.Predict(x_mat, p_load);
-    pred_load = p_load[0];
-
-    // store to the arma::vector for writing logs
-    pre_load_per_iter_list[taskwait_counter] = pred_load;
-
-    return pred_load;
+    // TODO: consider the size of vector, 100 iters should be ok but if larger, think about that
+    return pred_load_vec;
 }
 
 //================================================================
 // Start Tool & Register Callbacks
 //================================================================
 
-#define register_callback_t(name, type)                                         \
-do{                                                                             \
-    type f_##name = &on_##name;                                                 \
-    if (cham_t_set_callback(name, (cham_t_callback_t)f_##name) == cham_t_set_never)   \
-        printf("0: Could not register callback '" #name "'\n");                 \
+#define register_callback_t(name, type)                                             \
+do{                                                                                 \
+    type f_##name = &on_##name;                                                     \
+    if (cham_t_set_callback(name, (cham_t_callback_t)f_##name) == cham_t_set_never) \
+        printf("0: Could not register callback '" #name "'\n");                     \
 } while(0)
 
 #define register_callback(name) register_callback_t(name, name##_t)
@@ -218,7 +239,9 @@ do{                                                                             
  * Initializing the cham-tool callbacks.
  *
  * @param lookup: search the name of activated callbacks.
- * @param tool_data
+ * @param tool_data: return the profile data of the tool. But temporarily have
+ *        not used this param, just return directly the profile data or use
+ *        directly in memory.
  */
 int cham_t_initialize(
     cham_t_function_lookup_t lookup,
@@ -237,19 +260,16 @@ int cham_t_initialize(
     register_callback(cham_t_callback_train_prediction_model);
     register_callback(cham_t_callback_valid_prediction_model);
 
-    // get num_samples_env_var value
-    char* num_samples_env_var = std::getenv("NUM_SAMPLE");
-    if (num_samples_env_var != NULL)
-        num_samples = std::atoi(num_samples_env_var);
-
-    // get num_epochs_env_var value
-    char* num_epochs_env_var = std::getenv("NUM_EPOCH");
-    if (num_epochs_env_var != NULL)
-        num_epochs = std::atoi(num_epochs_env_var);
+    // get info about the number of iterations
+    int max_num_iters = DEFAULT_NUM_ITERS;
+    char *program_num_iters = std::getenv("EST_NUM_ITERS");
+    if (program_num_iters != NULL){
+        max_num_iters = atoi(program_num_iters);
+    }
     
-    // free memory
-    delete num_samples_env_var;
-    delete num_epochs_env_var;
+    // resize the arma::vectors
+    avg_load_per_iter_list.resize(max_num_iters);
+    pre_load_per_iter_list.resize(max_num_iters);
 
     return 1;
 }
@@ -257,6 +277,8 @@ int cham_t_initialize(
 /**
  * Finalizing the cham-tool.
  *
+ * This callback is to finalize the whole callback tool, after the
+ * chameleon finished. This is called from chameleon-lib side.
  * @param tool_data
  */
 void cham_t_finalize(cham_t_data_t *tool_data)
@@ -273,9 +295,11 @@ void cham_t_finalize(cham_t_data_t *tool_data)
 /**
  * Starting the cham-tool.
  *
+ * This is to start the chameleon tool, then the functions, i.e.,
+ * cham_t_initialize() and cham_t_finalize() would be pointed to call.
  * @param cham_version.
- * @return as a main function of the callback took,
- *      would init cham_t_initialize and cham_t_finalize.
+ * @return as a main function of the callback took, would init
+ *         cham_t_initialize and cham_t_finalize.
  */
 #ifdef __cplusplus
 extern "C" {

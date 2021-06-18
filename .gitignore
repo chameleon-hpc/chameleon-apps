@@ -12,3 +12,8 @@ applications/matrix_example/scriptsFrontend/
 
 *.so
 
+=======
+/.vscode
+__pycache__
+output_*
+core*
