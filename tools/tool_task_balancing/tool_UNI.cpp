@@ -273,7 +273,6 @@ on_cham_t_callback_task_schedule(
         std::vector<long double> inSizes, outSizes;
         long double overallSize = 0;
 
-
         for (int i = 0; i < p_info.num_args; ++i) {
 
             overallSize += (long double) p_info.arg_sizes[i]/1000;
@@ -334,16 +333,6 @@ int cham_t_initialize(
     cham_t_rank_info_t *r_info = cham_t_get_rank_info();
     cham_t_data_t *r_data = cham_t_get_rank_data();
     r_data->value = r_info->comm_rank;
-
-    setenv("LIKWID_FILEPATH", "/home/ey186093/output/likwid_marker.out", 1);
-
-    LIKWID_MARKER_INIT;
-
-    std::string tag;
-    for (int i=0; i< MAX_NUMBER_TASKS; i++){
-        tag = std::to_string(r_data->value) + "R" + std::to_string(i);
-        LIKWID_MARKER_REGISTER(tag.c_str());
-    }
 
     return 1; //success
 }
@@ -502,7 +491,6 @@ void cham_t_finalize(cham_t_data_t *tool_data) {
         for (int j = 0; j < nevents; j++)
             file << ";" << events[j];
 
-
         file << "\n";
 
         file_N << std::scientific << std::to_string(rank_data->value) << 'R' << id_v.at(i) << ";" << runtimeMin << ";" << runtimeMax << ";" << runtimeMean << ";" \
@@ -513,7 +501,7 @@ void cham_t_finalize(cham_t_data_t *tool_data) {
     file_N.close();
 
     LIKWID_MARKER_CLOSE;
-    
+
     printf("0: cham_t_event_runtime_shutdown\n");
 }
 
