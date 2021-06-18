@@ -76,12 +76,12 @@
 
 #include <assert.h>
 #include <mpi.h>
-#include "chameleon.h"
 #include <cstdlib>
 #include <cstdio>
 #include <random>
+#include <inttypes.h>
 #include <iostream>
-#include <string>
+#include <string.h>
 #include <sstream>
 #include "math.h"
 #include <cmath>
@@ -96,6 +96,18 @@
 
 #if CHECK_GENERATED_TASK_ID
 #include <mutex>
+#endif
+
+#ifndef DPxMOD
+#define DPxMOD "0x%0*" PRIxPTR
+#endif
+
+#ifndef DPxPTR
+#define DPxPTR(ptr) ((int)(2*sizeof(uintptr_t))), ((uintptr_t) (ptr))
+#endif
+
+#if COMPILE_CHAMELEON
+#include "chameleon.h"
 #endif
 
 // static rank id that can also be used in other functions except main
