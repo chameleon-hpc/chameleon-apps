@@ -106,10 +106,10 @@ void compute_num_tasks_to_offload(std::vector<int32_t>& tasksToOffloadPerRank,
     //  + min_val = load(R1)
     //  + max_val = load(R2)
     std::vector<size_t> tmp_sorted_idx = sort_indexes(loadInfoRanks);
-    double min_val                  = (double) loadInfoRanks[tmp_sorted_idx[0]];
-    double max_val                  = (double) loadInfoRanks[tmp_sorted_idx[chameleon_comm_size-1]];
-    double cur_load                 = (double) loadInfoRanks[chameleon_comm_rank];
-    double ratio_lb                 = 0.0; // 1 = high imbalance, 0 = no imbalance
+    double min_val = (double) loadInfoRanks[tmp_sorted_idx[0]];
+    double max_val = (double) loadInfoRanks[tmp_sorted_idx[chameleon_comm_size-1]];
+    double cur_load = (double) loadInfoRanks[chameleon_comm_rank];
+    double ratio_lb = 0.0; // 1 = high imbalance, 0 = no imbalance
     if (max_val > 0) {
         ratio_lb = (double)(max_val - min_val) / (double)max_val;
     }
@@ -194,21 +194,22 @@ void pair_num_tasks_to_offload(std::vector<int32_t>& tasks_to_offload_per_rank,
     double pred_cur_load = predicted_load_info_ranks[chameleon_comm_rank];
 
     // check pred-log info
-    std::string rank_orders = "[";
-    std::string pred_load_arr = "[";
-    for (int i = 0; i < num_ranks; i++){
-        int r = tmp_sorted_idx[i];
-        rank_orders += "R" + std::to_string(r) + " ";
-        pred_load_arr += std::to_string(predicted_load_info_ranks[r]) + " ";
-    }
-    rank_orders += "]";
-    pred_load_arr += "]";
+    // std::string rank_orders = "[";
+    // std::string pred_load_arr = "[";
+    // for (int i = 0; i < num_ranks; i++){
+    //     int r = tmp_sorted_idx[i];
+    //     rank_orders += "R" + std::to_string(r) + " ";
+    //     pred_load_arr += std::to_string(predicted_load_info_ranks[r]) + " ";
+    // }
+    // rank_orders += "]";
+    // pred_load_arr += "]";
     // RELP("[PAIR_DBG] Iter%d: %s = %s\n", tw_idx, rank_orders.c_str(), pred_load_arr.c_str());
 
     // init and compute the ratio of load-balancing
     double ratio_lb = 0.0;  // 1.0 is high, 0.0 is no imbalance
     if (pred_max_load > 0)
         ratio_lb = (pred_max_load - pred_min_load) / pred_max_load;
+    // RELP("[PAIR_DBG] Iter%d: ratio_lb=%.3f\n", tw_idx, ratio_lb);
 
     if (ratio_lb >= MIN_REL_LOAD_IMBALANCE_BEFORE_MIGRATION){
         // determine the postition of the current rank in progress
@@ -225,12 +226,12 @@ void pair_num_tasks_to_offload(std::vector<int32_t>& tasks_to_offload_per_rank,
             double load_diff_percentage = load_diff_ratio * 100;
 
             // check the estimation
-            // RELP("[PAIR_TASKS_OFFLOAD] vic_pos=%d, vic_rank=%d: vic_pred_load=%.3f | load_diff=%.2f%\n",
+            // RELP("[PAIR_DBG] vic_pos=%d, vic_rank=%d: vic_pred_load=%.3f | load_diff=%.2f%\n",
             //                            vic_pos, vic_rank, vic_pred_load, load_diff_percentage);
 
             // check the absolute condition with the constant of diff_load to migrate tasks
-            // RELP("[PAIR_TASKS_OFFLOAD] load_diff between src=R%d & vic=R%d is %.3f %\n",
-            //                         chameleon_comm_rank, vic_rank, load_diff_percentage);
+            // RELP("[PAIR_DBG] Iter%d: load_diff between src=R%d&vic=R%d is %.3f % | threshold=%.3f %\n", tw_idx,
+            //                         chameleon_comm_rank, vic_rank, load_diff_percentage, MIN_LOAD_DIFF_PERCENTAGE_TO_MIGRATION*100);
             if (load_diff_ratio < MIN_LOAD_DIFF_PERCENTAGE_TO_MIGRATION)
                 return;
 
@@ -250,7 +251,7 @@ void pair_num_tasks_to_offload(std::vector<int32_t>& tasks_to_offload_per_rank,
                 // set a threshold, an approriate number of tasks should be migrated
                 //      + currently, try to set 40% of the diff-load
                 //      + TODO: which % should be good?
-                int appro_num_tasks = (int)(max_num_tasks * 0.4);
+                int appro_num_tasks = (int)(max_num_tasks * 0.5);
                 if (appro_num_tasks >= max_tasks_per_rank)
                     appro_num_tasks = 1;
 
@@ -263,7 +264,12 @@ void pair_num_tasks_to_offload(std::vector<int32_t>& tasks_to_offload_per_rank,
                     appro_num_tasks = 1;
                 
                 // return the results
-                tasks_to_offload_per_rank[vic_rank] = appro_num_tasks; // app_num_tasks;
+#if CHAM_PRED_MIGRATION == 1
+                tasks_to_offload_per_rank[vic_rank] = appro_num_tasks;
+#elif CHAM_PRED_MIGRATION == 2
+                // tasks_to_offload_per_rank[vic_rank] = appro_num_tasks;
+                tasks_to_offload_per_rank[vic_rank] = 0;
+#endif
             }
         }
     }

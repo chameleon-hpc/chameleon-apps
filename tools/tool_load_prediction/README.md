@@ -22,11 +22,28 @@ The code is simply organized with its utils as follow:
 * python_utils/: some examples with scikit-learn/mlpack lib in Python, to build and test the regression models.
 * src/: the src-code of the tool.
 
-## How it works
+## How it works And Configurations
 As the diagram above, the tool works as the plugin of Chameleon lib (sounds like the event-based working flow). When we need a callback event, we need to define it, determine when it's called and what should it return back to the chameleon-lib side or not. Therefore, it could be managed as:
 * Define the callback event associated with its function (action).
 * When it's called, should control who calls it (comm_thread or execution threads).
 * What should it give back to the cham-lib side.
+
+As some changes in the folder - chameleon_patch/, there are 2 ENV-variables (defined in `chameleon_patch/chameleon_common.h`) to define prediction modes and migration modes along with the prediction.
+``` CXX
+// specify the method for predicting load by the callback tool
+#ifndef CHAM_PREDICTION_MODE
+#define CHAM_PREDICTION_MODE 0      // no prediction
+// #define CHAM_PREDICTION_MODE 1   // time-series load as the patterns for prediction
+// #define CHAM_PREDICTION_MODE 2   // task-characterization, args as the patterns for prediction
+#endif
+
+// specify the strategy of work-stealing with prediction tool
+#ifndef CHAM_PRED_MIGRATION
+#define CHAM_PRED_MIGRATION 0   // predict iter-by-iter, no migration action
+// #define CHAM_PRED_MIGRATION 1    // predict iter-by-iter, then migrate-actions 
+// #define CHAM_PRED_MIGRATION 2    // predict for the whole future, then migrate-actions
+#endif
+```
 
 ## Compiling the tool
 For example, could follow the sample compile-script in build/ folder, and need to adapt the dependencies that are declared in CMakeLists.txt (at the src/ folder).

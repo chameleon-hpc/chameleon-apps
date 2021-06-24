@@ -217,7 +217,7 @@ def plot_pred_lb_by_iters(est_lb_arr, output_folder):
     iter_idx = 0
     plt.xlabel("Rank")
     plt.ylabel("Total_Load (in seconds)")
-    plt.title("Pred-Load LB in detail by ranks [Iter-" + str(iter_idx) + "]")
+    # plt.title("Pred-Load LB in detail by ranks [Iter-" + str(iter_idx) + "]")
 
     # for x_index
     num_ranks = 32
@@ -262,7 +262,7 @@ def plot_pred_load_by_ranks(real_load_arr, pred_load_arr, s_rank, e_rank, output
     # configue sub-figures
     num_ranks = 4 # len(real_load_arr)
     fig, axs = plt.subplots(num_ranks, sharex=True)
-    fig.suptitle('Predicted Load per Rank by Iters')
+    # fig.suptitle('Predicted Load per Rank by Iters')
 
     # plot multiple sub-figs
     x_indices = np.arange(len(real_load_arr[0]))
@@ -276,9 +276,9 @@ def plot_pred_load_by_ranks(real_load_arr, pred_load_arr, s_rank, e_rank, output
             axs[i].legend(loc='best')
         axs[i].grid(True)
     
-    plt.show()
-    # fig_filename = "pred_load_from_R" + str(s_rank) + "_to_R" + str(e_rank) + ".pdf"
-    # plt.savefig(os.path.join(output_folder, fig_filename), bbox_inches='tight')
+    # plt.show()
+    fig_filename = "pred_load_from_R" + str(s_rank) + "_to_R" + str(e_rank) + "_okushiri_mode2.pdf"
+    plt.savefig(os.path.join(output_folder, fig_filename), bbox_inches='tight')
 
 
 """Plot runtime-by-iters
@@ -328,9 +328,73 @@ def plot_runtime_by_iters(stats_data, output_folder):
     # plt.show()
 
     # save the figure
-    fig_filename = "runtime_per_iter_" + str(num_ranks) + "_ranks_from_chamstats_logs" + ".pdf"
+    fig_filename = "runtime_per_iter_" + str(num_ranks) + "_ranks_from_chamstats_logs" + "_okushiri.pdf"
     plt.savefig(os.path.join(output_folder, fig_filename), bbox_inches='tight')
 
+
+"""Plot imblance load by iters
+
+Input is a list of runtime-data per rank. Use them to plot
+a line chart to compare the load imbalance over iter-by-iter.
+"""
+def plot_imbalance_by_iters(stats_data, output_folder):
+    # for the chart information
+    plt.xlabel("Iterations")
+    plt.ylabel("Imbalance (1.0 is no-imb)")
+    plt.title("Load Imbalance over Iters")
+
+    # for x_index by iters
+    first_rank_data = stats_data[0]
+    num_iters = len(first_rank_data)
+    x_indices = np.arange(num_iters)
+
+    # traverse the profile-data and calculate the imb-load
+    load_imb_arr = np.ones(num_iters)
+    num_ranks = len(stats_data)
+    for i in range(num_iters):
+
+        # get load at iter i through all ranks
+        load_arr = np.zeros(num_ranks)
+        for r in range(num_ranks):
+            rank_load = stats_data[r]
+            iter_load = rank_load[i]
+            load_arr[r] = iter_load
+        
+        # find the min_load, max_load, avg_load
+        max_load = np.amax(load_arr)
+        min_load = np.amin(load_arr)
+        mean_load = np.mean(load_arr)
+        # print("Load_arr: {}".format(load_arr))
+        # print("Max: {} | Min: {} | Avg: {}".format(max_load, min_load, mean_load))
+
+        # calculate the load-imbalance
+        imb_ratio = max_load / mean_load
+        load_imb_arr[i] = imb_ratio
+    
+    # try to calculate accum_load_imb array over iters
+    accum_load_imb_arr = np.ones(num_ranks)
+    for r in range(num_ranks):
+        total_load = np.sum(stats_data[r])
+        accum_load_imb_arr[r] = total_load
+    accum_max_load = np.amax(accum_load_imb_arr)
+    accum_min_load = np.amin(accum_load_imb_arr)
+    accum_mean_load = np.mean(accum_load_imb_arr)
+    print("Accum-Load-Array: {}".format(accum_load_imb_arr))
+    print("Accum-Max: {} | Accum-Min: {} | Accum-Avg: {}".format(accum_max_load, accum_min_load, accum_mean_load))
+    print("Accum-Imb-Ratio: {}".format(accum_max_load / accum_mean_load))
+    print("Load-Imb-Arry: {}".format(load_imb_arr))
+    
+    # plot the line-chart over iter-by-iter
+    plt.plot(x_indices, load_imb_arr, label="imb-ratio")
+    
+    plt.grid(True)
+    plt.ylim(1, 2.5)
+    # plt.legend(loc='best')
+    plt.show()
+
+    # save the figure
+    # fig_filename = "imblance_ratio_over_iters" + str(num_ranks) + "_ranks_from_chamstats_logs" + ".pdf"
+    # plt.savefig(os.path.join(output_folder, fig_filename), bbox_inches='tight')
 
 """Plot stacked-load types by ranks in a single iter
 
@@ -502,6 +566,8 @@ if __name__ == "__main__":
     cham_stats_file = sys.argv[1]
 
     # num ranks
+    s_rank = 0
+    e_rank = s_rank + (4 - 1)
     num_ranks = int(sys.argv[2])
 
     # out folder for plotting
@@ -520,12 +586,19 @@ if __name__ == "__main__":
     if (len(sys.argv) <= 3):
         rank = 0
     else:
+        print("Note: make sure that ./python program <arg1-logfile> <arg2-num_ranks> <arg3-rank_to_display> <arg4-first_iter_to_plot>")
         rank = int(sys.argv[3])
+        s_rank = int(sys.argv[4])
+        e_rank = s_rank + (4 - 1)
+
     # num_features = 6
     # cc_runtime_dataset_generator(total_load_arr, rank, num_features)
     
     """ plot the load-data by stacked-rank per iter """
     # plot_runtime_by_iters(total_load_arr, out_folder)
+
+    """ plot imbalance over iters """
+    # plot_imbalance_by_iters(total_load_arr, out_folder)
 
     """ estimate num tasks that should be migrated for load-balancing """
     # total_tasks_per_rank = 208
@@ -533,16 +606,17 @@ if __name__ == "__main__":
     # plot_pred_lb_by_iters(lb_est_load_arr, out_folder)
 
     """ read and check the predicted load per iter values """
-    # pred_load_arr = parse_predicted_load(cham_stats_file, num_ranks)
-    # s_rank, e_rank = 0, 3
-    # plot_pred_load_by_ranks(total_load_arr, pred_load_arr, s_rank, e_rank, out_folder)
+    pred_load_arr = parse_predicted_load(cham_stats_file, num_ranks)
+    plot_pred_load_by_ranks(total_load_arr, pred_load_arr, s_rank, e_rank, out_folder)
 
     """ read and parse values from the input in detail """
-    loc_load_list,sto_load_list,rep_load_list = parse_stats_load_indetail(cham_stats_file, num_ranks)
+    # loc_load_list,sto_load_list,rep_load_list = parse_stats_load_indetail(cham_stats_file, num_ranks)
 
     """ plot the load-diff by stacked-load types in a single iter """
-    iter_idx = 21
-    plot_stackedload_by_ranks(loc_load_list, sto_load_list, rep_load_list, iter_idx, out_folder)
+    # iter_idx = 20
+    # if (len(sys.argv) == 5):
+    #     iter_idx = int(sys.argv[4])
+    # plot_stackedload_by_ranks(loc_load_list, sto_load_list, rep_load_list, iter_idx, out_folder)
 
     """ plot a single-rank runtime-list """
     # rank = 25
@@ -553,3 +627,22 @@ if __name__ == "__main__":
     # plt.plot(x_indices, rank_data)
     # plt.grid(True)
     # plt.show()
+
+
+    # """ plot load-ibm over baseline and others """
+    # avg_baseline = 1.9978
+    # avg_mig_only = 1.1790
+    # avg_pred_mig = 1.4101
+    # plt.title('Sam(oa)^2 Load Imbalance')
+    # plt.xlabel("Methods")
+    # plt.ylabel("Imb-Ratio")
+    # objects = ('Baseline', 'Migration', 'Pred-Migration')
+    # x_pos = np.arange(len(objects))
+    # avg_imb_ratios = [avg_baseline, avg_mig_only, avg_pred_mig]
+
+    # plt.bar(x_pos, avg_imb_ratios, align='center', alpha=0.5, width=0.5)
+    # plt.xticks(x_pos, objects)
+
+    # # plt.show()
+    # fig_filename = "avg_imb_ratios" + ".pdf"
+    # plt.savefig(os.path.join("./", fig_filename), bbox_inches='tight')

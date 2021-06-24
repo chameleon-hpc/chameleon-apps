@@ -325,7 +325,7 @@ int32_t chameleon_init() {
     load_config_values();
 
 #if PRINT_CONFIG_VALUES
-    print_config_values();
+    print_config_values(chameleon_comm_rank);
 #endif
 
     // initilize thread data here
@@ -337,6 +337,7 @@ int32_t chameleon_init() {
     __rank_data.rank_tool_info.comm_rank = chameleon_comm_rank;
     __rank_data.rank_tool_info.comm_size = chameleon_comm_size;
 
+#if CHAM_PREDICTION_MODE > 0
     // get the config-env variables by one of the omp threads
     #pragma omp single
     {
@@ -351,8 +352,10 @@ int32_t chameleon_init() {
                         MAX_TASKS_PER_RANK, MAX_EST_NUM_ITERS, TIME_TO_TRAIN_MODEL);
         }
     }
+#endif
 
     // init the chameleon tool
+    // RELP("chameleon inits the callback tool...\n");
     cham_t_init();
 #endif
 
@@ -365,7 +368,7 @@ int32_t chameleon_init() {
     _load_info_ranks.resize(chameleon_comm_size);
     _total_load_info_ranks.resize(chameleon_comm_size);
 
-#if CHAMELEON_TOOL_SUPPORT && CHAM_PRED_MIGRATION
+#if CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE > 0
     // resize the list of real and predicted load
     _predicted_load_info_ranks.resize(chameleon_comm_size);
     _list_predicted_load.resize(MAX_EST_NUM_ITERS);
@@ -381,7 +384,7 @@ int32_t chameleon_init() {
         _total_load_info_ranks[i] = 0.0;
         _active_migrations_per_target_rank[i] = 0;
 
-#if CHAMELEON_TOOL_SUPPORT && CHAM_PRED_MIGRATION
+#if CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE>0
         _predicted_load_info_ranks[i] = 0.0;
 #endif
 
@@ -613,7 +616,7 @@ void dtw_startup() {
     _num_threads_idle                   = 0;
     _num_threads_finished_dtw           = 0;
 
-#if ENABLE_COMM_THREAD || ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE > 0 || CHAM_PRED_MIGRATION
+#if ENABLE_COMM_THREAD || ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE > 0 || CHAM_PREDICTION_MODE > 0
     // indicating that this has not happend yet for the current sync cycle
     _comm_thread_load_exchange_happend  = 0;
 
@@ -633,7 +636,7 @@ void dtw_startup() {
     _comm_thread_load_exchange_happend  = 1; 
     _num_ranks_not_completely_idle      = 0;
 
-#endif /* ENABLE_COMM_THREAD || ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE>0 || CHAM_PRED_MIGRATION*/
+#endif /* ENABLE_COMM_THREAD || ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE>0 || CHAM_PREDICTION_MODE > 0 */
 
     _flag_dtw_active = 1;
     _mtx_taskwait.unlock();
@@ -814,7 +817,7 @@ int32_t chameleon_distributed_taskwait(int nowait) {
         }
 #endif /* COMMUNICATION_MODE == 1 */
 
-#if ENABLE_TASK_MIGRATION || CHAM_PRED_MIGRATION
+#if ENABLE_TASK_MIGRATION || (CHAM_PREDICTION_MODE > 0 && CHAM_PRED_MIGRATION > 0)
         // ========== Prio 1: try to execute stolen tasks to overlap computation and communication
         if(!_stolen_remote_tasks.empty()) {
      
@@ -836,7 +839,7 @@ int32_t chameleon_distributed_taskwait(int nowait) {
             if(res == CHAM_REMOTE_TASK_SUCCESS)
                 continue;
         }
-#endif /* ENABLE_TASK_MIGRATION || CHAM_PRED_MIGRATION */
+#endif /* ENABLE_TASK_MIGRATION || (CHAM_PREDICTION_MODE > 0 && CHAM_PRED_MIGRATION > 0) */
 
 #if !FORCE_MIGRATION
         // ========== Prio 2: work on local tasks first
@@ -862,7 +865,7 @@ int32_t chameleon_distributed_taskwait(int nowait) {
         }
 #endif /* !FORCE_MIGRATION */
 
-#if ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE>0 || CHAM_PRED_MIGRATION
+#if ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE>0 || (CHAM_PREDICTION_MODE > 0 && CHAM_PRED_MIGRATION > 0)
         // ========== Prio 3: work on replicated local tasks
         if(!_replicated_local_tasks.empty()) {
             
@@ -928,7 +931,8 @@ int32_t chameleon_distributed_taskwait(int nowait) {
                 continue;
         }
         #endif /* CHAM_REPLICATION_MODE<4 */
-#endif /* ENABLE_TASK_MIGRATION && CHAM_REPLICATION_MODE>0 && CHAM_PRED_MIGRATION */
+
+#endif /* ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE>0 || (CHAM_PREDICTION_MODE > 0 && CHAM_PRED_MIGRATION > 0) */
  
         // ========== Prio 4: work on a regular OpenMP task
         // make sure that we get info about outstanding tasks with dependences
@@ -1443,14 +1447,10 @@ inline int32_t process_replicated_remote_task() {
         double cur_time = omp_get_wtime();
 #endif 
 
-//#if CHAM_REPLICATION_MODE==2
-        //cancel task on remote ranks
-//        cancel_offloaded_task(replicated_task);
-//#endif
-
         int32_t res = execute_target_task(replicated_task);
         if(res != CHAM_SUCCESS)
             handle_error_en(1, "execute_target_task - remote");
+
 #if CHAM_STATS_RECORD
         cur_time = omp_get_wtime()-cur_time;
         atomic_add_dbl(_time_task_execution_replicated_sum, cur_time);
@@ -1472,6 +1472,7 @@ inline int32_t process_replicated_remote_task() {
             _num_remote_tasks_outstanding--;
             DBP("process_replicated_task - decrement remote outstanding count for task %ld\n", replicated_task->task_id);
         }
+
 #ifdef TRACE
         VT_END_W_CONSTRAINED(event_process_replicated_remote);
 #endif
@@ -1555,6 +1556,7 @@ inline int32_t process_remote_task() {
     DBP("process_remote_task - task_id: %ld\n", task->task_id);
 
     int is_migrated= task->is_migrated_task;
+
 #ifdef TRACE
     static int event_process_remote = -1;
     static const std::string event_process_remote_name = "process_remote";
@@ -1626,6 +1628,7 @@ inline int32_t process_remote_task() {
 }
 
 inline int32_t process_local_task() {
+    
     // pop tasks from the local queue
     cham_migratable_task_t *task = _local_tasks.pop_front();
     if(!task)

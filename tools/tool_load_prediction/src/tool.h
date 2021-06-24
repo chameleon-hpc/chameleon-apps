@@ -12,13 +12,19 @@
 #include <string>
 #include <sched.h>
 #include <numeric>
-#include <mpi.h>
-
-// for using torch
-#include <torch/torch.h>
 #include <iostream>
 #include <cstddef>
 #include <iomanip>
+#include <mpi.h>
+
+// for using torch
+#ifndef ENABLE_PYTORCH_CXX
+#define ENABLE_PYTORCH_CXX 0
+#endif
+
+#if ENABLE_PYTORCH_CXX == 1
+#include <torch/torch.h>
+#endif
 
 // for using mlpack
 #include <mlpack/methods/linear_regression/linear_regression.hpp>
@@ -50,37 +56,26 @@ static int _tracing_enabled = 1;
 #endif
 #endif
 
-#ifndef NUM_SAMPLE
-#define DEF_NUM_SAMPLE 100
-#endif
-
-#ifndef NUM_EPOCH
-#define DEF_NUM_EPOCH 2000
-#endif
-
 #ifndef NUM_ITERATIONS
-#define DEF_ITERS 100
-#endif
-
-#ifndef NUM_OMP_THREADS
-#define DEF_N_THREADS 2
+#define DEFAULT_NUM_ITERS 100
 #endif
 
 #ifndef MXM_EXAMPLE
 #define MXM_EXAMPLE 0
 #endif
 
+#ifndef JACOBI_EXAMPLE
+#define JACOBI_EXAMPLE 0
+#endif
+
 #ifndef SAMOA_EXAMPLE
-#define SAMOA_EXAMPLE 1
+#define SAMOA_EXAMPLE 0
 #endif
 
 #ifndef LOG_DIR
 #define DEF_LOG_DIR "./logs"
 #endif
 
-#ifndef NUM_THREADS
-#define NUM_THREADS 3 // for testing on laptop
-#endif
 
 // ================================================================================
 // Declare Struct
@@ -89,7 +84,7 @@ static int _tracing_enabled = 1;
 /**
  * The cham-tool task struct for storing profiled-data.
  *
- * This struct helps collect task-by-task info
+ * This struct helps collecting task-by-task info
  * @attributes: tid, rank, num_args, args_list, ...
  */
 typedef struct prof_task_info_t {
@@ -111,20 +106,37 @@ typedef struct prof_task_info_t {
  * The cham-tool profile-task data class.
  *
  * This class helps holding a list of prof-tasks.
- * @attributes: tasks_list, ...
+ * @attributes: task_list, list for storing avg load per iter,
+ *              size of the list, ...
  */
 class prof_task_list_t {
     public:
         std::vector<prof_task_info_t *> task_list;
         std::vector<double> avg_load_list;
-        std::mutex m;
         std::atomic<size_t> tasklist_size;
+        std::mutex m;
         
-        /* duplicate to avoid contention on single atomic
-        from comm thread and worker threads */
+        // duplicate to avoid contention on single atomic 
+        // from comm thread and worker threads
         std::atomic<size_t> dup_list_size;
 
-        prof_task_list_t() { tasklist_size = 0; dup_list_size = 0; }
+        // constructor 1
+        prof_task_list_t() {
+            // set tasklist sizes
+            tasklist_size = 0;
+            dup_list_size = 0;
+
+            // get the total num of iterations
+            int n_iters;
+            char *total_num_iters = std::getenv("EST_NUM_ITERS");
+            if (total_num_iters != NULL)
+                n_iters = atoi(total_num_iters);
+            else
+                n_iters = DEFAULT_NUM_ITERS;
+
+            // resize and fill the lists
+            avg_load_list.resize(n_iters, 0.0);
+        }
 
         size_t dup_size() {
             return this->dup_list_size.load();
@@ -162,11 +174,9 @@ class prof_task_list_t {
             return ret_val;
         }
 
-        void add_avgload(double avg_value){
+        void add_avgload(double avg_value, int iter){
             this->m.lock();
-            // this works for torch, but no need for mlpack from now
-            // float f_value = (float) avg_value;
-            this->avg_load_list.push_back(avg_value);
+            this->avg_load_list[iter] = avg_value;
             this->m.unlock();
         }
 };
@@ -178,6 +188,7 @@ class prof_task_list_t {
  * @param num_features, num hidden layers, num_outputs
  * @return a corresponding prediction model
  */
+#if ENABLE_PYTORCH_CXX == 1
 struct SimpleRegression:torch::nn::Module {
 
     SimpleRegression(int in_dim, int n_hidden, int out_dim){
@@ -204,30 +215,28 @@ struct SimpleRegression:torch::nn::Module {
 
     torch::nn::Linear hidden1{nullptr}, hidden2{nullptr}, predict{nullptr};
 };
+#endif
 
 /**
  * Example: how to declare the torch-based regression model.
- *  + auto net = std::make_shared<SimpleRegression>(4, 10, 1);
- *  + ...
+ *      + auto net = std::make_shared<SimpleRegression>(4, 10, 1);
+ *      + ...
  */
 
 
 // ================================================================================
 // Global Variables
 // ================================================================================
-prof_task_list_t profiled_task_list;
+prof_task_list_t profiled_task_list = prof_task_list_t();
 std::vector<float> min_vec; // the last element is min_ground_truth
 std::vector<float> max_vec; // the last element is max_ground_truth
-int num_samples = DEF_NUM_SAMPLE;
-int num_epochs = DEF_NUM_EPOCH;
 
 // Declare a general mlpack regression model
 mlpack::regression::LinearRegression lr;
 
 // Declare 2 vectors for storing avg_load & pre_load (predicted loads)
-const int REF_NUM_ITERS = 100;
-arma::vec avg_load_per_iter_list(REF_NUM_ITERS);
-arma::vec pre_load_per_iter_list(REF_NUM_ITERS);
+arma::vec avg_load_per_iter_list;
+arma::vec pre_load_per_iter_list;
 
 
 // ================================================================================
@@ -242,20 +251,25 @@ std::vector<size_t> sort_indexes(const std::vector<T> &v) {
 	std::iota(idx.begin(), idx.end(), 0);
 
 	// sort indexes based on comparing values in v
-	std::sort(idx.begin(), idx.end(),
-		[&v](size_t i1, size_t i2) {return v[i1] < v[i2];});
+	std::sort(idx.begin(), idx.end(), [&v](size_t i1, size_t i2)
+    {
+        return v[i1] < v[i2];
+    });
 
 	return idx;
 }
 
 /**
- * Paring the index numbers
+ * Paring the index numbers.
  *
+ * This function give a unique number index from 2 input numbers.
+ * For example, we have a=3, b=4, the unique index = 32.
  * @param a, b
- * @return an unique number 
+ * @return an unique number
  */
 int pairing_function(int a, int b){
     int result = ((a + b) * (a + b + 1) / 2) + b;
+    
     return result;
 }
 
@@ -269,6 +283,9 @@ int pairing_function(int a, int b){
 /**
  * Writing logs for all tasks.
  *
+ * The function will generate the profile-data log in .csv files. One file
+ * per rank is written. TODO: which information could be written, should think about
+ * this or somehow describe them at the application side (user-defined).
  * @param task_list_ref with profiled-info, mpi_rank
  * @return .csv logfiles by rank
  */
@@ -286,7 +303,7 @@ void chameleon_t_write_logs(prof_task_list_t& tasklist_ref, int mpi_rank){
 
     // declare output file
     std::ofstream outfile;
-    outfile.open(log_dir + "/logfile_rank_" + std::to_string(mpi_rank) + "_" + std::to_string(num_samples) + "samples_" + std::to_string(num_epochs) + "epochs" + ".csv");
+    outfile.open(log_dir + "/chamtool_logfile_rank_" + std::to_string(mpi_rank) + ".csv");
 
     // create an iterator to traverse the list
     std::vector<prof_task_info_t *>::iterator it;
@@ -301,15 +318,19 @@ void chameleon_t_write_logs(prof_task_list_t& tasklist_ref, int mpi_rank){
         std::string prob_sizes_statement;
 
 #if SAMOA_EXAMPLE==1
-        const int selected_arg = 8;  // the last 4 args affecting much on the taks runtime
+        // the last 4 args affecting much on the taks runtime
+        const int selected_arg = 8;
         for (int arg = selected_arg; arg < num_args; arg++){
             prob_sizes_statement += std::to_string((*it)->args_list[arg]) + "\t";
         }
-#else
+#endif
+
+#if MXM_EXAMPLE==1
         const int selected_arg = 0;
         prob_sizes_statement += std::to_string((*it)->arg_sizes.at(selected_arg)) + "\t";
 #endif
 
+        // cast profile-data to string for logging
         std::string line = std::to_string((*it)->tid) + "\t"
                             + prob_sizes_statement + "\t"
                             + std::to_string((*it)->core_freq) + "\n";
@@ -336,6 +357,9 @@ void chameleon_t_write_logs(prof_task_list_t& tasklist_ref, int mpi_rank){
 /**
  * Free memory of each task.
  *
+ * The task type is prof_task_info_t, each task, after being pushed into
+ * the list (prof_task_list), would be allocated the memory. So, this function should
+ * remove the allocated mem.
  * @param a pointer to a task object (struct prof_task_info)
  * @return free mem
  */
@@ -346,9 +370,12 @@ static void free_prof_task(prof_task_info_t* task){
     }
 }
 
+
 /**
  * Free memory of a whole tasks-list.
  *
+ * This function would pop all tasks in the profile-tasks list out, then
+ * free the allocated memory of tasks one by one.
  * @param a ref to a list of tasks (class prof_task_list)
  * @return free mem
  */
@@ -359,11 +386,14 @@ void clear_prof_tasklist() {
     }
 }
 
+
 /**
  * Get CPU frequency (Hz).
  *
- * @param CPU core ID
- * @return freq_value
+ * This function is simply to get the frequency value per core. The value 
+ * is obtained from the system file, i.e., /proc/cpuinfo.
+ * @param CPU core_id: the current core was executing the task.
+ * @return freq_value: the frequency value from that corresponding core.
  */
 double get_core_freq(int core_id){
 	std::string line;
@@ -397,10 +427,13 @@ double get_core_freq(int core_id){
 /**
  * Printing tensor values in Torch-CXX.
  *
+ * Such the tensor objects in Torch-CXX, this function is used to access
+ * and print those values for checking or debugging.
  * @param tensor_arr, num_vals are an array of tensor values,
- *      and num of values we want to print.
- * @return I/O
+ *        and num of values we want to print.
+ * @return I/O: tensor values
  */
+#if ENABLE_PYTORCH_CXX == 1
 void print_tensor(torch::Tensor tensor_arr, int num_vals)
 {
     std::cout << std::fixed << std::setprecision(3);
@@ -408,12 +441,15 @@ void print_tensor(torch::Tensor tensor_arr, int num_vals)
         std::cout << tensor_arr[i].item<float>() << std::endl;
     }
 }
-
+#endif
 
 /**
  * Normalizing 2D-vector by column for training with Torch.
  *
- * @param vec: a ref to the 2D vector
+ * The normalized 2D vector are retuned back to the argument by passing
+ * references in this fucntion. To this end, this needs to find min and
+ * max values of the input vector.
+ * @return vec: a ref to the 2D vector
  */
 void normalize_2dvector_by_column(std::vector<std::vector<float>> &vec)
 {
@@ -451,10 +487,12 @@ void normalize_2dvector_by_column(std::vector<std::vector<float>> &vec)
 
 
 /**
- * Gathering profiled-data and training with mlpack.
+ * Online training the prediction model.
  *
  * @param tasklist_ref: a ref to the list of profiled tasks. But currently
  *        work for the runtime list, no need arguments of each task.
+ * @param num_input_points: represent for num of input features
+ * @param num_iters: the ended iter to train the prediction model
  * @return a dataset matrix
  */
 bool online_mlpack_training(prof_task_list_t& tasklist_ref, int num_input_points, int num_iters)
@@ -467,7 +505,7 @@ bool online_mlpack_training(prof_task_list_t& tasklist_ref, int num_input_points
     // preparing data
     arma::vec runtime_list(num_iters);
     for (int i = 0; i < num_iters; i++){
-        runtime_list[i] = double(tasklist_ref.avg_load_list[i]);
+        runtime_list[i] = tasklist_ref.avg_load_list[i];
     }
     // std::cout << "[CHAM_TOOL] gather_train_data: runtime_list" << std::endl;
     // std::cout << runtime_list << std::endl;
@@ -497,4 +535,80 @@ bool online_mlpack_training(prof_task_list_t& tasklist_ref, int num_input_points
     std::cout << "[CHAM_TOOL] the training is done." << std::endl;
 
     return true;
+}
+
+/**
+ * Get the predicted values for the whole future.
+ *
+ * This means that with the input-start/end-points, the first iter of the main loop
+ * in this function could return the predicted result of the expected current
+ * cham-taskwait cycle/iter. Then, it will be used to continously create the input
+ * and predict for the next iters until an end.
+ * 
+ * @param rank: the current rank is running this func, just for checking
+ * @param start_point: the start chameleon-taskwait iter/cycle to make an input vector
+ * @param end_point: the end chameleon-taskwait iter/cycle to make an input vector
+ * @return &predicted_load_vec: a reference to the return-vector
+ */
+void get_whole_future_prediction(int rank, int start_point, int end_point, std::vector<double> &predicted_load_vec)
+{
+    int num_features = 6;   // TODO: get it by the setup-time or env-variables
+    int end_program_iter = pre_load_per_iter_list.size(); // TODO: get this by the env-variable
+
+    // the main loop for the whole future prediction with the first start point
+    for (int i = end_point; i < end_program_iter; i++){
+        // prepare the input vector for the model
+        arma::vec input_vec(num_features);
+
+        // assert (num_features back from the end_point, the value is exist)
+        if (i == end_point){
+            assert((i-num_features) >= 0);
+            assert((avg_load_per_iter_list[i-num_features]) >= 0);
+        }
+
+        // get the previous loads as the input for predicting the load at end_point
+        int s = i - num_features;
+        int e = i;
+        // std::string idx_iter_str_log = "(s" + std::to_string(s) + ",e" + std::to_string(e) + ")";
+        // std::string val_iter_str_log = "";
+        for (int j = s; j < e; j++){
+            input_vec[j-s] = avg_load_per_iter_list[j];
+            
+            // for checking or logging
+            // idx_iter_str_log += std::to_string(j) + " ";
+            // val_iter_str_log += std::to_string(input_vec[j-s]) + " ";
+        }
+
+        // call the pred_model
+        arma::mat x_mat(1, num_features);   // 1 row, num_features cols
+        arma::rowvec p_load;                // for the result
+        x_mat = input_vec;
+        lr.Predict(x_mat, p_load);          // load the trained model
+        predicted_load_vec[i] = p_load[0];  // save the result to return back to chameleon-lib side
+        pre_load_per_iter_list[i] = p_load[0];
+
+        // update the pred-value into the list of avg_load
+        avg_load_per_iter_list[i] = p_load[0];
+
+        // check this flow
+        // std::cout << "[CHAM_TOOL] R" << rank << "-Iter" << end_point
+        //           << ": input [" << idx_iter_str_log.c_str() << "]"
+        //           << "= [" << val_iter_str_log.c_str() << "]"
+        //           << "| output(i" << e << ") = " << p_load[0] << std::endl;
+    }
+}
+
+/**
+ * Get the predicted values by iter-by-iter
+ *
+ * This means that with the input-start/end-points, from the real-load of these input
+ * points, the function would load the trained model and return the predicted result.
+ * 
+ * @param start_point: the start chameleon-taskwait iter/cycle to make an input vector
+ * @param end_point: the end chameleon-taskwait iter/cycle to make an input vector
+ * @return &predicted_load_vec: a reference to the return-vector
+ */
+void get_iter_by_iter_prediction(int start_point, int end_point, std::vector<double> &predicted_load_vec)
+{
+
 }

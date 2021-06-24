@@ -90,10 +90,18 @@ extern MinMaxAvgStats       _stats_bytes_send_per_message;
 extern MinMaxAvgStats       _stats_bytes_recv_per_message;
 
 #if CHAMELEON_TOOL_SUPPORT
+
 extern std::atomic<double>  _time_tool_get_thread_data_sum;
 extern std::atomic<int>     _time_tool_get_thread_data_count;
 extern std::atomic<double>  _time_task_execution_pred_sum;
 extern std::atomic<int>     _time_task_execution_pred_count;
+
+// for estimating training_ or inferencing_time of prediction models
+extern std::atomic<double> _time_training_model_sum;
+extern std::atomic<int>    _time_training_model_count;
+extern std::atomic<double> _time_inferenc_model_sum;
+extern std::atomic<int>    _time_inferenc_model_count;
+
 #endif
 
 #ifdef __cplusplus
