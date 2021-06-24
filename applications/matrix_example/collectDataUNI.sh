@@ -11,8 +11,9 @@
 
 module use -a /home/ey186093/.modules
 module load chameleon
+echo "$(pwd)"
 
-export CHAMELEON_TOOL_LIBRARIES=/home/ey186093/GitLab/jusch_chameleon-apps/tools/tool_task_balancing/tool.so;
+export CHAMELEON_TOOL_LIBRARIES=/home/ey186093/GitLab/jusch_chameleon-apps/tools/tool_task_balancing/tool_UNI.so;
 export OMP_NUM_THREADS=4;
 export OMP_PLACES=cores;
 export OMP_PROC_BIND=close;
@@ -20,11 +21,12 @@ export I_MPI_PIN=1;
 export I_MPI_PIN_DOMAIN=auto;
 
 mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')";
-mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')/node";
+mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')/rank";
 mkdir -p "/home/ey186093/output/$(date '+%Y-%m-%d')/runtime";
 
 ### 100.600.100
-for matrix_size in {100..600..100}; do
+###for matrix_size in {100..600..100}; do
+for matrix_size in 50 100 150 200 450 500 550 600; do
   ### 10..50..10
   for workload in {10..50..10}; do
     for SEQUENCE in {1..13..1}; do
@@ -109,7 +111,7 @@ for matrix_size in {100..600..100}; do
           d=$a;
       fi
 
-      mpiexec.hydra -np 4 -genvall main $matrix_size $a $b $c $d 2>&1 | tee log.log;
+      mpiexec.hydra -np 4 -genvall ./main $matrix_size $a $b $c $d 2>&1 | tee log.log;
 
       if grep -q "FAILED" "log.log"; then
         echo "ERROR: One test failed";
@@ -141,7 +143,7 @@ for matrix_size in {100..600..100}; do
         rm "${file}";
       done
 
-      for file in /home/ey186093/output/.node/*.csv; do
+      for file in /home/ey186093/output/.rank/*.csv; do
         ###if [[ "${file}" == *"R0"* ]]; then
           ###echo "----R0---" >> "RESULT_S${matrix_size}W_${a}_${b}_${c}_${d}.csv";
         ####elif [[ "${file}" == *"R1"* ]]; then
@@ -157,7 +159,7 @@ for matrix_size in {100..600..100}; do
       done
 
       mv "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')/runtime";
-      mv "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}_N.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')/node";
+      mv "UNI_S_${matrix_size}_W_${a}_${b}_${c}_${d}_N.csv" "/home/ey186093/output/$(date '+%Y-%m-%d')/rank";
 
     done
   done
