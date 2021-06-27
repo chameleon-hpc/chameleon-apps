@@ -401,7 +401,6 @@ int main(int argc, char **argv)
 #endif
 
 #if COMPILE_CHAMELEON
-    chameleon_init();
     #pragma omp parallel
     {
         chameleon_thread_init();
