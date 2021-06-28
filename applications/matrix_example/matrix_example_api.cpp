@@ -108,6 +108,7 @@
 
 #if COMPILE_CHAMELEON
 #include "chameleon.h"
+#include "chameleon_pre_init.h"
 #endif
 
 // static rank id that can also be used in other functions except main
@@ -395,12 +396,8 @@ int main(int argc, char **argv)
 	double wTimeCham, wTimeHost;
 	bool pass = true;
 
-#if CHECK_GENERATED_TASK_ID
-    std::mutex mtx_t_ids;
-    std::list<int32_t> t_ids;
-#endif
-
 #if COMPILE_CHAMELEON
+    chameleon_pre_init();
     #pragma omp parallel
     {
         chameleon_thread_init();
@@ -425,6 +422,11 @@ int main(int argc, char **argv)
             printf("Mode: Non-Uniform Task Distribution\n");
         }
     }
+
+#if CHECK_GENERATED_TASK_ID
+    std::mutex mtx_t_ids;
+    std::list<int32_t> t_ids;
+#endif
 	
     std::string msg = "will create "+std::to_string(numberOfTasks)+" tasks";
     LOG(iMyRank, msg.c_str());
