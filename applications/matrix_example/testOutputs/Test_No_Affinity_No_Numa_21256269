@@ -1,0 +1,831 @@
+Loading Chameleon module version intel_no_affinity
+ncm0558.hpc.itc.rwth-aachen.de
+Currently Loaded Modulefiles:
+ 1) DEVELOP                      3) intelmpi/2018               
+ 2) intel/19.0                   4) chameleon/intel_no_affinity 
+HOME=/home/ka387454
+SHELL=/usr/local_rwth/bin/zsh
+USER=ka387454
+LOGNAME=ka387454
+PATH=/home/ka387454/install/chameleon/intel_no_affinity/bin:/home/ka387454/.cargo/bin:/opt/intel/impi/2018.4.274/compilers_and_libraries/linux/mpi/bin64:/opt/intel/Compiler/19.0/1.144/rwthlnk/bin/intel64:/opt/slurm/bin:/usr/local_host/bin:/usr/local_host/sbin:/usr/local_rwth/bin:/usr/local_rwth/sbin:/usr/bin:/usr/sbin:/bin:/sbin:/opt/singularity/bin:/usr/local/bin:/usr/local/sbin
+XDG_SESSION_ID=c189399
+XDG_RUNTIME_DIR=/run/user/40101
+SHLVL=2
+PWD=/home/ka387454/repos/chameleon-apps/applications/matrix_example
+OLDPWD=/rwthfs/rz/cluster/home/ka387454/repos/chameleon-apps/applications/matrix_example
+R_CPUGROUPS=skylake-sp
+R_GROUPS=perfmon,perfmonl,lustreclient,lc16,lc18,modules45,ldapclient,nss_merge,cvmfs,hpc,claix-2018,opa
+R_HOSTNAME=ncm0558.hpc.itc.rwth-aachen.de
+R_HWARCH=intel_64
+R_HWTYPE=i386
+R_HW_HOSTNAME=ncm0558.hpc.itc.rwth-aachen.de
+R_HW_NPROC=48
+R_HW_REALMEM=196608
+R_IB=
+R_NAME=ncm0558
+R_N_INTEL_MIC=
+R_OPA=claix18
+R_OSDIST=CENTOS
+R_OSDISTMAJVERS=7
+R_OSDISTVERS=7.9
+R_OSNAME=LINUX
+R_OSTYPE=LINUX
+R_OSVERSION=3
+R_SERVICE=batch
+R_SERVICES=batch
+R_SLURM_CLUSTER=rcc
+R_SLURM_ROLES=compute
+R_SVC_LDAP_MASTER=ldap01.hpc.itc.rwth-aachen.de
+R_WLM_TYPE=slurm
+R_LOGINHOST=ncm0558.hpc.itc.rwth-aachen.de
+R_LOGNAME=ka387454
+R_LOGINNAME=ka387454
+WORK=/work/ka387454
+HPCWORK=/hpcwork/ka387454
+HOME_SNAPSHOT=/home/ka387454/.snapshot
+WORK_SNAPSHOT=/work/ka387454/.snapshot
+R_LOGINTAG=179771@ncm0558.hpc.itc.rwth-aachen.de
+R_LOGINTAG_UID=ncm0558_40101
+R_LOGINPID=179771
+LOGINPID=179771
+R_LOGINMODE=BATCH
+R_REMOTEHOST=unknown
+NODENAME=unknown
+MANPATH=/opt/intel/impi/2018.4.274/compilers_and_libraries/linux/mpi/man:/opt/intel/Compiler/19.0/1.144/rwthlnk/documentation_2019/en/debugger/gdb-ia/man:/opt/intel/Compiler/19.0/1.144/rwthlnk/documentation_2019/en/debugger/gdb-igfx/man:/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/benchmarks/mp_linpack/man:/opt/intel/Compiler/19.0/1.144/rwthlnk/man/common:/usr/local_rwth/modules/man:/opt/slurm/share/man:/usr/local_host/man:/usr/local_rwth/man:/usr/man:/usr/share/man:/usr/local/man:/usr/local/share/man
+LANG=en_US.UTF-8
+TZ=:/etc/localtime
+R_DELIMITER=------------------------------------------------------------------------------
+DELIM_LINE=------------------------------------------------------------------------------
+R_LOGFILEDIR=/usr/local_host/logfiles
+R_INITENVDIR=/usr/local_host/etc
+ENV=/usr/local_host/etc/kshenv
+BASH_ENV=/usr/local_host/etc/bashenv
+PUREOPTIONS= -cache-dir=/work/ka387454
+PSRC=/rwthfs/rz/SW/HPC/examples
+JAVA_TOOL_OPTIONS=-Xmx2048m
+TMP=/w0/tmp/slurm_ka387454.21256269
+TEMP=/w0/tmp/slurm_ka387454.21256269
+TMPSESS=/w0/tmp/slurm_ka387454.21256269
+FINALDIR=/usr/local_rwth/modules/modulefiles/linux/x86-64
+MODULEPATH_modshare=/home/ka387454/.modules:1:/usr/local_rwth/modules/modulefiles/linux/x86-64/DEVELOP:1:/usr/local_rwth/modules/modulefiles/GLOBAL:2
+MODULESHOME=/usr/local_rwth/modules/src
+MODULEPATH=/usr/local_rwth/modules/modulefiles/linux/x86-64/DEVELOP:/usr/local_rwth/modules/modulefiles/GLOBAL:/home/ka387454/.modules
+_LMFILES__modshare=/usr/local_rwth/modules/modulefiles/GLOBAL/DEVELOP:1:/usr/local_rwth/modules/modulefiles/linux/x86-64/DEVELOP/intel/19.0:1:/home/ka387454/.modules/chameleon/intel_no_affinity:1:/usr/local_rwth/modules/modulefiles/linux/x86-64/DEVELOP/intelmpi/2018:1
+LOADEDMODULES_modshare=chameleon/intel_no_affinity:1:intelmpi/2018:1:intel/19.0:1:DEVELOP:1
+_LMFILES_=/usr/local_rwth/modules/modulefiles/GLOBAL/DEVELOP:/usr/local_rwth/modules/modulefiles/linux/x86-64/DEVELOP/intel/19.0:/usr/local_rwth/modules/modulefiles/linux/x86-64/DEVELOP/intelmpi/2018:/home/ka387454/.modules/chameleon/intel_no_affinity
+LOADEDMODULES=DEVELOP:intel/19.0:intelmpi/2018:chameleon/intel_no_affinity
+CPATH=/home/ka387454/install/chameleon/intel_no_affinity/include:/opt/intel/Compiler/19.0/1.144/rwthlnk/pstl/include:/opt/intel/Compiler/19.0/1.144/rwthlnk/pstl/stdlib:/opt/intel/Compiler/19.0/1.144/rwthlnk/daal/include:/opt/intel/Compiler/19.0/1.144/rwthlnk/ipp/include:/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/include:/opt/intel/Compiler/19.0/1.144/rwthlnk/tbb/include
+FLAGS_AUTOPAR=-parallel
+_INTERNAL_FLAGS_MKL_RPATH=MKL
+INTELARCH=64
+FLAGS_FAST=-O3 -ip -xSSE4.2 -axCORE-AVX2,AVX -fp-model fast=2 
+_LIST_FLAGS_LINKER={-L/opt/intel/Compiler/19.0/1.144/rwthlnk/compiler/lib/intel64_lin -L/opt/intel/Compiler/19.0/1.144/rwthlnk/compiler/lib/ia32_lin -L/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/ia32_lin  -L/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/intel64_lin }
+MPM_LAUNCHER=/opt/intel/Compiler/19.0/1.144/debugger_2019/mpm/mic/bin/start_mpm.sh
+FLAGS_MKL_INCLUDE=-I/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/include -I/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/include/fftw -I/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/include/intel64/lp64 -I/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/include/ia32 -I/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/include/intel64/lp64
+_LAST_COMPILER_REVISION=1.144
+FLAGS_OPENMP=-qopenmp
+TBBROOT=/opt/intel/Compiler/19.0/1.144/rwthlnk/tbb
+FLAGS_ARCH64= -m64 
+_LIST__INTERNAL_MKLROOT=intel
+INTEL_LICENSE_FILE=50017@license2.rz.rwth-aachen.de
+_INTERNAL_INTELARCH=intelmpi
+_INTERNAL_FLAGS_MKL_INCLUDE=MKL
+OBJCXX= 
+_LIST_FLAGS_FAST_NO_FPOPT={-O3 -ip -xSSE4.2 -axCORE-AVX2,AVX -fp-model precise}
+FLAGS_LINKER=-L/opt/intel/Compiler/19.0/1.144/rwthlnk/compiler/lib/intel64_lin -L/opt/intel/Compiler/19.0/1.144/rwthlnk/compiler/lib/ia32_lin -L/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/ia32_lin  -L/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/intel64_lin 
+FLAGS_INTEL_FREE=-free -fpp
+_LIST__LAST_COMPILER_MINORVERSION=0
+FLAGS_INTEL_ARCH32= -m32 
+_LIST_FLAGS_AUTOPAR=-parallel
+_LIST__INTERNAL_FLAGS_MKL_RPATH=MKL
+_LIST_INTELARCH=64 64
+F77=ifort -f77rtl -fpconstant -intconstant
+CLASSPATH_modshare=/opt/intel/impi/2018.4.274/compilers_and_libraries/linux/mpi/lib64/mpi.jar:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/daal/lib/daal.jar:1
+_LIST_FLAGS_MKL_INCLUDE={-I/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/include -I/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/include/fftw -I/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/include/intel64/lp64 -I/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/include/ia32 -I/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/include/intel64/lp64}
+_LIST_CXX=icpc
+_LIST_FLAGS_DEBUG=-g
+PSTLROOT=/opt/intel/Compiler/19.0/1.144/rwthlnk/pstl
+_INTERNAL_FLAGS_MKL_LINKER=MKL
+_LIST_MKLROOT=/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl
+MANPATH_modshare=/usr/local/share/man:1:/usr/local_rwth/man:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/documentation_2019/en/debugger/gdb-igfx/man:1:/usr/local_host/man:1:/usr/man:1:/usr/local/man:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/benchmarks/mp_linpack/man:1:/opt/slurm/share/man:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/man/common:1:/usr/local_rwth/modules/man:1:/opt/intel/impi/2018.4.274/compilers_and_libraries/linux/mpi/man:1:/usr/share/man:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/documentation_2019/en/debugger/gdb-ia/man:1
+_LIST_FC=ifort
+INCLUDE=/home/ka387454/install/chameleon/intel_no_affinity/include:/opt/intel/Compiler/19.0/1.144/rwthlnk/daal/include:/opt/intel/Compiler/19.0/1.144/rwthlnk/ipp/include:/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/include:/opt/intel/Compiler/19.0/1.144/rwthlnk/tbb/include
+prepvintFLAGS_LPATH={} {-L/opt/intel/Compiler/19.0/1.144/rwthlnk/compiler/lib/intel64_lin                  -L/opt/intel/Compiler/19.0/1.144/rwthlnk/compiler/lib/ia32_lin                  -L/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/intel64_lin                   -L/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/ia32_lin  }
+FLAGS_FREE=-free -fpp
+LAST_COMPILER=intel
+_INTERNAL_FLAGS_LPATH=intelmpi
+_LIST_FLAGS_MKL_RPATH={ -Wl,-rpath=/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/intel64_lin -Wl,-rpath=/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/ia32_lin }
+FLAGS_MATH_LINKER=-mkl=sequential 
+LD_LIBRARY_PATH_modshare=/opt/intel/Compiler/19.0/1.144/rwthlnk/tbb/lib/ia32_lin/gcc4.7:1:/opt/intel/impi/2018.4.274/compilers_and_libraries/linux/mpi/lib64:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/ipp/lib/intel64_lin:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/compiler/lib/ia32_lin:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/intel64_lin:2:/opt/intel/Compiler/19.0/1.144/rwthlnk/tbb/lib/intel64_lin/gcc4.7:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/ia32_lin:2:/opt/intel/impi/2018.4.274/compilers_and_libraries/linux/mpi/lib:1:/home/ka387454/install/chameleon/intel_no_affinity/lib:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/ipp/lib/ia32_lin:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/daal/lib/intel64_lin:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/compiler/lib/intel64_lin:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/daal/lib/ia32_lin:1:/home/ka387454/install/chameleon/intel_no_affinity/lib/intel64:1
+_LIST__INTERNAL_INTEL_LICENSE_FILE=intelmpi intel
+prepvintFLAGS_RPATH={djkch84adca/opt/intel/Compiler/19.0/1.144/rwthlnk/compiler/lib/intel64_lin djkch84adca/opt/intel/Compiler/19.0/1.144/rwthlnk/compiler/lib/ia32_lin djkch84adca/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/intel64_lin  djkch84adca/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/ia32_lin }
+_LIST_FLAGS_FAST={-O3 -ip -xSSE4.2 -axCORE-AVX2,AVX -fp-model fast=2 }
+_LIST__LAST_COMPILER_MAJORVERSION=19
+OMP_NUM_THREADS=47
+_INTERNAL_FLAGS_RPATH=intel
+INTEL_PYTHONHOME=/opt/intel/Compiler/19.0/1.144/debugger_2019/python/intel64/
+_LIST_FLAGS_MKL_LINKER=-mkl=sequential
+CC=icc
+FLAGS_FAST_NO_FPOPT=-O3 -ip -xSSE4.2 -axCORE-AVX2,AVX -fp-model precise
+FLAGS_INTEL_RUNTIME_LINKER=-Wl,-rpath=
+_LAST_COMPILER_MINORVERSION=0
+_LIST_INTEL_LICENSE_FILE=50017@license2.rz.rwth-aachen.de 50017@license2.rz.rwth-aachen.de
+LD_LIBRARY_PATH=/home/ka387454/install/chameleon/intel_no_affinity/lib/intel64:/home/ka387454/install/chameleon/intel_no_affinity/lib:/opt/intel/impi/2018.4.274/compilers_and_libraries/linux/mpi/lib64:/opt/intel/impi/2018.4.274/compilers_and_libraries/linux/mpi/lib:/opt/intel/Compiler/19.0/1.144/rwthlnk/daal/lib/intel64_lin:/opt/intel/Compiler/19.0/1.144/rwthlnk/daal/lib/ia32_lin:/opt/intel/Compiler/19.0/1.144/rwthlnk/ipp/lib/intel64_lin:/opt/intel/Compiler/19.0/1.144/rwthlnk/ipp/lib/ia32_lin:/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/intel64_lin:/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/ia32_lin:/opt/intel/Compiler/19.0/1.144/rwthlnk/tbb/lib/intel64_lin/gcc4.7:/opt/intel/Compiler/19.0/1.144/rwthlnk/tbb/lib/ia32_lin/gcc4.7:/opt/intel/Compiler/19.0/1.144/rwthlnk/compiler/lib/intel64_lin:/opt/intel/Compiler/19.0/1.144/rwthlnk/compiler/lib/ia32_lin
+FLAGS_PIC=-fPIC -shared
+_INTERNAL_INTEL_LICENSE_FILE=intelmpi
+_LIST_LAST_COMPILER=intel
+_LIST_OBJCXX={ }
+_LIST_FLAGS_ARCH32={ -m32 }
+INTEL_CC=icc
+_LIST__INTERNAL_FLAGS_LPATH=intelmpi intel
+_LAST_REPLACES_FLAGS_RPATH=-Wl,-rpath=
+CXX=icpc
+FLAGS_DEBUG=-g
+FLAGS_MKL_LINKER=-mkl=sequential
+FLAGS_LPATH= -L/opt/intel/Compiler/19.0/1.144/rwthlnk/compiler/lib/intel64_lin                  -L/opt/intel/Compiler/19.0/1.144/rwthlnk/compiler/lib/ia32_lin                  -L/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/intel64_lin                   -L/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/ia32_lin  
+GDB_CROSS=/opt/intel/Compiler/19.0/1.144/debugger_2019/gdb/intel64/bin/gdb-ia
+DAALROOT=/opt/intel/Compiler/19.0/1.144/rwthlnk/daal
+FLAGS_INTEL_OPENMP=-qopenmp
+FLAGS_INTEL_ARCH64= -m64 
+FLAGS_ARCH32= -m32 
+INTEL_F77=ifort -f77rtl -fpconstant -intconstant
+_LIST__INTERNAL_FLAGS_RPATH=intel
+MKLROOT=/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl
+_LIST__INTERNAL_FLAGS_MKL_LINKER=MKL
+FLAGS_MATH_INCLUDE=-I/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/include -I/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/include/fftw -I/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/include/intel64/lp64 -I/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/include/ia32 -I/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/include/intel64/lp64 
+INTEL_OBJC= 
+INTEL_OBJCXX= 
+FLAGS_INTEL_FAST_NO_FPOPT=-O3 -ip -xSSE4.2 -axCORE-AVX2,AVX -fp-model precise
+NLSPATH=/opt/intel/Compiler/19.0/1.144/debugger_2019/gdb/intel64/share/locale/%l_%t/%N:/opt/intel/Compiler/19.0/1.144/rwthlnk/daal/lib/intel64_lin/locale/%l_%t/%N:/opt/intel/Compiler/19.0/1.144/rwthlnk/ipp/lib/intel64_lin/locale/%l_%t/%N:/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/intel64_lin/locale/%l_%t/%N:/opt/intel/Compiler/19.0/1.144/rwthlnk/compiler/lib/intel64_lin/locale/%l_%t/%N
+_LIST_FLAGS_PIC={-fPIC -shared}
+FLAGS_RPATH=-Wl,-rpath=/opt/intel/Compiler/19.0/1.144/rwthlnk/compiler/lib/intel64_lin -Wl,-rpath=/opt/intel/Compiler/19.0/1.144/rwthlnk/compiler/lib/ia32_lin -Wl,-rpath=/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/intel64_lin  -Wl,-rpath=/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/ia32_lin 
+FLAGS_INTEL_LINKER=-L/opt/intel/Compiler/19.0/1.144/rwthlnk/compiler/lib/intel64_lin -L/opt/intel/Compiler/19.0/1.144/rwthlnk/compiler/lib/ia32_lin -L/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/ia32_lin  -L/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/intel64_lin 
+GDBSERVER_MIC=/opt/intel/Compiler/19.0/1.144/debugger_2019/gdb/targets/intel64/x200/bin/gdbserver
+_LIST__LAST_COMPILER_REVISION=1.144
+FLAGS_MKL_RPATH= -Wl,-rpath=/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/intel64_lin -Wl,-rpath=/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/ia32_lin 
+INCLUDE_modshare=/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/include:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/tbb/include:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/ipp/include:1:/home/ka387454/install/chameleon/intel_no_affinity/include:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/daal/include:1
+FLAGS_INTEL_DEBUG=-g
+_LIST__INTERNAL_INTELARCH=intelmpi intel
+_LIST__INTERNAL_FLAGS_MKL_INCLUDE=MKL
+_LIST_FLAGS_FREE={-free -fpp}
+_LIST_OBJC={ }
+INFOPATH=/opt/intel/Compiler/19.0/1.144/rwthlnk/documentation_2019/en/debugger/gdb-ia/info:/opt/intel/Compiler/19.0/1.144/rwthlnk/documentation_2019/en/debugger/gdb-igfx/info
+LIBRARY_PATH=/home/ka387454/install/chameleon/intel_no_affinity/lib:/home/ka387454/install/chameleon/intel_no_affinity/lib/intel64:/home/ka387454/install/chameleon/intel_no_affinity/lib/mic:/opt/intel/Compiler/19.0/1.144/rwthlnk/daal/lib/intel64_lin:/opt/intel/Compiler/19.0/1.144/rwthlnk/daal/lib/ia32_lin:/opt/intel/Compiler/19.0/1.144/rwthlnk/ipp/lib/intel64_lin:/opt/intel/Compiler/19.0/1.144/rwthlnk/ipp/lib/ia32_lin:/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/intel64_lin:/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/ia32_lin:/opt/intel/Compiler/19.0/1.144/rwthlnk/tbb/lib/intel64_lin/gcc4.7:/opt/intel/Compiler/19.0/1.144/rwthlnk/tbb/lib/ia32_lin/gcc4.7
+INFOPATH_modshare=/opt/intel/Compiler/19.0/1.144/rwthlnk/documentation_2019/en/debugger/gdb-ia/info:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/documentation_2019/en/debugger/gdb-igfx/info:1
+LIBRARY_PATH_modshare=/opt/intel/Compiler/19.0/1.144/rwthlnk/daal/lib/intel64_lin:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/ipp/lib/ia32_lin:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/tbb/lib/ia32_lin/gcc4.7:1:/home/ka387454/install/chameleon/intel_no_affinity/lib:1:/home/ka387454/install/chameleon/intel_no_affinity/lib/mic:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/daal/lib/ia32_lin:1:/home/ka387454/install/chameleon/intel_no_affinity/lib/intel64:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/intel64_lin:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/ipp/lib/intel64_lin:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/ia32_lin:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/tbb/lib/intel64_lin/gcc4.7:1
+_LAST_COMPILER_MAJORVERSION=19
+FLAGS_MATH_RPATH= -Wl,-rpath=/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/intel64_lin -Wl,-rpath=/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/ia32_lin  
+NLSPATH_modshare=/opt/intel/Compiler/19.0/1.144/debugger_2019/gdb/intel64/share/locale/%l_%t/%N:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/ipp/lib/intel64_lin/locale/%l_%t/%N:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/daal/lib/intel64_lin/locale/%l_%t/%N:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/compiler/lib/intel64_lin/locale/%l_%t/%N:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/lib/intel64_lin/locale/%l_%t/%N:1
+IPPROOT=/opt/intel/Compiler/19.0/1.144/rwthlnk/ipp
+FLAGS_INTEL_FAST=-O3 -ip -xSSE4.2 -axCORE-AVX2,AVX -fp-model fast=2 
+_LIST_FLAGS_RUNTIME_LINKER=-Wl,-rpath=
+_LIST_F77={ifort -f77rtl -fpconstant -intconstant}
+OBJC= 
+_LIST_CC=icc
+FC=ifort
+CPATH_modshare=/opt/intel/Compiler/19.0/1.144/rwthlnk/mkl/include:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/tbb/include:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/pstl/stdlib:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/ipp/include:1:/home/ka387454/install/chameleon/intel_no_affinity/include:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/daal/include:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/pstl/include:1
+CLASSPATH=/opt/intel/impi/2018.4.274/compilers_and_libraries/linux/mpi/lib64/mpi.jar:/opt/intel/Compiler/19.0/1.144/rwthlnk/daal/lib/daal.jar
+_INTERNAL_MKLROOT=intel
+FLAGS_INTEL_PIC=-fPIC -shared
+FLAGS_INTEL_AUTOPAR=-parallel
+FLAGS_RUNTIME_LINKER=-Wl,-rpath=
+INTEL_FC=ifort
+_LIST_FLAGS_OPENMP=-qopenmp
+_LIST_FLAGS_ARCH64={ -m64 }
+INTEL_CXX=icpc
+PATH_modshare=/usr/local_host/bin:1:/usr/bin:1:/opt/intel/impi/2018.4.274/compilers_and_libraries/linux/mpi/bin64:1:/opt/intel/Compiler/19.0/1.144/rwthlnk/bin/intel64:1:/usr/local_host/sbin:1:/usr/local/bin:1:/opt/singularity/bin:1:/bin:1:/usr/local_rwth/sbin:1:/home/ka387454/install/chameleon/intel_no_affinity/bin:1:/home/ka387454/.cargo/bin:999999999:/sbin:1:/usr/sbin:1:/opt/slurm/bin:1:/usr/local/sbin:1:/usr/local_rwth/bin:1
+I_MPI_JOB_SIGNAL_PROPAGATION=on
+I_MPI_ROOT=/opt/intel/impi/2018.4.274/compilers_and_libraries/linux/mpi
+MPI_INCLUDE=/opt/intel/impi/2018.4.274/compilers_and_libraries/linux/mpi/include64
+R_MPI_ROOT=/opt/intel/impi/2018.4.274/compilers_and_libraries/linux/mpi
+_LAST_MPI_MINORVERSION=4
+MPIF77=mpiifort  -f77rtl -fpconstant -intconstant
+MPI_LIBDIR=/opt/intel/impi/2018.4.274/compilers_and_libraries/linux/mpi/lib64
+_COMPILER_INTELMPI=intel
+MPICC=mpiicc
+MPI_BINDIR=/opt/intel/impi/2018.4.274/compilers_and_libraries/linux/mpi/bin64
+_LAST_MPI_REVISION=274
+_LAST_MPI_MAJORVERSION=2018
+I_MPI_TCP_BUFFER_SIZE=131072
+I_MPI_FABRICS=shm:tmi
+_LAST_MPI=intelmpi
+MPICXX=mpiicpc
+DAPL_CM_ROUTE_TIMEOUT_MS=20000
+I_MPI_PIN=
+_MPI_LOADED=intelmpi/2018.4.274
+MPI_NAME=intelmpi
+FLAGS_MKL_SCALAPACK_LINKER=-lmkl_scalapack_lp64 -lmkl_blacs_intelmpi_lp64 -lpthread -lm
+MPIFC=mpiifort
+_=/usr/bin/env
+SLURM_EXPORT_ENV=NONE
+SLURM_JOB_NAME=slurm_no_affinity.sh
+SLURM_PRIO_PROCESS=0
+SLURM_SUBMIT_DIR=/rwthfs/rz/cluster/home/ka387454/repos/chameleon-apps/applications/matrix_example
+SLURM_SUBMIT_HOST=login18-3.hpc.itc.rwth-aachen.de
+SLURM_GET_USER_ENV=1
+SLURM_CPUS_PER_TASK=48
+SLURM_NPROCS=4
+SLURM_NTASKS=4
+SLURM_NTASKS_PER_NODE=1
+SLURM_CLUSTER_NAME=rcc
+SLURM_JOB_ID=21256269
+SLURM_JOB_NUM_NODES=4
+SLURM_JOB_NODELIST=ncm[0558,0560-0562]
+SLURM_JOB_PARTITION=c18m
+SLURM_NODE_ALIASES=(null)
+SLURM_JOB_CPUS_PER_NODE=48(x4)
+ENVIRONMENT=BATCH
+HOSTNAME=ncm0558.hpc.itc.rwth-aachen.de
+SLURM_JOBID=21256269
+SLURM_NNODES=4
+SLURM_NODELIST=ncm[0558,0560-0562]
+SLURM_TASKS_PER_NODE=1(x4)
+SLURM_MEM_PER_CPU=3900
+SLURM_JOB_ACCOUNT=default
+SLURM_JOB_QOS=normal
+SLURM_TOPOLOGY_ADDR=.sw18-ops-[01-16].sw18-ope-18.ncm0558
+SLURM_TOPOLOGY_ADDR_PATTERN=switch.switch.switch.node
+SLURM_CPUS_ON_NODE=48
+SLURM_TASK_PID=179771
+SLURM_NODEID=0
+SLURM_PROCID=0
+SLURM_LOCALID=0
+SLURM_GTIDS=0
+SLURM_CHECKPOINT_IMAGE_DIR=/w0/slurm/checkpoint
+SLURM_JOB_UID=40101
+SLURM_JOB_USER=ka387454
+SLURM_WORKING_CLUSTER=rcc:wlm1:6750:8448
+SLURM_JOB_GID=40101
+SLURMD_NODENAME=ncm0558
+BEEOND=/mnt/beegfs
+TMPDIR=/w0/tmp/slurm_ka387454.21256269
+R_WLM_JOB_ID=SLURM_21256269
+MPIEXEC=srun
+FLAGS_MPI_BATCH= -n 4
+R_WLM_HOSTLISTFILE=/w0/tmp/slurm_ka387454.21256269/.hostfile
+R_SLURM_HOSTLISTFILE=/w0/tmp/slurm_ka387454.21256269/.hostfile
+R_WLM_CFXHOSTLIST=ncm0558*48,ncm0560*48,ncm0561*48,ncm0562*48
+CFXHOSTS=ncm0558*48,ncm0560*48,ncm0561*48,ncm0562*48
+R_WLM_ABAQUSHOSTLIST=[['ncm0558.hpc.itc.rwth-aachen.de', 48],['ncm0560.hpc.itc.rwth-aachen.de', 48],['ncm0561.hpc.itc.rwth-aachen.de', 48],['ncm0562.hpc.itc.rwth-aachen.de', 48]]
+R_SHLVL=2
+CPLUS_INCLUDE_PATH_modshare=/home/ka387454/install/chameleon/intel_no_affinity/include:1
+C_INCLUDE_PATH_modshare=/home/ka387454/install/chameleon/intel_no_affinity/include:1
+CPLUS_INCLUDE_PATH=/home/ka387454/install/chameleon/intel_no_affinity/include
+C_INCLUDE_PATH=/home/ka387454/install/chameleon/intel_no_affinity/include
+
+srun  -n 4
+srun: TOPOLOGY: warning -- no switch can reach all nodes through its descendants.Do not use route/topology
+slurmstepd: error: Can't propagate RLIMIT_NPROC of 767594 from submit host: Operation not permitted
+[-1] MPI startup(): Imported environment partly inaccesible. Map=0 Info=641a40
+[-1] MPI startup(): Imported environment partly inaccesible. Map=0 Info=641a40
+[-1] MPI startup(): Imported environment partly inaccesible. Map=0 Info=641a40
+[-1] MPI startup(): Imported environment partly inaccesible. Map=0 Info=641a40
+[0] MPI startup(): Multi-threaded optimized library
+[0] DAPL startup(): trying to open DAPL provider from I_MPI_DAPL_PROVIDER: ofa-v2-ib0
+[2] DAPL startup(): trying to open DAPL provider from I_MPI_DAPL_PROVIDER: ofa-v2-ib0
+[3] DAPL startup(): trying to open DAPL provider from I_MPI_DAPL_PROVIDER: ofa-v2-ib0
+[0] MPI startup(): DAPL provider ofa-v2-ib0
+[0] MPI startup(): dapl data transfer mode
+[1] DAPL startup(): trying to open DAPL provider from I_MPI_DAPL_PROVIDER: ofa-v2-ib0
+[2] MPI startup(): DAPL provider ofa-v2-ib0
+[3] MPI startup(): DAPL provider ofa-v2-ib0
+[2] MPI startup(): dapl data transfer mode
+[3] MPI startup(): dapl data transfer mode
+[1] MPI startup(): DAPL provider ofa-v2-ib0
+[1] MPI startup(): dapl data transfer mode
+[0] MPID_nem_init_dapl_coll_fns(): User set DAPL collective mask = 0000
+[0] MPID_nem_init_dapl_coll_fns(): Effective DAPL collective mask = 0000
+[2] MPID_nem_init_dapl_coll_fns(): User set DAPL collective mask = 0000
+[2] MPID_nem_init_dapl_coll_fns(): Effective DAPL collective mask = 0000
+[1] MPID_nem_init_dapl_coll_fns(): User set DAPL collective mask = 0000
+[1] MPID_nem_init_dapl_coll_fns(): Effective DAPL collective mask = 0000
+[3] MPID_nem_init_dapl_coll_fns(): User set DAPL collective mask = 0000
+[3] MPID_nem_init_dapl_coll_fns(): Effective DAPL collective mask = 0000
+[0] MPI startup(): Rank    Pid      Node name                       Pin cpu
+[0] MPI startup(): 0       179879   ncm0558.hpc.itc.rwth-aachen.de  +1
+[0] MPI startup(): 1       70253    ncm0560.hpc.itc.rwth-aachen.de  +1
+[0] MPI startup(): 2       179980   ncm0561.hpc.itc.rwth-aachen.de  +1
+[0] MPI startup(): 3       142450   ncm0562.hpc.itc.rwth-aachen.de  +1
+[0] MPI startup(): I_MPI_DEBUG=5
+OMP: Info #212: KMP_AFFINITY: decoding x2APIC ids.
+OMP: Info #212: KMP_AFFINITY: decoding x2APIC ids.
+OMP: Info #212: KMP_AFFINITY: decoding x2APIC ids.
+OMP: Info #212: KMP_AFFINITY: decoding x2APIC ids.
+OMP: Info #210: KMP_AFFINITY: Affinity capable, using global cpuid leaf 11 info
+OMP: Info #154: KMP_AFFINITY: Initial OS proc set respected: 0-47
+OMP: Info #156: KMP_AFFINITY: 48 available OS procs
+OMP: Info #157: KMP_AFFINITY: Uniform topology
+OMP: Info #179: KMP_AFFINITY: 2 packages x 24 cores/pkg x 1 threads/core (48 total cores)
+OMP: Info #214: KMP_AFFINITY: OS proc to physical thread map:
+OMP: Info #171: KMP_AFFINITY: OS proc 0 maps to package 0 core 0 
+OMP: Info #171: KMP_AFFINITY: OS proc 1 maps to package 0 core 1 
+OMP: Info #171: KMP_AFFINITY: OS proc 2 maps to package 0 core 2 
+OMP: Info #171: KMP_AFFINITY: OS proc 3 maps to package 0 core 3 
+OMP: Info #171: KMP_AFFINITY: OS proc 4 maps to package 0 core 4 
+OMP: Info #171: KMP_AFFINITY: OS proc 5 maps to package 0 core 5 
+OMP: Info #171: KMP_AFFINITY: OS proc 6 maps to package 0 core 8 
+OMP: Info #171: KMP_AFFINITY: OS proc 7 maps to package 0 core 9 
+OMP: Info #171: KMP_AFFINITY: OS proc 8 maps to package 0 core 10 
+OMP: Info #171: KMP_AFFINITY: OS proc 9 maps to package 0 core 11 
+OMP: Info #171: KMP_AFFINITY: OS proc 10 maps to package 0 core 12 
+OMP: Info #171: KMP_AFFINITY: OS proc 11 maps to package 0 core 13 
+OMP: Info #171: KMP_AFFINITY: OS proc 12 maps to package 0 core 16 
+OMP: Info #171: KMP_AFFINITY: OS proc 13 maps to package 0 core 17 
+OMP: Info #171: KMP_AFFINITY: OS proc 14 maps to package 0 core 18 
+OMP: Info #171: KMP_AFFINITY: OS proc 15 maps to package 0 core 19 
+OMP: Info #171: KMP_AFFINITY: OS proc 16 maps to package 0 core 20 
+OMP: Info #171: KMP_AFFINITY: OS proc 17 maps to package 0 core 21 
+OMP: Info #171: KMP_AFFINITY: OS proc 18 maps to package 0 core 24 
+OMP: Info #171: KMP_AFFINITY: OS proc 19 maps to package 0 core 25 
+OMP: Info #171: KMP_AFFINITY: OS proc 20 maps to package 0 core 26 
+OMP: Info #171: KMP_AFFINITY: OS proc 21 maps to package 0 core 27 
+OMP: Info #171: KMP_AFFINITY: OS proc 22 maps to package 0 core 28 
+OMP: Info #171: KMP_AFFINITY: OS proc 23 maps to package 0 core 29 
+OMP: Info #171: KMP_AFFINITY: OS proc 24 maps to package 1 core 0 
+OMP: Info #171: KMP_AFFINITY: OS proc 25 maps to package 1 core 1 
+OMP: Info #171: KMP_AFFINITY: OS proc 26 maps to package 1 core 2 
+OMP: Info #171: KMP_AFFINITY: OS proc 27 maps to package 1 core 3 
+OMP: Info #171: KMP_AFFINITY: OS proc 28 maps to package 1 core 4 
+OMP: Info #171: KMP_AFFINITY: OS proc 29 maps to package 1 core 5 
+OMP: Info #171: KMP_AFFINITY: OS proc 30 maps to package 1 core 8 
+OMP: Info #171: KMP_AFFINITY: OS proc 31 maps to package 1 core 9 
+OMP: Info #171: KMP_AFFINITY: OS proc 32 maps to package 1 core 10 
+OMP: Info #171: KMP_AFFINITY: OS proc 33 maps to package 1 core 11 
+OMP: Info #171: KMP_AFFINITY: OS proc 34 maps to package 1 core 12 
+OMP: Info #171: KMP_AFFINITY: OS proc 35 maps to package 1 core 13 
+OMP: Info #171: KMP_AFFINITY: OS proc 36 maps to package 1 core 16 
+OMP: Info #210: KMP_AFFINITY: Affinity capable, using global cpuid leaf 11 info
+OMP: Info #154: KMP_AFFINITY: Initial OS proc set respected: 0-47
+OMP: Info #156: KMP_AFFINITY: 48 available OS procs
+OMP: Info #157: KMP_AFFINITY: Uniform topology
+OMP: Info #179: KMP_AFFINITY: 2 packages x 24 cores/pkg x 1 threads/core (48 total cores)
+OMP: Info #171: KMP_AFFINITY: OS proc 37 maps to package 1 core 17 
+OMP: Info #171: KMP_AFFINITY: OS proc 38 maps to package 1 core 18 
+OMP: Info #171: KMP_AFFINITY: OS proc 39 maps to package 1 core 19 
+OMP: Info #171: KMP_AFFINITY: OS proc 40 maps to package 1 core 20 
+OMP: Info #171: KMP_AFFINITY: OS proc 41 maps to package 1 core 21 
+OMP: Info #171: KMP_AFFINITY: OS proc 42 maps to package 1 core 24 
+OMP: Info #171: KMP_AFFINITY: OS proc 43 maps to package 1 core 25 
+OMP: Info #171: KMP_AFFINITY: OS proc 44 maps to package 1 core 26 
+OMP: Info #171: KMP_AFFINITY: OS proc 45 maps to package 1 core 27 
+OMP: Info #171: KMP_AFFINITY: OS proc 46 maps to package 1 core 28 
+OMP: Info #171: KMP_AFFINITY: OS proc 47 maps to package 1 core 29 
+OMP: Info #210: KMP_AFFINITY: Affinity capable, using global cpuid leaf 11 info
+OMP: Info #154: KMP_AFFINITY: Initial OS proc set respected: 0-47
+OMP: Info #156: KMP_AFFINITY: 48 available OS procs
+OMP: Info #157: KMP_AFFINITY: Uniform topology
+OMP: Info #179: KMP_AFFINITY: 2 packages x 24 cores/pkg x 1 threads/core (48 total cores)
+OMP: Info #214: KMP_AFFINITY: OS proc to physical thread map:
+OMP: Info #171: KMP_AFFINITY: OS proc 0 maps to package 0 core 0 
+OMP: Info #171: KMP_AFFINITY: OS proc 1 maps to package 0 core 1 
+OMP: Info #171: KMP_AFFINITY: OS proc 2 maps to package 0 core 2 
+OMP: Info #171: KMP_AFFINITY: OS proc 3 maps to package 0 core 3 
+OMP: Info #214: KMP_AFFINITY: OS proc to physical thread map:
+OMP: Info #171: KMP_AFFINITY: OS proc 0 maps to package 0 core 0 
+OMP: Info #171: KMP_AFFINITY: OS proc 1 maps to package 0 core 1 
+OMP: Info #171: KMP_AFFINITY: OS proc 4 maps to package 0 core 4 
+OMP: Info #171: KMP_AFFINITY: OS proc 5 maps to package 0 core 5 
+OMP: Info #171: KMP_AFFINITY: OS proc 6 maps to package 0 core 8 
+OMP: Info #171: KMP_AFFINITY: OS proc 7 maps to package 0 core 9 
+OMP: Info #171: KMP_AFFINITY: OS proc 8 maps to package 0 core 10 
+OMP: Info #171: KMP_AFFINITY: OS proc 2 maps to package 0 core 2 
+OMP: Info #171: KMP_AFFINITY: OS proc 3 maps to package 0 core 3 
+OMP: Info #171: KMP_AFFINITY: OS proc 4 maps to package 0 core 4 
+OMP: Info #171: KMP_AFFINITY: OS proc 5 maps to package 0 core 5 
+OMP: Info #171: KMP_AFFINITY: OS proc 6 maps to package 0 core 8 
+OMP: Info #171: KMP_AFFINITY: OS proc 7 maps to package 0 core 9 
+OMP: Info #171: KMP_AFFINITY: OS proc 9 maps to package 0 core 11 
+OMP: Info #171: KMP_AFFINITY: OS proc 10 maps to package 0 core 12 
+OMP: Info #171: KMP_AFFINITY: OS proc 11 maps to package 0 core 13 
+OMP: Info #171: KMP_AFFINITY: OS proc 12 maps to package 0 core 16 
+OMP: Info #171: KMP_AFFINITY: OS proc 8 maps to package 0 core 10 
+OMP: Info #171: KMP_AFFINITY: OS proc 9 maps to package 0 core 11 
+OMP: Info #171: KMP_AFFINITY: OS proc 10 maps to package 0 core 12 
+OMP: Info #171: KMP_AFFINITY: OS proc 11 maps to package 0 core 13 
+OMP: Info #171: KMP_AFFINITY: OS proc 13 maps to package 0 core 17 
+OMP: Info #171: KMP_AFFINITY: OS proc 14 maps to package 0 core 18 
+OMP: Info #171: KMP_AFFINITY: OS proc 15 maps to package 0 core 19 
+OMP: Info #210: KMP_AFFINITY: Affinity capable, using global cpuid leaf 11 info
+OMP: Info #154: KMP_AFFINITY: Initial OS proc set respected: 0-47
+OMP: Info #156: KMP_AFFINITY: 48 available OS procs
+OMP: Info #157: KMP_AFFINITY: Uniform topology
+OMP: Info #179: KMP_AFFINITY: 2 packages x 24 cores/pkg x 1 threads/core (48 total cores)
+OMP: Info #171: KMP_AFFINITY: OS proc 12 maps to package 0 core 16 
+OMP: Info #171: KMP_AFFINITY: OS proc 13 maps to package 0 core 17 
+OMP: Info #171: KMP_AFFINITY: OS proc 14 maps to package 0 core 18 
+OMP: Info #171: KMP_AFFINITY: OS proc 15 maps to package 0 core 19 
+OMP: Info #171: KMP_AFFINITY: OS proc 16 maps to package 0 core 20 
+OMP: Info #171: KMP_AFFINITY: OS proc 16 maps to package 0 core 20 
+OMP: Info #171: KMP_AFFINITY: OS proc 17 maps to package 0 core 21 
+OMP: Info #171: KMP_AFFINITY: OS proc 18 maps to package 0 core 24 
+OMP: Info #171: KMP_AFFINITY: OS proc 19 maps to package 0 core 25 
+OMP: Info #214: KMP_AFFINITY: OS proc to physical thread map:
+OMP: Info #171: KMP_AFFINITY: OS proc 0 maps to package 0 core 0 
+OMP: Info #171: KMP_AFFINITY: OS proc 1 maps to package 0 core 1 
+OMP: Info #171: KMP_AFFINITY: OS proc 17 maps to package 0 core 21 
+OMP: Info #171: KMP_AFFINITY: OS proc 18 maps to package 0 core 24 
+OMP: Info #171: KMP_AFFINITY: OS proc 19 maps to package 0 core 25 
+OMP: Info #171: KMP_AFFINITY: OS proc 20 maps to package 0 core 26 
+OMP: Info #171: KMP_AFFINITY: OS proc 21 maps to package 0 core 27 
+OMP: Info #171: KMP_AFFINITY: OS proc 22 maps to package 0 core 28 
+OMP: Info #250: KMP_AFFINITY: pid 142450 tid 142450 thread 0 bound to OS proc set 0
+OMP: Info #171: KMP_AFFINITY: OS proc 2 maps to package 0 core 2 
+OMP: Info #171: KMP_AFFINITY: OS proc 3 maps to package 0 core 3 
+OMP: Info #171: KMP_AFFINITY: OS proc 4 maps to package 0 core 4 
+OMP: Info #171: KMP_AFFINITY: OS proc 5 maps to package 0 core 5 
+OMP: Info #171: KMP_AFFINITY: OS proc 6 maps to package 0 core 8 
+OMP: Info #171: KMP_AFFINITY: OS proc 7 maps to package 0 core 9 
+OMP: Info #171: KMP_AFFINITY: OS proc 8 maps to package 0 core 10 
+OMP: Info #171: KMP_AFFINITY: OS proc 20 maps to package 0 core 26 
+OMP: Info #171: KMP_AFFINITY: OS proc 21 maps to package 0 core 27 
+OMP: Info #171: KMP_AFFINITY: OS proc 22 maps to package 0 core 28 
+OMP: Info #171: KMP_AFFINITY: OS proc 23 maps to package 0 core 29 
+OMP: Info #171: KMP_AFFINITY: OS proc 23 maps to package 0 core 29 
+OMP: Info #171: KMP_AFFINITY: OS proc 24 maps to package 1 core 0 
+OMP: Info #171: KMP_AFFINITY: OS proc 25 maps to package 1 core 1 
+OMP: Info #171: KMP_AFFINITY: OS proc 9 maps to package 0 core 11 
+OMP: Info #171: KMP_AFFINITY: OS proc 10 maps to package 0 core 12 
+OMP: Info #171: KMP_AFFINITY: OS proc 11 maps to package 0 core 13 
+OMP: Info #171: KMP_AFFINITY: OS proc 12 maps to package 0 core 16 
+OMP: Info #171: KMP_AFFINITY: OS proc 13 maps to package 0 core 17 
+OMP: Info #171: KMP_AFFINITY: OS proc 24 maps to package 1 core 0 
+OMP: Info #171: KMP_AFFINITY: OS proc 25 maps to package 1 core 1 
+OMP: Info #171: KMP_AFFINITY: OS proc 26 maps to package 1 core 2 
+OMP: Info #171: KMP_AFFINITY: OS proc 26 maps to package 1 core 2 
+OMP: Info #171: KMP_AFFINITY: OS proc 27 maps to package 1 core 3 
+OMP: Info #171: KMP_AFFINITY: OS proc 28 maps to package 1 core 4 
+OMP: Info #171: KMP_AFFINITY: OS proc 29 maps to package 1 core 5 
+OMP: Info #171: KMP_AFFINITY: OS proc 30 maps to package 1 core 8 
+OMP: Info #171: KMP_AFFINITY: OS proc 14 maps to package 0 core 18 
+OMP: Info #171: KMP_AFFINITY: OS proc 15 maps to package 0 core 19 
+OMP: Info #171: KMP_AFFINITY: OS proc 16 maps to package 0 core 20 
+OMP: Info #171: KMP_AFFINITY: OS proc 17 maps to package 0 core 21 
+OMP: Info #171: KMP_AFFINITY: OS proc 18 maps to package 0 core 24 
+OMP: Info #171: KMP_AFFINITY: OS proc 27 maps to package 1 core 3 
+OMP: Info #171: KMP_AFFINITY: OS proc 28 maps to package 1 core 4 
+OMP: Info #171: KMP_AFFINITY: OS proc 29 maps to package 1 core 5 
+OMP: Info #171: KMP_AFFINITY: OS proc 30 maps to package 1 core 8 
+OMP: Info #171: KMP_AFFINITY: OS proc 31 maps to package 1 core 9 
+OMP: Info #171: KMP_AFFINITY: OS proc 32 maps to package 1 core 10 
+OMP: Info #171: KMP_AFFINITY: OS proc 31 maps to package 1 core 9 
+OMP: Info #171: KMP_AFFINITY: OS proc 32 maps to package 1 core 10 
+OMP: Info #171: KMP_AFFINITY: OS proc 33 maps to package 1 core 11 
+OMP: Info #171: KMP_AFFINITY: OS proc 34 maps to package 1 core 12 
+OMP: Info #171: KMP_AFFINITY: OS proc 35 maps to package 1 core 13 
+OMP: Info #171: KMP_AFFINITY: OS proc 19 maps to package 0 core 25 
+OMP: Info #171: KMP_AFFINITY: OS proc 20 maps to package 0 core 26 
+OMP: Info #171: KMP_AFFINITY: OS proc 21 maps to package 0 core 27 
+OMP: Info #171: KMP_AFFINITY: OS proc 22 maps to package 0 core 28 
+OMP: Info #171: KMP_AFFINITY: OS proc 23 maps to package 0 core 29 
+OMP: Info #171: KMP_AFFINITY: OS proc 33 maps to package 1 core 11 
+OMP: Info #171: KMP_AFFINITY: OS proc 34 maps to package 1 core 12 
+OMP: Info #171: KMP_AFFINITY: OS proc 35 maps to package 1 core 13 
+OMP: Info #171: KMP_AFFINITY: OS proc 36 maps to package 1 core 16 
+OMP: Info #171: KMP_AFFINITY: OS proc 36 maps to package 1 core 16 
+OMP: Info #171: KMP_AFFINITY: OS proc 37 maps to package 1 core 17 
+OMP: Info #171: KMP_AFFINITY: OS proc 38 maps to package 1 core 18 
+OMP: Info #171: KMP_AFFINITY: OS proc 39 maps to package 1 core 19 
+OMP: Info #171: KMP_AFFINITY: OS proc 24 maps to package 1 core 0 
+OMP: Info #171: KMP_AFFINITY: OS proc 25 maps to package 1 core 1 
+OMP: Info #171: KMP_AFFINITY: OS proc 26 maps to package 1 core 2 
+OMP: Info #171: KMP_AFFINITY: OS proc 27 maps to package 1 core 3 
+OMP: Info #171: KMP_AFFINITY: OS proc 28 maps to package 1 core 4 
+OMP: Info #171: KMP_AFFINITY: OS proc 37 maps to package 1 core 17 
+OMP: Info #171: KMP_AFFINITY: OS proc 38 maps to package 1 core 18 
+OMP: Info #171: KMP_AFFINITY: OS proc 39 maps to package 1 core 19 
+OMP: Info #171: KMP_AFFINITY: OS proc 40 maps to package 1 core 20 
+OMP: Info #171: KMP_AFFINITY: OS proc 41 maps to package 1 core 21 
+OMP: Info #171: KMP_AFFINITY: OS proc 42 maps to package 1 core 24 
+OMP: Info #171: KMP_AFFINITY: OS proc 29 maps to package 1 core 5 
+OMP: Info #171: KMP_AFFINITY: OS proc 30 maps to package 1 core 8 
+OMP: Info #171: KMP_AFFINITY: OS proc 31 maps to package 1 core 9 
+OMP: Info #171: KMP_AFFINITY: OS proc 32 maps to package 1 core 10 
+OMP: Info #171: KMP_AFFINITY: OS proc 40 maps to package 1 core 20 
+OMP: Info #171: KMP_AFFINITY: OS proc 41 maps to package 1 core 21 
+OMP: Info #171: KMP_AFFINITY: OS proc 42 maps to package 1 core 24 
+OMP: Info #171: KMP_AFFINITY: OS proc 43 maps to package 1 core 25 
+OMP: Info #171: KMP_AFFINITY: OS proc 44 maps to package 1 core 26 
+OMP: Info #171: KMP_AFFINITY: OS proc 43 maps to package 1 core 25 
+OMP: Info #171: KMP_AFFINITY: OS proc 44 maps to package 1 core 26 
+OMP: Info #171: KMP_AFFINITY: OS proc 45 maps to package 1 core 27 
+OMP: Info #171: KMP_AFFINITY: OS proc 46 maps to package 1 core 28 
+OMP: Info #171: KMP_AFFINITY: OS proc 33 maps to package 1 core 11 
+OMP: Info #171: KMP_AFFINITY: OS proc 34 maps to package 1 core 12 
+OMP: Info #171: KMP_AFFINITY: OS proc 35 maps to package 1 core 13 
+OMP: Info #171: KMP_AFFINITY: OS proc 36 maps to package 1 core 16 
+OMP: Info #171: KMP_AFFINITY: OS proc 37 maps to package 1 core 17 
+OMP: Info #171: KMP_AFFINITY: OS proc 45 maps to package 1 core 27 
+OMP: Info #171: KMP_AFFINITY: OS proc 46 maps to package 1 core 28 
+OMP: Info #171: KMP_AFFINITY: OS proc 47 maps to package 1 core 29 
+OMP: Info #171: KMP_AFFINITY: OS proc 47 maps to package 1 core 29 
+OMP: Info #171: KMP_AFFINITY: OS proc 38 maps to package 1 core 18 
+OMP: Info #171: KMP_AFFINITY: OS proc 39 maps to package 1 core 19 
+OMP: Info #171: KMP_AFFINITY: OS proc 40 maps to package 1 core 20 
+OMP: Info #171: KMP_AFFINITY: OS proc 41 maps to package 1 core 21 
+OMP: Info #171: KMP_AFFINITY: OS proc 42 maps to package 1 core 24 
+OMP: Info #250: KMP_AFFINITY: pid 70253 tid 70253 thread 0 bound to OS proc set 0
+OMP: Info #250: KMP_AFFINITY: pid 179980 tid 179980 thread 0 bound to OS proc set 0
+OMP: Info #171: KMP_AFFINITY: OS proc 43 maps to package 1 core 25 
+OMP: Info #171: KMP_AFFINITY: OS proc 44 maps to package 1 core 26 
+OMP: Info #171: KMP_AFFINITY: OS proc 45 maps to package 1 core 27 
+OMP: Info #171: KMP_AFFINITY: OS proc 46 maps to package 1 core 28 
+OMP: Info #171: KMP_AFFINITY: OS proc 47 maps to package 1 core 29 
+OMP: Info #250: KMP_AFFINITY: pid 179879 tid 179879 thread 0 bound to OS proc set 0
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142493 thread 36 bound to OS proc set 36
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142489 thread 32 bound to OS proc set 32
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142492 thread 35 bound to OS proc set 35
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142473 thread 16 bound to OS proc set 16
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142496 thread 39 bound to OS proc set 39
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142460 thread 3 bound to OS proc set 3
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70271 thread 11 bound to OS proc set 11
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70268 thread 8 bound to OS proc set 8
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70292 thread 32 bound to OS proc set 32
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70276 thread 16 bound to OS proc set 16
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142503 thread 46 bound to OS proc set 46
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142495 thread 38 bound to OS proc set 38
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142459 thread 2 bound to OS proc set 2
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142461 thread 4 bound to OS proc set 4
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142469 thread 12 bound to OS proc set 12
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142491 thread 34 bound to OS proc set 34
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142487 thread 30 bound to OS proc set 30
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142494 thread 37 bound to OS proc set 37
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142490 thread 33 bound to OS proc set 33
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142458 thread 1 bound to OS proc set 1
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142488 thread 31 bound to OS proc set 31
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142476 thread 19 bound to OS proc set 19
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142477 thread 20 bound to OS proc set 20
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142468 thread 11 bound to OS proc set 11
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142485 thread 28 bound to OS proc set 28
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142482 thread 25 bound to OS proc set 25
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142474 thread 17 bound to OS proc set 17
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142481 thread 24 bound to OS proc set 24
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142475 thread 18 bound to OS proc set 18
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180014 thread 28 bound to OS proc set 28
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 179992 thread 6 bound to OS proc set 6
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 179989 thread 3 bound to OS proc set 3
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 179988 thread 2 bound to OS proc set 2
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 179990 thread 4 bound to OS proc set 4
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180018 thread 32 bound to OS proc set 32
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180002 thread 16 bound to OS proc set 16
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180010 thread 24 bound to OS proc set 24
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70304 thread 44 bound to OS proc set 44
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70270 thread 10 bound to OS proc set 10
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70269 thread 9 bound to OS proc set 9
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70293 thread 33 bound to OS proc set 33
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70284 thread 24 bound to OS proc set 24
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70261 thread 1 bound to OS proc set 1
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70294 thread 34 bound to OS proc set 34
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70282 thread 22 bound to OS proc set 22
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70278 thread 18 bound to OS proc set 18
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70277 thread 17 bound to OS proc set 17
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70280 thread 20 bound to OS proc set 20
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70275 thread 15 bound to OS proc set 15
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179909 thread 12 bound to OS proc set 12
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179905 thread 8 bound to OS proc set 8
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179908 thread 11 bound to OS proc set 11
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179901 thread 4 bound to OS proc set 4
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180016 thread 30 bound to OS proc set 30
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 179998 thread 12 bound to OS proc set 12
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180012 thread 26 bound to OS proc set 26
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180004 thread 18 bound to OS proc set 18
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180011 thread 25 bound to OS proc set 25
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70264 thread 4 bound to OS proc set 4
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70300 thread 40 bound to OS proc set 40
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70272 thread 12 bound to OS proc set 12
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70265 thread 5 bound to OS proc set 5
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70262 thread 2 bound to OS proc set 2
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70306 thread 46 bound to OS proc set 46
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70286 thread 26 bound to OS proc set 26
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70283 thread 23 bound to OS proc set 23
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70281 thread 21 bound to OS proc set 21
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70285 thread 25 bound to OS proc set 25
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70287 thread 27 bound to OS proc set 27
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70266 thread 6 bound to OS proc set 6
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 179991 thread 5 bound to OS proc set 5
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70302 thread 42 bound to OS proc set 42
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70263 thread 3 bound to OS proc set 3
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180005 thread 19 bound to OS proc set 19
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180017 thread 31 bound to OS proc set 31
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180019 thread 33 bound to OS proc set 33
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180021 thread 35 bound to OS proc set 35
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 179987 thread 1 bound to OS proc set 1
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180030 thread 44 bound to OS proc set 44
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180001 thread 15 bound to OS proc set 15
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180000 thread 14 bound to OS proc set 14
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180027 thread 41 bound to OS proc set 41
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180020 thread 34 bound to OS proc set 34
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 179994 thread 8 bound to OS proc set 8
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180006 thread 20 bound to OS proc set 20
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180003 thread 17 bound to OS proc set 17
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180028 thread 42 bound to OS proc set 42
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180013 thread 27 bound to OS proc set 27
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180025 thread 39 bound to OS proc set 39
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142472 thread 15 bound to OS proc set 15
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180015 thread 29 bound to OS proc set 29
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180029 thread 43 bound to OS proc set 43
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180009 thread 23 bound to OS proc set 23
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 179999 thread 13 bound to OS proc set 13
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142478 thread 21 bound to OS proc set 21
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142463 thread 6 bound to OS proc set 6
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142467 thread 10 bound to OS proc set 10
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142502 thread 45 bound to OS proc set 45
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142484 thread 27 bound to OS proc set 27
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142464 thread 7 bound to OS proc set 7
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142471 thread 14 bound to OS proc set 14
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142479 thread 22 bound to OS proc set 22
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142501 thread 44 bound to OS proc set 44
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70274 thread 14 bound to OS proc set 14
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142465 thread 8 bound to OS proc set 8
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142470 thread 13 bound to OS proc set 13
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142480 thread 23 bound to OS proc set 23
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142466 thread 9 bound to OS proc set 9
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142462 thread 5 bound to OS proc set 5
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142486 thread 29 bound to OS proc set 29
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142483 thread 26 bound to OS proc set 26
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142500 thread 43 bound to OS proc set 43
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142497 thread 40 bound to OS proc set 40
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70301 thread 41 bound to OS proc set 41
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142499 thread 42 bound to OS proc set 42
+OMP: Info #250: OMP_PROC_BIND: pid 142450 tid 142498 thread 41 bound to OS proc set 41
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70267 thread 7 bound to OS proc set 7
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70295 thread 35 bound to OS proc set 35
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70296 thread 36 bound to OS proc set 36
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70299 thread 39 bound to OS proc set 39
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70298 thread 38 bound to OS proc set 38
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180023 thread 37 bound to OS proc set 37
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70297 thread 37 bound to OS proc set 37
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70288 thread 28 bound to OS proc set 28
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70273 thread 13 bound to OS proc set 13
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70279 thread 19 bound to OS proc set 19
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70303 thread 43 bound to OS proc set 43
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70305 thread 45 bound to OS proc set 45
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70291 thread 31 bound to OS proc set 31
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70290 thread 30 bound to OS proc set 30
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179929 thread 32 bound to OS proc set 32
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179937 thread 40 bound to OS proc set 40
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179912 thread 15 bound to OS proc set 15
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179911 thread 14 bound to OS proc set 14
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179941 thread 44 bound to OS proc set 44
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179922 thread 25 bound to OS proc set 25
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179910 thread 13 bound to OS proc set 13
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179904 thread 7 bound to OS proc set 7
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179921 thread 24 bound to OS proc set 24
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179898 thread 1 bound to OS proc set 1
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179902 thread 5 bound to OS proc set 5
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179938 thread 41 bound to OS proc set 41
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179931 thread 34 bound to OS proc set 34
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180008 thread 22 bound to OS proc set 22
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180007 thread 21 bound to OS proc set 21
+OMP: Info #250: OMP_PROC_BIND: pid 70253 tid 70289 thread 29 bound to OS proc set 29
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 179995 thread 9 bound to OS proc set 9
+2021-06-04 15:54:28.482.502 ChameleonLib R#3 T#0 (OS_TID:142450): --> chameleon_init: VERSION 0.1.0
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180024 thread 38 bound to OS proc set 38
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179913 thread 16 bound to OS proc set 16
+2021-06-04 15:54:28.482.460 ChameleonLib R#1 T#0 (OS_TID:70253): --> chameleon_init: VERSION 0.1.0
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179930 thread 33 bound to OS proc set 33
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179939 thread 42 bound to OS proc set 42
+2021-06-04 15:54:28.482.589 ChameleonLib R#3 T#0 (OS_TID:142450): --> COMMUNICATION_MODE=0
+2021-06-04 15:54:28.482.340 ChameleonLib R#0 T#0 (OS_TID:179879): --> chameleon_init: VERSION 0.1.0
+2021-06-04 15:54:28.482.598 ChameleonLib R#3 T#0 (OS_TID:142450): --> ENABLE_COMM_THREAD=1
+2021-06-04 15:54:28.482.604 ChameleonLib R#3 T#0 (OS_TID:142450): --> ENABLE_TASK_MIGRATION=1
+2021-06-04 15:54:28.482.610 ChameleonLib R#3 T#0 (OS_TID:142450): --> ENABLE_EARLY_IRECVS=0
+2021-06-04 15:54:28.482.615 ChameleonLib R#3 T#0 (OS_TID:142450): --> OFFLOAD_DATA_PACKING_TYPE=2
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179907 thread 10 bound to OS proc set 10
+2021-06-04 15:54:28.482.620 ChameleonLib R#3 T#0 (OS_TID:142450): --> MPI_BLOCKING=0
+2021-06-04 15:54:28.482.625 ChameleonLib R#3 T#0 (OS_TID:142450): --> OMP_NUM_THREADS=47
+2021-06-04 15:54:28.482.561 ChameleonLib R#1 T#0 (OS_TID:70253): --> COMMUNICATION_MODE=0
+2021-06-04 15:54:28.482.556 ChameleonLib R#0 T#0 (OS_TID:179879): --> COMMUNICATION_MODE=0
+2021-06-04 15:54:28.482.570 ChameleonLib R#1 T#0 (OS_TID:70253): --> ENABLE_COMM_THREAD=1
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179916 thread 19 bound to OS proc set 19
+2021-06-04 15:54:28.482.566 ChameleonLib R#0 T#0 (OS_TID:179879): --> ENABLE_COMM_THREAD=1
+2021-06-04 15:54:28.482.592 ChameleonLib R#1 T#0 (OS_TID:70253): --> ENABLE_TASK_MIGRATION=1
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179940 thread 43 bound to OS proc set 43
+2021-06-04 15:54:28.482.597 ChameleonLib R#1 T#0 (OS_TID:70253): --> ENABLE_EARLY_IRECVS=0
+2021-06-04 15:54:28.482.602 ChameleonLib R#1 T#0 (OS_TID:70253): --> OFFLOAD_DATA_PACKING_TYPE=2
+chameleon_init - dummy region
+2021-06-04 15:54:28.482.573 ChameleonLib R#0 T#0 (OS_TID:179879): --> OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179933 thread 36 bound to OS proc set 36
+ENABLE_TASK_MIGRATION=1
+2021-06-04 15:54:28.482.606 ChameleonLib R#1 T#0 (OS_TID:70253): --> MPI_BLOCKING=0
+2021-06-04 15:54:28.482.631 ChameleonLib R#3 T#0 (OS_TID:142450): --> MIN_ABS_LOAD_IMBALANCE_BEFORE_MIGRATION=2.000000
+chameleon_init - dummy region
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179943 thread 46 bound to OS proc set 46
+2021-06-04 15:54:28.482.611 ChameleonLib R#1 T#0 (OS_TID:70253): --> OMP_NUM_THREADS=47
+2021-06-04 15:54:28.482.644 ChameleonLib R#3 T#0 (OS_TID:142450): --> MIN_REL_LOAD_IMBALANCE_BEFORE_MIGRATION=0.050000
+2021-06-04 15:54:28.482.651 ChameleonLib R#3 T#0 (OS_TID:142450): --> TAG_NBITS_TASK_ID=16
+2021-06-04 15:54:28.482.602 ChameleonLib R#0 T#0 (OS_TID:179879): --> ENABLE_EARLY_IRECVS=0
+2021-06-04 15:54:28.482.616 ChameleonLib R#1 T#0 (OS_TID:70253): --> MIN_ABS_LOAD_IMBALANCE_BEFORE_MIGRATION=2.000000
+2021-06-04 15:54:28.482.656 ChameleonLib R#3 T#0 (OS_TID:142450): --> MIN_LOCAL_TASKS_IN_QUEUE_BEFORE_MIGRATION=2.000000
+2021-06-04 15:54:28.482.661 ChameleonLib R#3 T#0 (OS_TID:142450): --> MAX_TASKS_PER_RANK_TO_MIGRATE_AT_ONCE=1.000000
+2021-06-04 15:54:28.482.632 ChameleonLib R#0 T#0 (OS_TID:179879): --> OFFLOAD_DATA_PACKING_TYPE=2
+2021-06-04 15:54:28.482.628 ChameleonLib R#1 T#0 (OS_TID:70253): --> MIN_REL_LOAD_IMBALANCE_BEFORE_MIGRATION=0.050000
+2021-06-04 15:54:28.482.667 ChameleonLib R#3 T#0 (OS_TID:142450): --> MAX_TASKS_PER_RANK_TO_ACTIVATE_AT_ONCE=1.000000
+2021-06-04 15:54:28.482.637 ChameleonLib R#0 T#0 (OS_TID:179879): --> MPI_BLOCKING=0
+2021-06-04 15:54:28.482.634 ChameleonLib R#1 T#0 (OS_TID:70253): --> TAG_NBITS_TASK_ID=16
+2021-06-04 15:54:28.482.639 ChameleonLib R#1 T#0 (OS_TID:70253): --> MIN_LOCAL_TASKS_IN_QUEUE_BEFORE_MIGRATION=2.000000
+2021-06-04 15:54:28.482.672 ChameleonLib R#3 T#0 (OS_TID:142450): --> PERCENTAGE_DIFF_TASKS_TO_MIGRATE=0.500000
+2021-06-04 15:54:28.482.678 ChameleonLib R#3 T#0 (OS_TID:142450): --> ENABLE_TRACE_FROM_SYNC_CYCLE=-1
+2021-06-04 15:54:28.482.683 ChameleonLib R#3 T#0 (OS_TID:142450): --> ENABLE_TRACE_TO_SYNC_CYCLE=2147483647
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179903 thread 6 bound to OS proc set 6
+2021-06-04 15:54:28.482.644 ChameleonLib R#1 T#0 (OS_TID:70253): --> MAX_TASKS_PER_RANK_TO_MIGRATE_AT_ONCE=1.000000
+2021-06-04 15:54:28.482.648 ChameleonLib R#1 T#0 (OS_TID:70253): --> MAX_TASKS_PER_RANK_TO_ACTIVATE_AT_ONCE=1.000000
+2021-06-04 15:54:28.482.688 ChameleonLib R#3 T#0 (OS_TID:142450): --> MAX_PERCENTAGE_REPLICATED_TASKS=0.100000
+2021-06-04 15:54:28.482.694 ChameleonLib R#3 T#0 (OS_TID:142450): --> USE_TASK_AFFINITY=0
+chameleon_init - dummy region
+2021-06-04 15:54:28.482.643 ChameleonLib R#0 T#0 (OS_TID:179879): --> OMP_NUM_THREADS=47
+2021-06-04 15:54:28.482.657 ChameleonLib R#1 T#0 (OS_TID:70253): --> PERCENTAGE_DIFF_TASKS_TO_MIGRATE=0.500000
+2021-06-04 15:54:28.482.662 ChameleonLib R#1 T#0 (OS_TID:70253): --> ENABLE_TRACE_FROM_SYNC_CYCLE=-1
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179924 thread 27 bound to OS proc set 27
+2021-06-04 15:54:28.482.667 ChameleonLib R#1 T#0 (OS_TID:70253): --> ENABLE_TRACE_TO_SYNC_CYCLE=2147483647
+2021-06-04 15:54:28.482.665 ChameleonLib R#0 T#0 (OS_TID:179879): --> MIN_ABS_LOAD_IMBALANCE_BEFORE_MIGRATION=2.000000
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179925 thread 28 bound to OS proc set 28
+2021-06-04 15:54:28.482.672 ChameleonLib R#1 T#0 (OS_TID:70253): --> MAX_PERCENTAGE_REPLICATED_TASKS=0.100000
+2021-06-04 15:54:28.482.677 ChameleonLib R#1 T#0 (OS_TID:70253): --> USE_TASK_AFFINITY=0
+2021-06-04 15:54:28.482.689 ChameleonLib R#0 T#0 (OS_TID:179879): --> MIN_REL_LOAD_IMBALANCE_BEFORE_MIGRATION=0.050000
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179936 thread 39 bound to OS proc set 39
+2021-06-04 15:54:28.482.697 ChameleonLib R#0 T#0 (OS_TID:179879): --> TAG_NBITS_TASK_ID=16
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179935 thread 38 bound to OS proc set 38
+2021-06-04 15:54:28.482.716 ChameleonLib R#0 T#0 (OS_TID:179879): --> MIN_LOCAL_TASKS_IN_QUEUE_BEFORE_MIGRATION=2.000000
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179923 thread 26 bound to OS proc set 26
+2021-06-04 15:54:28.482.724 ChameleonLib R#0 T#0 (OS_TID:179879): --> OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179915 thread 18 bound to OS proc set 18
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 179993 thread 7 bound to OS proc set 7
+MAX_TASKS_PER_RANK_TO_MIGRATE_AT_ONCE=1.000000
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179914 thread 17 bound to OS proc set 17
+2021-06-04 15:54:28.482.750 ChameleonLib R#0 T#0 (OS_TID:179879): --> MAX_TASKS_PER_RANK_TO_ACTIVATE_AT_ONCE=1.000000
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179917 thread 20 bound to OS proc set 20
+2021-06-04 15:54:28.482.782 ChameleonLib R#0 T#0 (OS_TID:179879): --> PERCENTAGE_DIFF_TASKS_TO_MIGRATE=0.500000
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179934 thread 37 bound to OS proc set 37
+2021-06-04 15:54:28.482.797 ChameleonLib R#0 T#0 (OS_TID:179879): --> ENABLE_TRACE_FROM_SYNC_CYCLE=-1
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179920 thread 23 bound to OS proc set 23
+2021-06-04 15:54:28.482.811 ChameleonLib R#0 T#0 (OS_TID:179879): --> ENABLE_TRACE_TO_SYNC_CYCLE=2147483647
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179919 thread 22 bound to OS proc set 22
+2021-06-04 15:54:28.482.827 ChameleonLib R#0 T#0 (OS_TID:179879): --> MAX_PERCENTAGE_REPLICATED_TASKS=0.100000
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179918 thread 21 bound to OS proc set 21
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179928 thread 31 bound to OS proc set 31
+2021-06-04 15:54:28.482.836 ChameleonLib R#0 T#0 (OS_TID:179879): --> USE_TASK_AFFINITY=0
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180031 thread 45 bound to OS proc set 45
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 179997 thread 11 bound to OS proc set 11
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180026 thread 40 bound to OS proc set 40
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180032 thread 46 bound to OS proc set 46
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 180022 thread 36 bound to OS proc set 36
+2021-06-04 15:54:28.482.574 ChameleonLib R#2 T#0 (OS_TID:179980): --> chameleon_init: VERSION 0.1.0
+OMP: Info #250: OMP_PROC_BIND: pid 179980 tid 179996 thread 10 bound to OS proc set 10
+2021-06-04 15:54:28.483.043 ChameleonLib R#2 T#0 (OS_TID:179980): --> COMMUNICATION_MODE=0
+2021-06-04 15:54:28.483.062 ChameleonLib R#2 T#0 (OS_TID:179980): --> ENABLE_COMM_THREAD=1
+2021-06-04 15:54:28.483.067 ChameleonLib R#2 T#0 (OS_TID:179980): --> ENABLE_TASK_MIGRATION=1
+2021-06-04 15:54:28.483.072 ChameleonLib R#2 T#0 (OS_TID:179980): --> ENABLE_EARLY_IRECVS=0
+2021-06-04 15:54:28.483.077 ChameleonLib R#2 T#0 (OS_TID:179980): --> OFFLOAD_DATA_PACKING_TYPE=2
+2021-06-04 15:54:28.483.082 ChameleonLib R#2 T#0 (OS_TID:179980): --> MPI_BLOCKING=0
+2021-06-04 15:54:28.483.087 ChameleonLib R#2 T#0 (OS_TID:179980): --> OMP_NUM_THREADS=47
+2021-06-04 15:54:28.483.093 ChameleonLib R#2 T#0 (OS_TID:179980): --> MIN_ABS_LOAD_IMBALANCE_BEFORE_MIGRATION=2.000000
+2021-06-04 15:54:28.483.113 ChameleonLib R#2 T#0 (OS_TID:179980): --> MIN_REL_LOAD_IMBALANCE_BEFORE_MIGRATION=0.050000
+2021-06-04 15:54:28.483.119 ChameleonLib R#2 T#0 (OS_TID:179980): --> TAG_NBITS_TASK_ID=16
+2021-06-04 15:54:28.483.124 ChameleonLib R#2 T#0 (OS_TID:179980): --> MIN_LOCAL_TASKS_IN_QUEUE_BEFORE_MIGRATION=2.000000
+2021-06-04 15:54:28.483.129 ChameleonLib R#2 T#0 (OS_TID:179980): --> MAX_TASKS_PER_RANK_TO_MIGRATE_AT_ONCE=1.000000
+2021-06-04 15:54:28.483.135 ChameleonLib R#2 T#0 (OS_TID:179980): --> MAX_TASKS_PER_RANK_TO_ACTIVATE_AT_ONCE=1.000000
+2021-06-04 15:54:28.483.140 ChameleonLib R#2 T#0 (OS_TID:179980): --> PERCENTAGE_DIFF_TASKS_TO_MIGRATE=0.500000
+2021-06-04 15:54:28.483.145 ChameleonLib R#2 T#0 (OS_TID:179980): --> ENABLE_TRACE_FROM_SYNC_CYCLE=-1
+2021-06-04 15:54:28.483.150 ChameleonLib R#2 T#0 (OS_TID:179980): --> ENABLE_TRACE_TO_SYNC_CYCLE=2147483647
+2021-06-04 15:54:28.483.155 ChameleonLib R#2 T#0 (OS_TID:179980): --> MAX_PERCENTAGE_REPLICATED_TASKS=0.100000
+2021-06-04 15:54:28.483.160 ChameleonLib R#2 T#0 (OS_TID:179980): --> USE_TASK_AFFINITY=0
+chameleon_init - dummy region
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179900 thread 3 bound to OS proc set 3
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179906 thread 9 bound to OS proc set 9
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179942 thread 45 bound to OS proc set 45
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179927 thread 30 bound to OS proc set 30
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179899 thread 2 bound to OS proc set 2
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179932 thread 35 bound to OS proc set 35
+OMP: Info #250: OMP_PROC_BIND: pid 179879 tid 179926 thread 29 bound to OS proc set 29
+2021-06-04 15:54:28.498.934 ChameleonLib R#1 T#0 (OS_TID:70307): --> COMM_THREAD: Setting thread affinity to core 47
+2021-06-04 15:54:28.499.437 ChameleonLib R#3 T#0 (OS_TID:142504): --> COMM_THREAD: Setting thread affinity to core 47
+2021-06-04 15:54:28.499.581 ChameleonLib R#2 T#0 (OS_TID:180033): --> COMM_THREAD: Setting thread affinity to core 47
+2021-06-04 15:54:28.499.978 ChameleonLib R#0 T#0 (OS_TID:179944): --> COMM_THREAD: Setting thread affinity to core 47
+#R1: will create 100 tasks
+#R2: will create 100 tasks
+#R3: will create 100 tasks
+#R0: using user-defined initial load distribution...
+Mode: Normal Task Distribution
+#R0: will create 100 tasks
+Executing parallel init
+Executing iteration 0 ...
+Executing iteration 1 ...
+#R0: Computations with chameleon took 0.10506
+#R0: Validation:
+#R1: Validation:
+#R2: Validation:
+#R3: Validation:
+#R0: TEST SUCCESS
+#R1: TEST SUCCESS
+Executing iteration 0 ...
+#R3: TEST SUCCESS
+#R2: TEST SUCCESS
+Executing iteration 1 ...
+#R0: Computations with normal tasking took 0.06014
+#R0: Validation:
+#R1: Validation:
+#R2: Validation:
+#R3: Validation:
+#R0: TEST SUCCESS
+#R0: This corresponds to a speedup of 0.57246!
+#R1: TEST SUCCESS
+#R2: TEST SUCCESS
+#R3: TEST SUCCESS
