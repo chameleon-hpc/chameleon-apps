@@ -74,13 +74,7 @@
 #define SPEC_RESTRICT __restrict__
 //#define SPEC_RESTRICT restrict
 
-#ifndef USE_LIKWID
-#define USE_LIKWID 0
-#endif
-
-#if USE_LIKWID
-    #define LIKWID_PERFMON
-#endif
+#include "matrix_example_likwid.h"
 
 #include <assert.h>
 #include <mpi.h>
@@ -101,10 +95,6 @@
 #include <algorithm>
 #include <functional>
 #include "util_string.h"
-
-#if USE_LIKWID
-#include <likwid.h>
-#endif
 
 #if CHECK_GENERATED_TASK_ID
 #include <mutex>
@@ -264,9 +254,7 @@ void printArray(int rank, double * SPEC_RESTRICT array, char* arr_name, int n) {
 }
 
 void matrixMatrixKernel(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, double * SPEC_RESTRICT C, int matrixSize, int i) {
-#if USE_LIKWID
-    LIKWID_MARKER_START("Compute");
-#endif
+LIKWID_MARKER_START("Compute");
 
 #if VERBOSE_MATRIX
     int iMyRank2;
@@ -284,9 +272,9 @@ void matrixMatrixKernel(double * SPEC_RESTRICT A, double * SPEC_RESTRICT B, doub
     compute_matrix_matrix(A, B, C, matrixSize);
 #endif
 
-#if USE_LIKWID
-    LIKWID_MARKER_STOP("Compute");
-#endif
+
+LIKWID_MARKER_STOP("Compute");
+
 }
 
 int parse_command_line_args(int argc, char **argv) {
@@ -416,10 +404,8 @@ int main(int argc, char **argv)
 	double wTimeCham, wTimeHost;
 	bool pass = true;
 
-    #if USE_LIKWID
-        LIKWID_MARKER_INIT;
-        LIKWID_MARKER_THREADINIT;
-    #endif
+    LIKWID_MARKER_INIT;
+    // LIKWID_MARKER_THREADINIT;
 
 #if COMPILE_CHAMELEON
     chameleon_pre_init();
@@ -744,9 +730,7 @@ int main(int argc, char **argv)
 #endif
     MPI_Finalize();
 
-    #if USE_LIKWID
-        LIKWID_MARKER_CLOSE;
-    #endif
+    LIKWID_MARKER_CLOSE;
 
     return 0;
 }
