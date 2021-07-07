@@ -54,7 +54,7 @@ generic: clean
 	${MPICXX}  $(FLAGS_OPTIMIZATION) -o $(PROG) $(APP_COMPILE_FLAGS) $(FILE_NAMES) $(APP_LINKER_FLAGS)
 
 run:
-	$(RUN_SETTINGS) mpiexec.hydra -np 1 -genvall no_numa_balancing ./$(PROG) $(MATRIX_SIZE) 1200
+	$(RUN_SETTINGS) mpiexec.hydra -np 1 -genvall no_numa_balancing ./$(PROG) $(MATRIX_SIZE) 120
 
 run-batch:
 	$(RUN_SETTINGS_SLURM) ${MPIEXEC} ${FLAGS_MPI_BATCH} ${MPI_EXPORT_VARS_SLURM} ./$(PROG) ${MATRIX_SIZE} ${NUM_TASKS} ${NUM_TASKS} ${NUM_TASKS}

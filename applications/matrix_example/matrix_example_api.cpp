@@ -498,6 +498,8 @@ int main(int argc, char **argv)
         std::atomic<int> replicated_cnt = 0;
         int num_to_replicate            = 10;
 #endif
+        // Testing with serial task creation for static task order
+        // #pragma omp single
 		#pragma omp for
     		for(int i=0; i<numberOfTasks; i++) {
                 int cur_size = matrixSize;
