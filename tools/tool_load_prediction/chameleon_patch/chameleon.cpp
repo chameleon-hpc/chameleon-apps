@@ -185,7 +185,6 @@ int chameleon_get_annotation_string(chameleon_annotations_t* ann, char *key, cha
     int found = get_annotation_general(ann, key, &tmp);
     if(found)
         *val = (char*)tmp.val_ptr;
-        // strcpy(val, (char*)tmp.val_ptr);
     return found;
 }
 
@@ -271,6 +270,26 @@ inline void verify_initialized() {
 }
 
 /* 
+ * Function chameleon_preinit_ctor
+ * Runs before chameleon library is initialized.
+ * NOTE: Might not work with libgomp: might not run before libgomp constructor 
+ *       is executed which already binds threads if OpenMP affinity policy set.
+ */
+static void __attribute__((constructor (102))) chameleon_preinit_ctor(void) {
+    // first thing: remember original full cpuset of complete process
+    sched_getaffinity(getpid(), sizeof(cpu_set_t), &pid_mask);
+}
+
+/* 
+ * Function __chameleon_set_proc_cpuset
+ * Possibility to set process cpuset from outside
+ * NOTE: Necessary when using GNU compiler + libgomp
+ */
+void chameleon_set_proc_cpuset(cpu_set_t mask) {
+    pid_mask = mask;
+}
+
+/* 
  * Function chameleon_init
  * Initialized chameleon library, communicators and all whats necessary.
  */
@@ -314,9 +333,6 @@ int32_t chameleon_init() {
     MPI_Errhandler_set(chameleon_comm_cancel, MPI_ERRORS_RETURN);
     MPI_Errhandler_set(chameleon_comm_load, MPI_ERRORS_RETURN);
 
-    // show the chameleon version
-    RELP("chameleon_init: VERSION %s\n", CHAMELEON_VERSION_STRING);
-
 #ifdef CHAM_DEBUG
     mem_allocated = 0;
 #endif
@@ -325,6 +341,7 @@ int32_t chameleon_init() {
     load_config_values();
 
 #if PRINT_CONFIG_VALUES
+    RELP("chameleon_init: VERSION %s\n", CHAMELEON_VERSION_STRING);
     print_config_values(chameleon_comm_rank);
 #endif
 
@@ -339,23 +356,20 @@ int32_t chameleon_init() {
 
 #if CHAM_PREDICTION_MODE > 0
     // get the config-env variables by one of the omp threads
-    #pragma omp single
-    {
-        char *max_tasks_per_rank = std::getenv("TASKS_PER_RANK");
-        char *max_est_iter_num = std::getenv("EST_NUM_ITERS");
-        char *time_to_train = std::getenv("TIME2TRAIN");
-        if (max_tasks_per_rank != NULL && max_est_iter_num != NULL && time_to_train != NULL){
-            MAX_TASKS_PER_RANK = atoi(max_tasks_per_rank);
-            MAX_EST_NUM_ITERS = atoi(max_est_iter_num);
-            TIME_TO_TRAIN_MODEL = atoi(time_to_train);
-            RELP("[CHAM_INIT] max_task/rank=%d, max_est_iter=%d, time2train=%d\n",
-                        MAX_TASKS_PER_RANK, MAX_EST_NUM_ITERS, TIME_TO_TRAIN_MODEL);
-        }
+    char *max_tasks_per_rank = std::getenv("TASKS_PER_RANK");
+    char *max_est_iter_num = std::getenv("EST_NUM_ITERS");
+    char *time_to_train = std::getenv("TIME2TRAIN");
+    if (max_tasks_per_rank != NULL && max_est_iter_num != NULL && time_to_train != NULL){
+        MAX_TASKS_PER_RANK = atoi(max_tasks_per_rank);
+        MAX_EST_NUM_ITERS = atoi(max_est_iter_num);
+        TIME_TO_TRAIN_MODEL = atoi(time_to_train);
+        RELP("[CHAM_INIT] max_task/rank=%d, max_est_iter=%d, time2train=%d\n",
+                    MAX_TASKS_PER_RANK, MAX_EST_NUM_ITERS, TIME_TO_TRAIN_MODEL);
     }
 #endif
 
     // init the chameleon tool
-    // RELP("chameleon inits the callback tool...\n");
+    RELP("chameleon inits the callback tool...\n");
     cham_t_init();
 #endif
 
@@ -394,12 +408,14 @@ int32_t chameleon_init() {
     _outstanding_jobs_sum = 0;
     _task_id_counter = 0;
 
+#ifndef __GNUG__
     // dummy target region to force binary loading, use host offloading for that purpose
     // #pragma omp target device(1001) map(to:stderr), i.e., 1001 = CHAMELEON_HOST
     #pragma omp target device(1001)
     {
         printf("chameleon_init - dummy region\n");
     }
+#endif
 
     // initialize communication session data
     chameleon_comm_thread_session_data_t_init();
@@ -581,6 +597,7 @@ int32_t chameleon_taskyield() {
  * _flag_dtw_active into 1 if it is active.
  */
 void dtw_startup() {
+
     // if the dtw_flag is active, break the function
     if(_flag_dtw_active)
         return;
@@ -623,7 +640,7 @@ void dtw_startup() {
     // turn on the _flag_is_new_iteration, to trigger the action_pred_migration
     // it's save to turn it on here, inside dw_startup()
     int current_taskwait_index = _commthread_time_taskwait_count.load();
-    RELP("[DWT_STARTUP] started a new iter: _cur_tw_idx= %d, _pre_tw_idx=%d\n",
+    RELP("[DWT_STARTUP] started a new iter: _cur_tw_idx=%d, _pre_tw_idx=%d\n",
                      current_taskwait_index, _global_flag_prev_taskwait_idx);
 
     if (current_taskwait_index != _global_flag_prev_taskwait_idx){
@@ -650,6 +667,7 @@ void dtw_startup() {
  * _flag_dtw_active off.
  */
 void dtw_teardown() {
+
     // last thread should perform the teardown
     int tmp_num = ++_num_threads_finished_dtw;
 
@@ -680,10 +698,10 @@ void dtw_teardown() {
         // get real load and save it per iter
         double r_load = _time_task_execution_local_sum.load();
 
-#if CHAMELEON_TOOL_SUPPORT
+#if CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE > 0
         // make sure that the last thread call this callback
         if(cham_t_status.enabled && cham_t_status.cham_t_callback_get_load_stats_per_taskwait) {
-            double load_per_rank = cham_t_status.cham_t_callback_get_load_stats_per_taskwait(cur_iter_idx, thread_id, r_load);
+            cham_t_status.cham_t_callback_get_load_stats_per_taskwait(cur_iter_idx, thread_id, r_load);
         }
 #endif
 
@@ -738,14 +756,14 @@ int32_t chameleon_distributed_taskwait(int nowait) {
     //                             CHAMELEON_TOOL_SUPPORT mode is 1
     // another _time_taskwait_count at the chameleon main side, just use for counting
     // how many threads in this taskwait and have to wait how long.
-
-#if CHAM_STATS_RECORD
-    double time_start_tw = omp_get_wtime();
-#endif
     
     // startup action to set the flag which indicates the chameleon
     // distributed taskwait function is being active
     dtw_startup();
+
+#if CHAM_STATS_RECORD
+    double time_start_tw = omp_get_wtime();
+#endif
 
 #if ENABLE_COMM_THREAD
     #if THREAD_ACTIVATION
@@ -887,7 +905,7 @@ int32_t chameleon_distributed_taskwait(int nowait) {
                 continue;
         }
 
-    #if CHAM_REPLICATION_MODE<4
+    #if CHAM_REPLICATION_MODE < 4
         // ========== Prio 5: work on replicated migrated tasks
 		if(!_replicated_migrated_tasks.empty()) {
 
@@ -922,7 +940,6 @@ int32_t chameleon_distributed_taskwait(int nowait) {
                 DBP("chameleon_distributed_taskwait - _num_threads_idle decr: %d\n", my_idle_order);
                 this_thread_idle = false;
             }
-            // this_thread_num_attemps_standard_task = 0;
 
             // try to execute replicated remote tasks
             res = process_replicated_remote_task();
@@ -930,7 +947,7 @@ int32_t chameleon_distributed_taskwait(int nowait) {
             if(res != CHAM_REPLICATED_TASK_NONE)
                 continue;
         }
-        #endif /* CHAM_REPLICATION_MODE<4 */
+    #endif /* CHAM_REPLICATION_MODE < 4 */
 
 #endif /* ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE>0 || (CHAM_PREDICTION_MODE > 0 && CHAM_PRED_MIGRATION > 0) */
  
@@ -1119,7 +1136,7 @@ int32_t chameleon_add_task(cham_migratable_task_t *task) {
     if(cham_t_status.enabled && cham_t_status.cham_t_callback_task_create) {
         double queued_time = omp_get_wtime();
         intptr_t codeptr_ra = task->tgt_entry_ptr;
-        int taskwait_counter = _time_taskwait_count.load();
+        int taskwait_counter = _commthread_time_taskwait_count.load();
         cham_t_status.cham_t_callback_task_create(task, task->arg_sizes, queued_time, codeptr_ra, taskwait_counter);
     }
 #endif
@@ -1303,6 +1320,7 @@ int32_t execute_target_task(cham_migratable_task_t *task) {
     __thread_data[gtid].current_task = task;
     void (*entry)(void);
     *((void**) &entry) = ((void*) task->tgt_entry_ptr);
+
     // use host pointers here
     ffi_call(&cif, entry, NULL, &args[0]);
 
@@ -1329,6 +1347,7 @@ int32_t execute_target_task(cham_migratable_task_t *task) {
         }
     }
 #endif
+
     // switch back to prior task or null
     __thread_data[gtid].current_task = prior_task;
 
@@ -1412,10 +1431,6 @@ inline int32_t process_replicated_local_task() {
         //Do not free replicated task here, as the communication thread may later receive back
         //this task and needs to access the task (check flag + post receive requests to trash buffer)
         //The replicated task should be deallocated in recv back handlers
-    //}
-    //else {
-    //    return CHAM_REPLICATED_TASK_ALREADY_AVAILABLE;
-   // }
 
     return CHAM_REPLICATED_TASK_SUCCESS;
 
@@ -1611,7 +1626,7 @@ inline int32_t process_remote_task() {
 
 #if CHAM_STATS_RECORD
     if(is_migrated)
-      _num_executed_tasks_stolen++;
+        _num_executed_tasks_stolen++;
     else
     	_num_executed_tasks_replicated_remote++;
 #endif
@@ -1624,6 +1639,7 @@ inline int32_t process_remote_task() {
         VT_END_W_CONSTRAINED(event_process_remote);
     }
 #endif
+
     return CHAM_REMOTE_TASK_SUCCESS;
 }
 
@@ -1631,8 +1647,7 @@ inline int32_t process_local_task() {
     
     // pop tasks from the local queue
     cham_migratable_task_t *task = _local_tasks.pop_front();
-    if(!task)
-        return CHAM_LOCAL_TASK_NONE;
+    if(!task) return CHAM_LOCAL_TASK_NONE;
 
 #ifdef TRACE
     static int event_process_local = -1;
@@ -1665,6 +1680,21 @@ inline int32_t process_local_task() {
     cur_time = omp_get_wtime()-cur_time;
     atomic_add_dbl(_time_task_execution_local_sum, cur_time);
     _time_task_execution_local_count++;
+
+    // check elapsed_time of callback_get_task_wc_time
+    // double cb_get_task_wc_time = omp_get_wtime();
+
+#if CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE == 3
+    if(cham_t_status.enabled && cham_t_status.cham_t_callback_get_task_wallclock_time) {
+        int cur_tw_cycle = _commthread_time_taskwait_count.load();
+        int omp_thread_id = omp_get_thread_num();
+        cham_t_status.cham_t_callback_get_task_wallclock_time(cur_tw_cycle, omp_thread_id, task->task_id, cur_time);
+    }
+#endif
+
+    // cb_get_task_wc_time = omp_get_wtime() - cb_get_task_wc_time;
+    // RELP("[CHAMELEON]: callback_get_task_wallclock_time takes ~%.5f\n", cb_get_task_wc_time);
+
 #endif
 
 #if CHAMELEON_ENABLE_FINISHED_TASK_TRACKING
@@ -1682,9 +1712,7 @@ inline int32_t process_local_task() {
 
     // handle external finish callback
     if(task->cb_task_finish_func_ptr) {
-        DBP("process_local_task - entered cb_task_finish_func_ptr\n");
         task->cb_task_finish_func_ptr(task->cb_task_finish_func_param);
-        DBP("process_local_task - passed cb_task_finish_func_ptr\n");
     }
 
 #if CHAM_STATS_RECORD

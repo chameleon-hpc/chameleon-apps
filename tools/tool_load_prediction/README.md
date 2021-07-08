@@ -34,7 +34,8 @@ As some changes in the folder - chameleon_patch/, there are 2 ENV-variables (def
 #ifndef CHAM_PREDICTION_MODE
 #define CHAM_PREDICTION_MODE 0      // no prediction
 // #define CHAM_PREDICTION_MODE 1   // time-series load as the patterns for prediction
-// #define CHAM_PREDICTION_MODE 2   // task-characterization, args as the patterns for prediction
+// #define CHAM_PREDICTION_MODE 2   // time-series load as the patterns, use predicted values to predict the whole future
+// #define CHAM_PREDICTION_MODE 3   // task-characterization, args as the patterns for prediction
 #endif
 
 // specify the strategy of work-stealing with prediction tool

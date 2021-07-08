@@ -57,7 +57,11 @@ static int _tracing_enabled = 1;
 #endif
 
 #ifndef NUM_ITERATIONS
-#define DEFAULT_NUM_ITERS 100
+#define DEFAULT_NUM_ITERS 2
+#endif
+
+#ifndef NUM_TASKS_PER_RANK
+#define DEFAULT_NUM_TASKS_PER_RANK 100
 #endif
 
 #ifndef MXM_EXAMPLE
@@ -76,6 +80,8 @@ static int _tracing_enabled = 1;
 #define DEF_LOG_DIR "./logs"
 #endif
 
+#define NBITS_SHIFT 16
+
 
 // ================================================================================
 // Declare Struct
@@ -88,7 +94,8 @@ static int _tracing_enabled = 1;
  * @attributes: tid, rank, num_args, args_list, ...
  */
 typedef struct prof_task_info_t {
-    TYPE_TASK_ID tid;   // task id
+    int tool_tid;       // tool task id
+    TYPE_TASK_ID cham_tid;   // chameleon task id
     int rank_belong;    // rank created it
     int num_args;       // num arguments
     std::vector<int64_t> args_list;   // list of arguments 
@@ -97,8 +104,21 @@ typedef struct prof_task_info_t {
     double end_time;    // end time
     double mig_time;    // migrated time
     double exe_time;    // runtime
+    double pre_time;    // predicted runtime
     intptr_t code_ptr;  // code pointer
     double core_freq;   // cpu-core frequency
+
+    // constructor 1
+    prof_task_info_t(){
+        que_time = 0.0;
+        sta_time = 0.0;
+        end_time = 0.0;
+        mig_time = 0.0;
+        exe_time = 0.0;
+        pre_time = 0.0;
+        core_freq = 0.0;
+    }
+
 } prof_task_info_t;
 
 
@@ -111,6 +131,7 @@ typedef struct prof_task_info_t {
  */
 class prof_task_list_t {
     public:
+        int ntasks_per_rank;
         std::vector<prof_task_info_t *> task_list;
         std::vector<double> avg_load_list;
         std::atomic<size_t> tasklist_size;
@@ -122,20 +143,9 @@ class prof_task_list_t {
 
         // constructor 1
         prof_task_list_t() {
-            // set tasklist sizes
+
             tasklist_size = 0;
             dup_list_size = 0;
-
-            // get the total num of iterations
-            int n_iters;
-            char *total_num_iters = std::getenv("EST_NUM_ITERS");
-            if (total_num_iters != NULL)
-                n_iters = atoi(total_num_iters);
-            else
-                n_iters = DEFAULT_NUM_ITERS;
-
-            // resize and fill the lists
-            avg_load_list.resize(n_iters, 0.0);
         }
 
         size_t dup_size() {
@@ -152,7 +162,8 @@ class prof_task_list_t {
 
         void push_back(prof_task_info_t* task) {
             this->m.lock();
-            this->task_list.push_back(task);
+            int idx = task->tool_tid;
+            this->task_list[idx] = task;
             this->tasklist_size++;
             this->dup_list_size++;
             this->m.unlock();
@@ -177,6 +188,13 @@ class prof_task_list_t {
         void add_avgload(double avg_value, int iter){
             this->m.lock();
             this->avg_load_list[iter] = avg_value;
+            this->m.unlock();
+        }
+
+        void add_wallclock_time(double wtime, int cham_tid, int iter, int thread_id, int idx){
+            this->m.lock();
+            // printf("[CHAMTOOL] T%d: add_wallclock_time: cham_tid=%d, tool_tid=%d\n", thread_id, cham_tid, idx);
+            this->task_list[idx]->exe_time = wtime;
             this->m.unlock();
         }
 };
@@ -228,6 +246,7 @@ struct SimpleRegression:torch::nn::Module {
 // Global Variables
 // ================================================================================
 prof_task_list_t profiled_task_list = prof_task_list_t();
+int tool_tasks_count;
 std::vector<float> min_vec; // the last element is min_ground_truth
 std::vector<float> max_vec; // the last element is max_ground_truth
 
@@ -299,43 +318,55 @@ void chameleon_t_write_logs(prof_task_list_t& tasklist_ref, int mpi_rank){
         log_dir = DEF_LOG_DIR;
 
     // check output-path for writing logfile
-    // printf("[TOOL] log_dir: %s\n", log_dir.c_str());
+    printf("[CHAMTOOL] log_dir: %s\n", log_dir.c_str());
 
     // declare output file
     std::ofstream outfile;
     outfile.open(log_dir + "/chamtool_logfile_rank_" + std::to_string(mpi_rank) + ".csv");
 
     // create an iterator to traverse the list
-    std::vector<prof_task_info_t *>::iterator it;
+    // std::vector<prof_task_info_t *>::iterator it;
+
+#if SAMOA_EXAMPLE==1
+        // the last 4 args affecting much on the taks runtime
+        printf("[CHAMTOOL] the usecase is: samoa...\n");
+        const int selected_arg = 8;
+#endif
+
+#if MXM_EXAMPLE==1
+        printf("[CHAMTOOL] the usecase is: mxm_example...\n");
+        const int selected_arg = 0;
+#endif
 
     // get through the list of profiled tasks
-    for (it = tasklist_ref.task_list.begin(); it != tasklist_ref.task_list.end(); it++){
+    // for (it = tasklist_ref.task_list.begin(); it != tasklist_ref.task_list.end(); it++){
+    for (int i = 0; i < tasklist_ref.task_list.size(); i++){
+
+        prof_task_info_t *tmp = tasklist_ref.task_list[i];
 
         // get a list of prob_sizes per task
-        int num_args = (*it)->num_args;
+        int num_args = tmp->num_args;
 
         // string for storing prob_sizes
         std::string prob_sizes_statement;
 
 #if SAMOA_EXAMPLE==1
-        // the last 4 args affecting much on the taks runtime
-        const int selected_arg = 8;
         for (int arg = selected_arg; arg < num_args; arg++){
-            prob_sizes_statement += std::to_string((*it)->args_list[arg]) + "\t";
+            prob_sizes_statement += std::to_string(tmp->args_list[arg]) + "\t";
         }
 #endif
 
 #if MXM_EXAMPLE==1
-        const int selected_arg = 0;
-        prob_sizes_statement += std::to_string((*it)->arg_sizes.at(selected_arg)) + "\t";
+        prob_sizes_statement += std::to_string(tmp->args_list[selected_arg]);
 #endif
 
         // cast profile-data to string for logging
-        std::string line = std::to_string((*it)->tid) + "\t"
+        std::string line = std::to_string(tmp->cham_tid) + "\t"
                             + prob_sizes_statement + "\t"
-                            + std::to_string((*it)->core_freq) + "\n";
-                            // + std::to_string((*it)->exe_time) + "\n";
-        
+                            + std::to_string(tmp->core_freq) + "\t"
+                            + std::to_string(tmp->exe_time) + "\t"
+                            + std::to_string(tmp->pre_time) + "\n";
+
         // writing logs
         outfile << line;
     }
@@ -487,15 +518,15 @@ void normalize_2dvector_by_column(std::vector<std::vector<float>> &vec)
 
 
 /**
- * Online training the prediction model.
+ * Online training the prediction model by iterative load.
  *
  * @param tasklist_ref: a ref to the list of profiled tasks. But currently
  *        work for the runtime list, no need arguments of each task.
  * @param num_input_points: represent for num of input features
  * @param num_iters: the ended iter to train the prediction model
- * @return a dataset matrix
+ * @return a trained prediction model and bool-return value.
  */
-bool online_mlpack_training(prof_task_list_t& tasklist_ref, int num_input_points, int num_iters)
+bool online_mlpack_training_iterative_load(prof_task_list_t& tasklist_ref, int num_input_points, int num_iters)
 {
     // the current list of finished tasks
     int size_tasklist = tasklist_ref.tasklist_size;
@@ -523,6 +554,7 @@ bool online_mlpack_training(prof_task_list_t& tasklist_ref, int num_input_points
         trainX.col(i-num_input_points) = runtime_list.subvec((i-num_input_points), (i-1));
         trainY.col(i-num_input_points) = runtime_list[i];
     }
+
     // std::cout << "[CHAM_TOOL] gather_train_data: trainX" << std::endl;
     // std::cout << trainX << std::endl;
     // std::cout << "[CHAM_TOOL] gather_train_data: trainY" << std::endl;
@@ -536,6 +568,50 @@ bool online_mlpack_training(prof_task_list_t& tasklist_ref, int num_input_points
 
     return true;
 }
+
+
+/**
+ * Online training the prediction model by task-features.
+ *
+ * @param tasklist_ref: a ref to the list of profiled tasks which
+ *        contains task characteristics, e.g., args, wall-clock time.
+ * @return a trained prediction model and bool-return value.
+ */
+bool online_mlpack_training_task_features(prof_task_list_t& tasklist_ref, int cur_cycle)
+{
+    // the current list of finished tasks
+    assert(cur_cycle != 0);
+    int num_tasks = tasklist_ref.ntasks_per_rank * (cur_cycle);
+    std::cout << "[CHAM_TOOL] gather_train_data: current_iter=" << cur_cycle << ", num tasks=" << num_tasks << std::endl;
+
+    // generate a std mat dataset for training
+    int n_rows_X = 1;
+    int n_cols_X = num_tasks;
+    int n_rows_Y = 1;
+    int n_cols_Y = n_cols_X;
+    // std::cout << "[CHAM_TOOL] gather_train_data: trainX_size=" << n_rows_X << "x" << n_cols_X
+    //           << ", trainY_size=" << n_rows_Y << "x" << n_cols_Y << std::endl;
+    arma::mat trainX(n_rows_X, n_cols_X);
+    arma::mat trainY(n_rows_Y, n_cols_Y);
+    for (int i = 0; i < num_tasks; i++){
+        trainX.col(i) = tasklist_ref.task_list[i]->args_list[0];
+        trainY.col(i) = tasklist_ref.task_list[i]->exe_time;
+    }
+
+    // std::cout << "[CHAM_TOOL] gather_train_data: trainX" << std::endl;
+    // std::cout << trainX << std::endl;
+    // std::cout << "[CHAM_TOOL] gather_train_data: trainY" << std::endl;
+    // std::cout << trainY << std::endl;
+
+    // declare and generate the regression model here
+    mlpack::regression::LinearRegression lr_pred_model(trainX, trainY);
+    lr = lr_pred_model;
+
+    std::cout << "[CHAM_TOOL] the training is done." << std::endl;
+
+    return true;
+}
+
 
 /**
  * Get the predicted values for the whole future.
@@ -557,6 +633,7 @@ void get_whole_future_prediction(int rank, int start_point, int end_point, std::
 
     // the main loop for the whole future prediction with the first start point
     for (int i = end_point; i < end_program_iter; i++){
+
         // prepare the input vector for the model
         arma::vec input_vec(num_features);
 
@@ -587,7 +664,7 @@ void get_whole_future_prediction(int rank, int start_point, int end_point, std::
         predicted_load_vec[i] = p_load[0];  // save the result to return back to chameleon-lib side
         pre_load_per_iter_list[i] = p_load[0];
 
-        // update the pred-value into the list of avg_load
+        // update the predicted-value into the list of avg_load as the input for the next calls
         avg_load_per_iter_list[i] = p_load[0];
 
         // check this flow
@@ -610,5 +687,70 @@ void get_whole_future_prediction(int rank, int start_point, int end_point, std::
  */
 void get_iter_by_iter_prediction(int start_point, int end_point, std::vector<double> &predicted_load_vec)
 {
+    // prepare the input vector for the model
+    int num_features = 6;   // TODO: get it by the setup-time or env-variables
+    arma::vec input_vec(num_features);
+    for (int i = start_point; i < end_point; i++){
+        input_vec[i-start_point] = profiled_task_list.avg_load_list[i];
+    }
 
+    // call the pred_model
+    arma::mat x_mat(1, num_features);
+    x_mat = input_vec;
+    arma::rowvec p_load;
+    lr.Predict(x_mat, p_load);
+
+    // store to the arma::vector for writing logs
+    // the current taskwait counter is end_point
+    predicted_load_vec[0] = p_load[0];
+    pre_load_per_iter_list[end_point] = p_load[0];
+
+}
+
+/**
+ * Get the predicted values by iter-by-iter with input features are task-characteristics
+ *
+ * This means that with the list of created tasks in the current iter, we know the task-arguments,
+ * then use them for loading th trained model.
+ * 
+ * @param cur_iter: the current iteration, the tool could get the list of its tasks
+ * @return &predicted_load_vec: a reference to the return-vector
+ */
+void get_iter_by_iter_prediction_by_task_characs(int cur_iter, std::vector<double> &predicted_load_vec)
+{
+    // get list of created tasks by this current iter
+    int num_tasks = profiled_task_list.ntasks_per_rank;
+    arma::mat x_mat(1, num_tasks); // num_tasks row, 1 column
+    arma::rowvec predicted_vals;
+    for (int i = 0; i < num_tasks; i++){
+        int idx = num_tasks * cur_iter + i;
+        int tool_tid = profiled_task_list.task_list[idx]->tool_tid;
+        int cham_tid = profiled_task_list.task_list[idx]->cham_tid;
+        int arg0 = profiled_task_list.task_list[idx]->args_list[0];
+        // printf("[CHAMTOOL] load_pred_model with the input: tool_task_id %d, cham_tid=%d, arg0=%d\n", tool_tid, cham_tid, arg0);
+
+        // create input matrix
+        x_mat.col(i) = arg0;
+    }
+    // std::cout << "[CHAMTOOL] load_pred_model: x_mat = " << x_mat << std::endl;
+
+    // call the trained model
+    lr.Predict(x_mat, predicted_vals);
+    // std::cout << "[CHAMTOOL] load_pred_model: predicted_vals = " << predicted_vals << std::endl;
+
+    // assign back the predicted values
+    // std::cout << "[CHAMTOOL] load_pred_model: predicted_load_vec = ";
+    for (int i = 0; i < num_tasks; i++){
+        double val = predicted_vals[i];
+        if (val < 0) val = val * (-1);
+        predicted_load_vec[i] = val;
+        pre_load_per_iter_list[cur_iter] += predicted_load_vec[i];
+        // std::cout << predicted_load_vec[i] << " ";
+
+        // assign predicted exetime of each task
+        int idx = num_tasks * cur_iter + i;
+        profiled_task_list.task_list[idx]->pre_time = val;
+    }
+    std::cout << std::endl;
+    
 }

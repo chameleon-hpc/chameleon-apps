@@ -2,8 +2,9 @@
 #ifndef _COMMTHREAD_H_
 #define _COMMTHREAD_H_
 
-#include <mpi.h>
+#include <numeric>
 #include <unordered_set>
+#include <mpi.h>
 
 #include "chameleon.h"
 #include "chameleon_common.h"
@@ -233,10 +234,6 @@ void action_communication_progression(int comm_thread);
 void cleanup_work_phase();
 
 int exit_condition_met(int from_taskwait, int print);
-
-void estimate_pred_load_diff(int tw_index);
-
-void estimate_real_load_diff(int tw_index);
 
 #ifdef __cplusplus
 }

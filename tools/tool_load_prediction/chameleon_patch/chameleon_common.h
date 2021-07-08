@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <iterator>
+#include <sched.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -37,11 +38,11 @@
 
 // flag which communication should be applied (load exchange & migration)
 #ifndef COMMUNICATION_MODE
-#define COMMUNICATION_MODE 0   // communication performed by communication thread (default)
-//#define COMMUNICATION_MODE 1 // communication performed only by threads inside distributed taskwait. Only a single thread active at a time.
-//#define COMMUNICATION_MODE 2 // communication performed only by threads inside distributed taskwait. All can do progress in parallel. Only one can do load exchange and migration decision at a time.
-//#define COMMUNICATION_MODE 3 // Hybrid mode. All can do progress. Only comm thread responsible for load exchange and migration decision. comm thread pinned.
-//#define COMMUNICATION_MODE 4 // Hybrid mode. All can do progress. Only comm thread responsible for load exchange and migration decision. comm thread not pinned.
+#define COMMUNICATION_MODE 0    // communication performed by communication thread (default)
+//#define COMMUNICATION_MODE 1  // communication performed only by threads inside distributed taskwait. Only a single thread active at a time.
+//#define COMMUNICATION_MODE 2  // communication performed only by threads inside distributed taskwait. All can do progress in parallel. Only one can do load exchange and migration decision at a time.
+//#define COMMUNICATION_MODE 3  // Hybrid mode. All can do progress. Only comm thread responsible for load exchange and migration decision. comm thread pinned.
+//#define COMMUNICATION_MODE 4  // Hybrid mode. All can do progress. Only comm thread responsible for load exchange and migration decision. comm thread not pinned.
 #endif
 
 // flag whether communication thread will be launched or not
@@ -81,8 +82,8 @@
 
 // determines how data (arguments) is packed and send during offloading
 #ifndef OFFLOAD_DATA_PACKING_TYPE
-// #define OFFLOAD_DATA_PACKING_TYPE 0   // 0 = pack meta data and arguments together and send it with a single message (requires copy to buffer)
-// #define OFFLOAD_DATA_PACKING_TYPE 1   // 1 = zero copy approach, only pack meta data (num_args, arg types ...) + separat send for each mapped argument
+// #define OFFLOAD_DATA_PACKING_TYPE 0  // 0 = pack meta data and arguments together and send it with a single message (requires copy to buffer)
+// #define OFFLOAD_DATA_PACKING_TYPE 1  // 1 = zero copy approach, only pack meta data (num_args, arg types ...) + separat send for each mapped argument
 #define OFFLOAD_DATA_PACKING_TYPE 2     // 2 = zero copy approach, only pack meta data (num_args, arg types ...) + ONE separat send for with mapped arguments
 #endif
 
@@ -112,7 +113,8 @@
 #ifndef CHAM_PREDICTION_MODE
 #define CHAM_PREDICTION_MODE 0      // no prediction
 // #define CHAM_PREDICTION_MODE 1   // time-series load as the patterns for prediction
-// #define CHAM_PREDICTION_MODE 2   // task-characterization, args as the patterns for prediction
+// #define CHAM_PREDICTION_MODE 2   // time-series load as the patterns, and use predicted-values to predict the whole future
+// #define CHAM_PREDICTION_MODE 3   // task-characterization, args as the patterns for prediction
 #endif
 
 // specify the strategy of work-stealing with prediction tool
@@ -156,9 +158,9 @@
 #endif
 
 #ifndef REPLICATION_PRIORITIZE_MIGRATED
-//#define REPLICATION_PRIORITIZE_MIGRATED 0 // migrated tasks have same priority as a-priori replicated tasks, Todo(Philipp): should be removed, 1 should be default
+// #define REPLICATION_PRIORITIZE_MIGRATED 0 // migrated tasks have same priority as a-priori replicated tasks, Todo(Philipp): should be removed, 1 should be default
 #define REPLICATION_PRIORITIZE_MIGRATED 1   // migrated tasks have low priority but higher priority than a-priori replicated tasks
-//#define REPLICATION_PRIORITIZE_MIGRATED 2 // migrated tasks have high priority
+// #define REPLICATION_PRIORITIZE_MIGRATED 2 // migrated tasks have high priority
 #endif
 
 
@@ -345,8 +347,8 @@ typedef struct cham_migratable_task_t {
 
     // host pointers will be used for transfer execution target region
     std::vector<void *> arg_hst_pointers;
-    std::vector<int64_t> arg_sizes;
-    std::vector<int64_t> arg_types;
+    std::vector<int64_t> arg_sizes; // size of each parameter in bytes
+    std::vector<int64_t> arg_types; // int representing bitwise combination of chameleon_tgt_map_type values
 
     // target pointers will just be used at sender side for host pointer lookup 
     // and freeing of entries in data entry table
@@ -872,6 +874,10 @@ class thread_safe_unordered_map_atomic {
 extern int chameleon_comm_rank;
 extern int chameleon_comm_size;
 
+// original cpuset of the complete process 
+// (needs to be recorded in serial region at the beginning of the applicatrion)
+extern cpu_set_t pid_mask;
+
 // atomic counter for task ids
 extern std::atomic<TYPE_TASK_ID> _task_id_counter;
 
@@ -1000,6 +1006,36 @@ static void split_string(const std::string& str, Container& cont, char delim = '
     while (std::getline(ss, token, delim)) {
         cont.push_back(token);
     }
+}
+
+static void print_affinity_mask(cpu_set_t mask) {
+    long nproc, i;
+
+    // get the number of processors/mts
+    nproc = sysconf(_SC_NPROCESSORS_ONLN);
+
+    // build + output mask string
+    std::string mask_str("");
+    for (i = 0; i < nproc; i++) {
+        if (CPU_ISSET(i, &mask)) {
+            mask_str = mask_str + " X";
+        } else {
+            mask_str = mask_str + " .";
+        }
+    }
+    RELP("CPUSET ==> %s\n", mask_str.c_str());
+}
+
+static void get_and_print_affinity_mask() {
+    
+    // get the affinity mask from the current thread
+    cpu_set_t mask;
+    if (sched_getaffinity(getpid(), sizeof(cpu_set_t), &mask) == -1) {
+        perror("sched_getaffinity");
+        return;
+    }
+
+    return print_affinity_mask(mask);
 }
 
 static void load_config_values() {

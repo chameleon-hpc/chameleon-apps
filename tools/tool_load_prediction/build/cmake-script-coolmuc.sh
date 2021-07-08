@@ -19,17 +19,19 @@ module load armadillo-10.4.0    # built with oneapi/2021
 module load ensmallen-2.16.2    # built with oneapi/2021
 module load mlpack-3.4.2        # built with oneapi/2021
 module load libtorch
-module load chamtool_pred_mig
+module load chamtool_pred3_mig0 # TODO: change mode depending on the experiments
 
 # export itac if we need
 # but, maybe it's already loaded by intel oneapi/2021
 
 # choose the tool for samoa-chameleon
-export SAMOA_EXAMPLE=1
+# echo "SAMOA_EXAMPLE=1"
+echo "MXM_EXAMPLE=1"
 
 # run cmake
 cmake -DCMAKE_PREFIX_PATH=/dss/dsshome1/lxc0D/ra56kop/local_libs/libtorch \
         -DCMAKE_C_COMPILER=mpiicc -DCMAKE_CXX_COMPILER=mpiicpc \
+        -DCMAKE_CXX_FLAGS=" -DMXM_EXAMPLE=1" \
         ../src/
 
 # run build

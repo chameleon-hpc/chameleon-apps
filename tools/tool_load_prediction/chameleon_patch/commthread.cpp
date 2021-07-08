@@ -14,6 +14,8 @@
 #include <hwloc/glibc-sched.h>
 #include <functional>
 #include <set>
+#include <string>
+#include <iostream>
 
 #ifdef TRACE
 #include "VT.h"
@@ -39,6 +41,10 @@ MPI_Comm chameleon_comm_activate;
 
 int chameleon_comm_rank = -1;
 int chameleon_comm_size = -1;
+
+// original cpuset of the complete process 
+// (needs to be recorded in serial region at the beginning of the applicatrion)
+cpu_set_t pid_mask;
 
 //request manager for MPI requests
 RequestManager request_manager_receive;
@@ -99,7 +105,7 @@ std::atomic<int32_t> _outstanding_jobs_sum(0);
 
 // ====== Info about real load that is open or is being processed ======
 std::vector<int32_t> _load_info_ranks;
-std::vector<double>  _total_load_info_ranks; // load after a finished iter
+std::vector<double>  _total_load_info_ranks; // load after an iter is finished
 std::mutex _mtx_cancellation;
 
 // ====== Info about the number of taskwait count being processed ======
@@ -147,7 +153,7 @@ int _flag_predict_for_the_whole_future = 0;
 
 #endif /* CHAM_PRED_MIGRATION > 0 */
 
-#endif
+#endif /* CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE > 0 */
 
 std::mutex _mtx_comm_threads_ended;
 std::atomic<int> _comm_threads_ended_count(0);
@@ -295,9 +301,10 @@ int32_t chameleon_wake_up_comm_threads() {
  */
 int32_t stop_communication_threads() {
 
-    // ===> Not necessary any more... should just be done in finalize call
+    // Not necessary any more... should just be done in finalize call
 #if !THREAD_ACTIVATION
     _mtx_comm_threads_ended.lock();
+
     // increment counter
     _comm_threads_ended_count++;
 
@@ -356,13 +363,13 @@ int32_t put_comm_threads_to_sleep() {
     //assert(request_manager_send.getNumberOfOutstandingRequests()==0);
 
     // wait until thread sleeps
-    _flag_comm_thread_sleeping             = 1;
+    _flag_comm_thread_sleeping = 1;
     while(!_comm_thread_service_stopped) {
         usleep(CHAM_SLEEP_TIME_MICRO_SECS);
     }
     // DBP("put_comm_threads_to_sleep - service thread stopped = %d\n", _comm_thread_service_stopped);
-    _comm_threads_ended_count               = 0;
-    _comm_thread_service_stopped            = 0;
+    _comm_threads_ended_count = 0;
+    _comm_thread_service_stopped = 0;
 
     DBP("put_comm_threads_to_sleep (exit)\n");
     _mtx_comm_threads_ended.unlock();
@@ -440,25 +447,21 @@ short pin_thread_to_last_core(int n_last_core) {
     int err;
     int s, j;
     pthread_t thread;
-    cpu_set_t current_cpuset;
     cpu_set_t new_cpu_set;
-    cpu_set_t final_cpu_set;    
 
-    // somehow this only reflects binding of current thread. Problem when OpenMP already pinned threads due to OMP_PLACES and OMP_PROC_BIND. 
+    // this only reflects binding of current thread. Problem when OpenMP already pinned threads due to OMP_PLACES and OMP_PROC_BIND. 
     // then comm thread only get cpuset to single core --> overdecomposition of core with computational and communication thread  
-    // err = sched_getaffinity(getpid(), sizeof(cpu_set_t), &current_cpuset);
-    // if(err != 0)
-    //     handle_error_en(err, "sched_getaffinity");
+    // err = sched_getaffinity(getpid(), sizeof(cpu_set_t), &pid_mask);
+    // if(err != 0) handle_error_en(err, "sched_getaffinity");
 
     hwloc_topology_t topology;
-    hwloc_bitmap_t set, hwlocset;
     err = hwloc_topology_init(&topology);
     err = hwloc_topology_load(topology);
-    hwlocset = hwloc_bitmap_alloc();
-    err = hwloc_get_proc_cpubind(topology, getpid(), hwlocset, 0);
-    hwloc_cpuset_to_glibc_sched_affinity(topology, hwlocset, &current_cpuset, sizeof(current_cpuset));
-    hwloc_bitmap_free(hwlocset);
-    
+
+    // ===== DEBUG
+    // print_affinity_mask(pid_mask);
+    // ===== DEBUG
+
     // also get the number of processing units (here)
     int depth = hwloc_get_type_depth(topology, HWLOC_OBJ_CORE);
     if(depth == HWLOC_TYPE_DEPTH_UNKNOWN) {
@@ -466,16 +469,18 @@ short pin_thread_to_last_core(int n_last_core) {
     }
     const long n_physical_cores = hwloc_get_nbobjs_by_depth(topology, depth);
     const long n_logical_cores = sysconf( _SC_NPROCESSORS_ONLN );
-
+    int ht_enabled = n_logical_cores > n_physical_cores;
     hwloc_topology_destroy(topology);
     
     // get last hw thread of current cpuset
     long max_core_set = -1;
     int count_last = 0;
 
-    for (long i = n_logical_cores; i >= 0; i--) {
-        if (CPU_ISSET(i, &current_cpuset)) {
-            // DBP("Last core/hw thread in cpuset is %ld\n", i);
+    for (long i = n_logical_cores-1; i >= 0; i--) {
+        // RELP("core/hw thread %ld not set in cpuset\n", i);
+        if (CPU_ISSET(i, &pid_mask)) {
+
+            // RELP("Last core/hw thread in cpuset is %ld\n", i);
             max_core_set = i;
             count_last++;
             if(count_last >= n_last_core)
@@ -485,7 +490,7 @@ short pin_thread_to_last_core(int n_last_core) {
 
     // set affinity mask to last core or all hw threads on specific core 
     CPU_ZERO(&new_cpu_set);
-    if(max_core_set < n_physical_cores) {
+    if(!ht_enabled) {
         // Case: there are no hyper threads
         RELP("COMM_THREAD: Setting thread affinity to core %ld\n", max_core_set);
         CPU_SET(max_core_set, &new_cpu_set);
@@ -499,14 +504,16 @@ short pin_thread_to_last_core(int n_last_core) {
         }
         RELP("COMM_THREAD: Setting thread affinity to cores %s\n", cores.c_str());
     }
+
     // get current thread to set affinity for    
     thread = pthread_self();
     err = pthread_setaffinity_np(thread, sizeof(cpu_set_t), &new_cpu_set);
     if (err != 0)
         handle_error_en(err, "pthread_setaffinity_np");
 
-    // // ===== DEBUG
-    // // verify that pinning worked
+    // ===== DEBUG
+    // verify that pinning worked
+    // cpu_set_t final_cpu_set;
     // err = pthread_getaffinity_np(thread, sizeof(cpu_set_t), &final_cpu_set);
     // if (err != 0)
     //     handle_error_en(err, "pthread_getaffinity_np");
@@ -518,7 +525,7 @@ short pin_thread_to_last_core(int n_last_core) {
 
     // final_cores.pop_back();
     // RELP("COMM_THREAD: Verifying thread affinity: pinned to cores %s\n", final_cores.c_str());
-    // // ===== DEBUG
+    // ===== DEBUG
 
     return CHAM_SUCCESS;
 }
@@ -556,9 +563,11 @@ static void send_handler(void* buffer, int tag, int source, cham_migratable_task
 };
 
 static void receive_handler_data(void* buffer, int tag, int source, cham_migratable_task_t** tasks, int num_tasks) {
+    
     // add tasks to stolen list
     for (int i_task = 0; i_task < num_tasks; i_task++) {
         cham_migratable_task_t *task = tasks[i_task];
+
         // check if task has already been cancelled
         if(_cancelled_task_ids.find(task->task_id)!=_cancelled_task_ids.end()) {
             _cancelled_task_ids.erase(task->task_id);
@@ -568,12 +577,13 @@ static void receive_handler_data(void* buffer, int tag, int source, cham_migrata
             _num_replicated_remote_tasks_outstanding--;
             _num_remote_tasks_outstanding--;
             DBP("receive_handler_data - late cancel, decrement stolen outstanding for task id: %d  new count %d\n",
-                                                            task->task_id, _num_remote_tasks_outstanding.load());
+                                            task->task_id, _num_remote_tasks_outstanding.load());
             DBP("receive_handler_data - conducted late cancel for task id: %d\n", task->task_id);
 
             #if CHAM_STATS_RECORD
             _num_tasks_canceled++;
             #endif
+
         	continue;
         }
 
@@ -590,6 +600,7 @@ static void receive_handler_data(void* buffer, int tag, int source, cham_migrata
         _map_tag_to_remote_task.insert(task->task_id, task);
         _map_overall_tasks.insert(task->task_id, task);
     }
+
     // free memory again here
     free(tasks);
 }
@@ -615,7 +626,7 @@ static void receive_handler(void* buffer, int tag, int source, cham_migratable_t
 #endif
 
     // add stolen load as soon as possible to avoid wrong decision making
-#if CHAM_REPLICATION_MODE!=4
+#if CHAM_REPLICATION_MODE != 4
     _num_remote_tasks_outstanding += n_tasks;
     DBP("receive_handler - increment stolen outstanding count for tag %d by %d, new count %d\n", tag, n_tasks, _num_remote_tasks_outstanding.load());
 #endif
@@ -626,13 +637,13 @@ static void receive_handler(void* buffer, int tag, int source, cham_migratable_t
         list_tasks[i_task]->source_mpi_rank = source;
         p_tasks[i_task] = list_tasks[i_task];
 
-#if CHAM_REPLICATION_MODE!=4
+#if CHAM_REPLICATION_MODE != 4
         if(p_tasks[i_task]->is_replicated_task)
           _num_replicated_remote_tasks_outstanding++;
         if(p_tasks[i_task]->is_migrated_task)
           _num_replicated_and_migrated_remote_tasks_outstanding++;       
 
-#else // CHAM_REPLICATION_MODE==4
+#else
         if(p_tasks[i_task]->is_migrated_task) {
             DBP("receive_handler - increment stolen outstanding count for tag %d by %d, new count %d\n", tag, n_tasks, _num_remote_tasks_outstanding.load());
            _num_remote_tasks_outstanding++;
@@ -640,15 +651,17 @@ static void receive_handler(void* buffer, int tag, int source, cham_migratable_t
         }
 #endif
     }
+
 #if OFFLOAD_DATA_PACKING_TYPE == 0
     receive_handler_data(NULL, tag, source, p_tasks, n_tasks);
 #elif OFFLOAD_DATA_PACKING_TYPE > 0
     double start_time_requests = 0;
-#if CHAM_STATS_RECORD
-    cur_time = omp_get_wtime();
-#endif
 
-#if OFFLOAD_DATA_PACKING_TYPE == 1
+    #if CHAM_STATS_RECORD
+    cur_time = omp_get_wtime();
+    #endif
+
+    #if OFFLOAD_DATA_PACKING_TYPE == 1
     int num_requests = 0;
     for(int i_task = 0; i_task < n_tasks; i_task++) {
         for(int i_par = 0; i_par < list_tasks[i_task]->arg_num; i_par++) {
@@ -693,7 +706,9 @@ static void receive_handler(void* buffer, int tag, int source, cham_migratable_t
             }
         }
     }
-#elif OFFLOAD_DATA_PACKING_TYPE == 2
+
+    #elif OFFLOAD_DATA_PACKING_TYPE == 2
+
     int num_requests = 1;
     MPI_Request *requests = new MPI_Request[num_requests];
     int tmp_overall_arg_nums = 0;
@@ -752,18 +767,18 @@ static void receive_handler(void* buffer, int tag, int source, cham_migratable_t
     assert(ierr==MPI_SUCCESS);
     ierr = MPI_Type_free(&type_mapped_vars);
     assert(ierr==MPI_SUCCESS);
-#endif /* OFFLOAD_DATA_PACKING_TYPE == ... */
+    #endif /* OFFLOAD_DATA_PACKING_TYPE == ... */
 
-#if CHAM_STATS_RECORD
+    #if CHAM_STATS_RECORD
     cur_time = omp_get_wtime()-cur_time;
     #if MPI_BLOCKING
     add_throughput_recv(cur_time, num_bytes_received);
     #endif
-#endif
+    #endif
 
-#if MPI_BLOCKING
+    #if MPI_BLOCKING
     receive_handler_data(NULL, tag, source, p_tasks, n_tasks);
-#else
+    #else
     std::function<void(void*, int, int, cham_migratable_task_t**, int)> cur_handler = receive_handler_data;
     request_manager_receive.submitRequests(start_time_requests, tag, 
                                     source,
@@ -776,7 +791,7 @@ static void receive_handler(void* buffer, int tag, int source, cham_migratable_t
                                     NULL, 
                                     p_tasks,
                                     n_tasks);
-#endif
+    #endif
 
     delete[] requests;
 
@@ -791,7 +806,8 @@ static void send_back_handler(void* buffer, int tag, int source, cham_migratable
     if(tasks) {
         for(int i_task = 0; i_task < num_tasks; i_task++) {
             cham_migratable_task_t *task = tasks[i_task];
-#if CHAM_REPLICATION_MODE!=4
+
+#if CHAM_REPLICATION_MODE != 4
             if(task->is_replicated_task)
             	_num_replicated_remote_tasks_outstanding--;
             if(task->is_migrated_task)
@@ -948,10 +964,10 @@ void cancel_offloaded_task_on_rank(cham_migratable_task_t *task, int rank) {
     std::function<void(void*, int, int, cham_migratable_task_t**, int)> cur_handler = handler_noop;
     request_manager_cancel.submitRequests( start_time_requests, 0, rank, 1,
                                            &request,
-                                           -1,  // TODO: what will this be?
+                                           -1, // TODO: what will this be?
                                            0, 
                                            cur_handler,
-                                           send,    // TODO: special request
+                                           send, // TODO: special request
                                            nullptr);
     _mtx_cancellation.unlock();
 }
@@ -2097,20 +2113,18 @@ inline void action_task_migration() {
                             if(_active_replication_victims.find(r)!=_active_replication_victims.end()) {
                         	    int tasks_to_activate =  std::min( (int) MAX_TASKS_PER_RANK_TO_ACTIVATE_AT_ONCE.load(),std::min(_num_replicated_local_tasks_per_victim[r], num_tasks_to_migrate));
                         	    if(tasks_to_activate>0) {
-                     	        //       printf("action_task_migratino, active migrations for %d = %d, num_to_migrate = %d, num_tasks_to_activate = %d load rank 0: %d load rank 1: %d\n", r , _active_migrations_per_target_rank[r], num_tasks_to_migrate, tasks_to_activate, _load_info_ranks[0], _load_info_ranks[1]);
-                        	       DBP("action_task_migration - activating %d replicated tasks on rank %d\n", tasks_to_activate, r);
-                        	       activate_replicated_tasks_on_rank(tasks_to_activate, r);
-                            	        _num_replicated_local_tasks_per_victim[r]-= tasks_to_activate;
-                            	        #if (CHAM_STATS_RECORD)  
-                                        _num_tasks_activated += tasks_to_activate;
-				                        #endif
-                                       _session_data.offload_triggered = 1;
-                                       num_tasks_to_migrate -= tasks_to_activate; //continue with task migration if it makes sense
-                                       num_tasks_to_migrate = std::max(0, num_tasks_to_migrate);
-                                     //  break;
+                     	            // printf("action_task_migratino, active migrations for %d = %d, num_to_migrate = %d, num_tasks_to_activate = %d load rank 0: %d load rank 1: %d\n", r , _active_migrations_per_target_rank[r], num_tasks_to_migrate, tasks_to_activate, _load_info_ranks[0], _load_info_ranks[1]);
+                        	        DBP("action_task_migration - activating %d replicated tasks on rank %d\n", tasks_to_activate, r);
+                        	        activate_replicated_tasks_on_rank(tasks_to_activate, r);
+                                    _num_replicated_local_tasks_per_victim[r]-= tasks_to_activate;
+                                    #if (CHAM_STATS_RECORD)  
+                                    _num_tasks_activated += tasks_to_activate;
+                                    #endif
+                                    _session_data.offload_triggered = 1;
+                                    num_tasks_to_migrate -= tasks_to_activate; // continue with task migration if it makes sense
+                                    num_tasks_to_migrate = std::max(0, num_tasks_to_migrate);
                         	    }
                             }
-                            //continue;
 			    #endif
                      	    
                             if(num_tasks_to_migrate==0) continue;
@@ -2126,7 +2140,7 @@ inline void action_task_migration() {
                                     #if CHAM_REPLICATION_MODE >= 3
                                     cur_tasks[num_tasks]->is_replicated_task = 1;
                                     cur_tasks[num_tasks]->replication_ranks.push_back(r);
-                                    #endif  /* CHAM_REPLICATION_MODE */                             
+                                    #endif                             
                                     num_tasks++;
                              
                                     // stop when limit reached
@@ -2156,6 +2170,9 @@ inline void action_task_migration() {
                                 #endif
 
                                 offload_done = true;
+                            }
+                            else {
+                                free(cur_tasks);
                             }
                         }
                     }
@@ -2842,16 +2859,21 @@ inline void action_handle_recv_request(MPI_Status *cur_status_receive, RequestMa
 
 inline bool action_task_replication() {
 
+    // create replication info
+    static cham_t_replication_info_t* replication_infos = nullptr;
+
     if(_comm_thread_load_exchange_happend && _local_tasks.dup_size() >= MIN_LOCAL_TASKS_IN_QUEUE_BEFORE_MIGRATION ) {
     	DBP("action_task_replication - selecting tasks to replicate\n");
-        //clean up replication infos from previous distributed taskwait
+
+        // clean up replication infos from previous distributed taskwait
     	while(!_replication_infos_list.empty()) {
     		free_replication_info(_replication_infos_list.pop_front());
     	}
 
+        if(!replication_infos) free(replication_infos);
+
     	int num_tasks_local = _local_tasks.dup_size();
 
-        cham_t_replication_info_t* replication_infos = nullptr;
         int num_rep_infos = 0;
         #if CHAMELEON_TOOL_SUPPORT && !FORCE_MIGRATION
         if(cham_t_status.enabled && cham_t_status.cham_t_callback_select_num_tasks_to_replicate) {
@@ -3113,6 +3135,7 @@ void action_communication_progression(int comm_thread) {
 #if COMMUNICATION_MODE == 2
     // avoid overwriting request and keep it up to date
     if (_mtx_comm_progression.try_lock()) {
+        
 #elif COMMUNICATION_MODE != 1
     // only execute that code if called from communication thread
     if(comm_thread) {
@@ -3494,8 +3517,13 @@ void* comm_thread_action(void* arg) {
                     // get start_time for calling - train the model
                     double time_start_training = omp_get_wtime();
 
-                    _flag_model_is_trained = cham_t_status.cham_t_callback_train_prediction_model(current_taskwait_counter);
-
+        #if CHAM_PREDICTION_MODE == 1
+                    _flag_model_is_trained = cham_t_status.cham_t_callback_train_prediction_model(current_taskwait_counter, 1);
+        #elif CHAM_PREDICTION_MODE == 2
+                    _flag_model_is_trained = cham_t_status.cham_t_callback_train_prediction_model(current_taskwait_counter, 2);
+        #elif CHAM_PREDICTION_MODE == 3
+                    _flag_model_is_trained = cham_t_status.cham_t_callback_train_prediction_model(current_taskwait_counter, 3);
+        #endif
                     // get training time - train the model
                     double elapsed_training_time = omp_get_wtime() - time_start_training;
                     atomic_add_dbl(_time_training_model_sum, elapsed_training_time);
@@ -3503,9 +3531,11 @@ void* comm_thread_action(void* arg) {
                 }
             }
 
-            // the triger for validating
+            // the triger for loading the trained model
             if(_flag_model_is_trained){
-                if(cham_t_status.enabled && cham_t_status.cham_t_callback_valid_prediction_model) {
+
+                // check the condition of the tool
+                if(cham_t_status.enabled && cham_t_status.cham_t_callback_load_prediction_model) {
 
     #if CHAM_PREDICTION_MODE == 1
                     // get start_time for calling - inference the model
@@ -3513,7 +3543,7 @@ void* comm_thread_action(void* arg) {
 
                     // get the predicted load for the current taskwait id
                     int cur_tw_idx = current_taskwait_counter;
-                    std::vector<double> pred_val_vec = cham_t_status.cham_t_callback_valid_prediction_model(cur_tw_idx, 0);
+                    std::vector<double> pred_val_vec = cham_t_status.cham_t_callback_load_prediction_model(cur_tw_idx, 1);
                     double pred_val = pred_val_vec[0];
 
                     // get inferencing time - inference the model
@@ -3534,9 +3564,10 @@ void* comm_thread_action(void* arg) {
     #elif CHAM_PREDICTION_MODE == 2
                     // This mode just needs to run at once, so check the condition for this reason
                     if (_flag_predict_for_the_whole_future == 0){
+
                         // get the predicted-load vector started from the current-taskwait id
                         int cur_tw_idx = current_taskwait_counter;
-                        std::vector<double> pred_val_vec = cham_t_status.cham_t_callback_valid_prediction_model(cur_tw_idx, 1);
+                        std::vector<double> pred_val_vec = cham_t_status.cham_t_callback_load_prediction_model(cur_tw_idx, 2);
 
                         // assign the predicted values from the tool to the vector at chameleon side
                         for (int i = cur_tw_idx; i < MAX_EST_NUM_ITERS; i++){
@@ -3547,6 +3578,25 @@ void* comm_thread_action(void* arg) {
                         // set the flag into 1, to make sure this branch runs at once
                         _flag_predict_for_the_whole_future = 1;
                     }
+
+    #elif CHAM_PREDICTION_MODE == 3
+                    // get start_time for calling - inference the model
+                    double time_start_inferencing = omp_get_wtime();
+
+                    // get the curretn tw iteration
+                    int cur_tw_idx = current_taskwait_counter;
+                    std::vector<double> pred_val_vec = cham_t_status.cham_t_callback_load_prediction_model(cur_tw_idx, 3);
+                    double pred_val = std::accumulate(pred_val_vec.begin(), pred_val_vec.end(), 0.0);
+                    _list_predicted_load[cur_tw_idx] = pred_val;
+
+                    // get inferencing time - inference the model
+                    double elapsed_inferencing_time = omp_get_wtime() - time_start_inferencing;
+                    atomic_add_dbl(_time_inferenc_model_sum, elapsed_inferencing_time);
+                    _time_inferenc_model_count++;
+
+                    // update the pred-value for the statistic_info at chameleon-size, this value is updated every cycle
+                    atomic_add_dbl(_time_task_execution_pred_sum, pred_val);
+                    _time_task_execution_pred_count++;
     #endif
                 }
             }

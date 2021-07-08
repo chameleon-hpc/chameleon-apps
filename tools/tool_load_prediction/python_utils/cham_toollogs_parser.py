@@ -97,12 +97,11 @@ def parse_taskprof_data(filename, num_nodes):
 
     # open the logfile
     file = open(filename, 'r')
-
-    # mark the begin_ & end_ line for
-    line_end = SAMOA_SECTIONS * NUM_OMPTHREADS * NUM_ITERATIONS
     
     # for storing tasks/iter
-    iter_data = []
+    profil_data = []
+    taskcha_arr = []
+    iterrun_arr = []
 
     # scan the file
     line_counter = 0
@@ -110,33 +109,26 @@ def parse_taskprof_data(filename, num_nodes):
     for line in file:
         # count the num of lines
         line_counter += 1
+        data = line.split("\t")
+        num_vals = len(data)
 
-        if line_counter <= line_end:
-            # create a new list of tasks
-            # when starting a new iter
-            if line_counter % 368 == 1:
-                task_list = []
+        if num_vals > 2:
+            tid = int(data[0])
+            arg = int(data[1])
+            core_freq = float(data[2])
+            wallclock_time = float(data[3])
+            taskcha_arr.append([tid, arg, core_freq, wallclock_time])
 
-            # read line by line
-            data = line.split("\t")
-            task_id  = int(data[0])
-            arg1     = int(data[3])
-            arg2     = int(data[4])
-            arg3     = int(data[5])
-            arg4     = int(data[6])
-            runtime  = 0.0
-            task     = Task(task_id, arg1, arg2, arg3, arg4, runtime)
+        if num_vals > 0 and num_vals <= 2:
+            real_wallclock_exetime = float(data[0])
+            pred_wallclock_exetime = float(data[1])
+            iterrun_arr.append([real_wallclock_exetime, pred_wallclock_exetime])
 
-            # add task to the current list
-            task_list.append(task)
-            
-            # add a list of tasks to iter_data
-            if line_counter % 368 == 0:
-                iter_data.append(task_list)
-                iter_idx += 1
+    profil_data.append(taskcha_arr)
+    profil_data.append(iterrun_arr)
 
     # return the result
-    return iter_data
+    return profil_data
 
 
 """Read log-file and parse total_load per iter
@@ -206,20 +198,21 @@ hence we process file-by-file, and storing results could be in a list.
 """
 def gather_results_taskprof(folder, num_nodes):
     results_per_rank = []
+    for i in range(num_nodes):
+        results_per_rank.append([])
 
     for f in os.listdir(folder):
 
         # to get the log of specific rank
         filename = f.split("_")
-        rank_id  = int(filename[2])
+        rank_id  = int((filename[-1].split("."))[0])
 
         # read log-file
         filepath = os.path.join(folder,f)
+
+        # parse tool-log files
         taskprof_data = parse_taskprof_data(filepath, num_nodes)    # store task-args data of all tasks per iter
-
-        rank_taskprof_data_tuple = (rank_id, taskprof_data)
-
-        results_per_rank.append(rank_taskprof_data_tuple)
+        results_per_rank[rank_id] = taskprof_data
 
     return results_per_rank
 
@@ -534,15 +527,28 @@ if __name__ == "__main__":
     # extract the folder name
     folder_name = folder.split("/")
     sub_folder_name   = folder_name[len(folder_name)-1].split("-")
-    num_nodes = int(sub_folder_name[2])
+    # num_nodes = int(sub_folder_name[2])
+    num_nodes = 2
 
     # gather results in the folder of logs
-    runtime_profile_data = gather_results_iterruntime(folder, num_nodes)
-    task_profile_data = gather_results_taskprof(folder, num_nodes)
+    # runtime_profile_data = gather_results_iterruntime(folder, num_nodes)
+    # task_profile_data = gather_results_taskprof(folder, num_nodes)
+    profiled_data = gather_results_taskprof(folder, num_nodes)
+    for i in range(num_nodes):
+        print("------ RANK {} profiled-data -----------".format(i))
+        rank_data = profiled_data[i]
+        taskchar_profil = rank_data[0]
+        total_task_wallclock_time = 0.0
+        for j in range(len(taskchar_profil)):
+            total_task_wallclock_time += taskchar_profil[j][-1]
+        iterrunt_profil = rank_data[1]
+        print("     num_tasks={}, num_iters={}".format(len(taskchar_profil), len(iterrunt_profil)))
+        print("     check: total_task_wallclock_time={:0.3f}, total_iter_runtime={:0.3f}".format(total_task_wallclock_time, np.sum(iterrunt_profil)))
+
 
     # sorting the profile-data by rank
-    task_profile_data.sort(key=lambda x:x[0])
-    runtime_profile_data.sort(key=lambda x:x[0])
+    # task_profile_data.sort(key=lambda x:x[0])
+    # runtime_profile_data.sort(key=lambda x:x[0])
 
     """ -------- calculate and check total_runtime per iter """
     # display_iterruntime_per_rank(runtime_profile_data)
@@ -558,6 +564,7 @@ if __name__ == "__main__":
     # plot_total_runtime_by_rank(runtime_profile_data, output_folder)
     
     """ -------- training based on args and iter-idx """
+    """
     # get the profile_data of the first rank
     rank = 3
     rank_task_profiled_data = task_profile_data[rank]
@@ -595,19 +602,19 @@ if __name__ == "__main__":
 
         # put into a larger list
         filtered_data.append(data_row)
-    
+    """
 
     """ -------- visualize the dataset before training """
     # num_plot_iters = 100
     # plot_groundtruth_by_iters(ground_truth, num_plot_iters)
 
     """ --------- write dataset to csv file """
-    csv_file = open("sample-dataset-r"+str(rank)+".csv", 'w')
-    with csv_file:
-        writer = csv.writer(csv_file, delimiter =',')
-        for row in filtered_data:
-            print(row)
-            writer.writerow(row)
+    # csv_file = open("sample-dataset-r"+str(rank)+".csv", 'w')
+    # with csv_file:
+    #     writer = csv.writer(csv_file, delimiter =',')
+    #     for row in filtered_data:
+    #         print(row)
+    #         writer.writerow(row)
     
 
     """ -------- convert filtered_data to tensor_type """
