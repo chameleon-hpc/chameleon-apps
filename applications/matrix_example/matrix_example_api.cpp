@@ -76,12 +76,12 @@
 
 #include <assert.h>
 #include <mpi.h>
-#include "chameleon.h"
 #include <cstdlib>
 #include <cstdio>
 #include <random>
+#include <inttypes.h>
 #include <iostream>
-#include <string>
+#include <string.h>
 #include <sstream>
 #include "math.h"
 #include <cmath>
@@ -96,6 +96,19 @@
 
 #if CHECK_GENERATED_TASK_ID
 #include <mutex>
+#endif
+
+#ifndef DPxMOD
+#define DPxMOD "0x%0*" PRIxPTR
+#endif
+
+#ifndef DPxPTR
+#define DPxPTR(ptr) ((int)(2*sizeof(uintptr_t))), ((uintptr_t) (ptr))
+#endif
+
+#if COMPILE_CHAMELEON
+#include "chameleon.h"
+#include "chameleon_pre_init.h"
 #endif
 
 // static rank id that can also be used in other functions except main
@@ -383,12 +396,8 @@ int main(int argc, char **argv)
 	double wTimeCham, wTimeHost;
 	bool pass = true;
 
-#if CHECK_GENERATED_TASK_ID
-    std::mutex mtx_t_ids;
-    std::list<int32_t> t_ids;
-#endif
-
 #if COMPILE_CHAMELEON
+    chameleon_pre_init();
     #pragma omp parallel
     {
         chameleon_thread_init();
@@ -413,6 +422,11 @@ int main(int argc, char **argv)
             printf("Mode: Non-Uniform Task Distribution\n");
         }
     }
+
+#if CHECK_GENERATED_TASK_ID
+    std::mutex mtx_t_ids;
+    std::list<int32_t> t_ids;
+#endif
 	
     std::string msg = "will create "+std::to_string(numberOfTasks)+" tasks";
     LOG(iMyRank, msg.c_str());
