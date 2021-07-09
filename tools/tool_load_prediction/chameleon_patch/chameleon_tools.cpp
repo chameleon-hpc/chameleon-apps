@@ -134,7 +134,6 @@ void cham_t_fini() {
  ****************************************************************************/
 static cham_t_set_result_t cham_t_set_callback(cham_t_callback_types_t which, cham_t_callback_t callback) {
     int tmp_val = (int) which;
-    // printf("Setting callback %d\n", tmp_val);
     switch(tmp_val) {
         case cham_t_callback_thread_init:
             cham_t_status.cham_t_callback_thread_init = (cham_t_callback_thread_init_t)callback;
@@ -175,11 +174,14 @@ static cham_t_set_result_t cham_t_set_callback(cham_t_callback_types_t which, ch
         case cham_t_callback_get_load_stats_per_taskwait:
             cham_t_status.cham_t_callback_get_load_stats_per_taskwait = (cham_t_callback_get_load_stats_per_taskwait_t)(callback);
             break;
+        case cham_t_callback_get_task_wallclock_time:
+            cham_t_status.cham_t_callback_get_task_wallclock_time = (cham_t_callback_get_task_wallclock_time_t)(callback);
+            break;
         case cham_t_callback_train_prediction_model:
             cham_t_status.cham_t_callback_train_prediction_model = (cham_t_callback_train_prediction_model_t)(callback);
             break;
-        case cham_t_callback_valid_prediction_model:
-            cham_t_status.cham_t_callback_valid_prediction_model = (cham_t_callback_valid_prediction_model_t)(callback);
+        case cham_t_callback_load_prediction_model:
+            cham_t_status.cham_t_callback_load_prediction_model = (cham_t_callback_load_prediction_model_t)(callback);
             break;
         default:
             fprintf(stderr, "ERROR: Unable to set callback for specifier %d\n", which);
@@ -227,6 +229,32 @@ cham_t_rank_info_t * cham_t_get_rank_info(void) {
 #endif
 }
 
+cham_t_task_param_info_t cham_t_get_task_param_info(cham_migratable_task_t* task) {
+    cham_t_task_param_info_t ret;
+    ret.arg_sizes       = nullptr;
+    ret.arg_types       = nullptr;
+    ret.arg_pointers    = nullptr;
+    ret.num_args        = -1;
+
+#if CHAMELEON_TOOL_SUPPORT
+    if(task) {
+        ret.num_args            = task->arg_num;        
+        if(ret.num_args > 0) {
+            ret.arg_sizes       = &(task->arg_sizes[0]);
+            ret.arg_types       = &(task->arg_types[0]);
+            ret.arg_pointers    = &(task->arg_hst_pointers[0]);
+        }
+    }
+#endif
+
+    return ret;
+}
+
+cham_t_task_param_info_t cham_t_get_task_param_info_by_id(TYPE_TASK_ID task_id) {
+    cham_migratable_task_t* task = _map_overall_tasks.find(task_id);
+    return cham_t_get_task_param_info(task);
+}
+
 static cham_t_interface_fn_t cham_t_fn_lookup(const char *s) {
     if(!strcmp(s, "cham_t_set_callback"))
         return (cham_t_interface_fn_t)cham_t_set_callback;
@@ -238,6 +266,10 @@ static cham_t_interface_fn_t cham_t_fn_lookup(const char *s) {
         return (cham_t_interface_fn_t)cham_t_get_rank_data;
     else if(!strcmp(s, "cham_t_get_rank_info"))
         return (cham_t_interface_fn_t)cham_t_get_rank_info;
+    else if(!strcmp(s, "cham_t_get_task_param_info"))
+        return (cham_t_interface_fn_t)cham_t_get_task_param_info;
+    else if(!strcmp(s, "cham_t_get_task_param_info_by_id"))
+        return (cham_t_interface_fn_t)cham_t_get_task_param_info_by_id;
     else if(!strcmp(s, "cham_t_get_task_data"))
         return (cham_t_interface_fn_t)cham_t_get_task_data;
     else

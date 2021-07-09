@@ -5,7 +5,6 @@
 #include <numeric>
 #include <algorithm>
 #include <cassert>
-#include <iostream>
 
 #pragma region Local Helpers
 template <typename T>
@@ -62,8 +61,8 @@ void compute_num_tasks_to_offload(std::vector<int32_t>& tasksToOffloadPerRank,
     output_l = loadInfoRanks[output_r];
 
     while(output_r<chameleon_comm_size) {
-        // TODO: maybe use this to compute load dependent on characteristics
-        // of target rank (slow node..)
+
+        // TODO: maybe use this to compute load dependent on characteristics of target rank (slow node..)
         int target_load_out = avg_l;
         int target_load_in = avg_l;
 
@@ -137,7 +136,7 @@ void compute_num_tasks_to_offload(std::vector<int32_t>& tasksToOffloadPerRank,
             double other_val    = (double) loadInfoRanks[other_idx];
             double cur_diff     = cur_load-other_val;
 
-            // check pos what is this rank?
+            // check pos what is this rank
             int rank_pos        = tmp_sorted_idx[pos];
 
 #if !FORCE_MIGRATION
@@ -182,6 +181,8 @@ void pair_num_tasks_to_offload(std::vector<int32_t>& tasks_to_offload_per_rank,
                                 std::vector<double>& predicted_load_info_ranks,
                                 int32_t num_tasks_local,
                                 int32_t num_tasks_stolen) {
+
+#if CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE > 0 && CHAM_PRED_MIGRATION > 0
 
     // check pred_info list before sorting it
     int num_ranks = predicted_load_info_ranks.size();
@@ -264,15 +265,18 @@ void pair_num_tasks_to_offload(std::vector<int32_t>& tasks_to_offload_per_rank,
                     appro_num_tasks = 1;
                 
                 // return the results
-#if CHAM_PRED_MIGRATION == 1
+    #if CHAM_PRED_MIGRATION == 1
                 tasks_to_offload_per_rank[vic_rank] = appro_num_tasks;
-#elif CHAM_PRED_MIGRATION == 2
+    #elif CHAM_PRED_MIGRATION == 2
                 // tasks_to_offload_per_rank[vic_rank] = appro_num_tasks;
                 tasks_to_offload_per_rank[vic_rank] = 0;
-#endif
+    #endif
             }
         }
     }
+
+#endif /* CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE > 0 && CHAM_PRED_MIGRATION > 0 */
+
 }
 
 

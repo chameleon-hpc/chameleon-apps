@@ -27,11 +27,10 @@ typedef enum cham_t_callback_types_t {
     cham_t_callback_select_tasks_for_migration  = 10,
     cham_t_callback_select_num_tasks_to_replicate = 11,
     cham_t_callback_change_freq_for_execution   = 12,
-    cham_t_callback_task_end                    = 13,
-    cham_t_callback_task_begin                  = 14,
-    cham_t_callback_get_load_stats_per_taskwait = 15,
-    cham_t_callback_train_prediction_model      = 16,
-    cham_t_callback_valid_prediction_model      = 17
+    cham_t_callback_get_load_stats_per_taskwait = 13,
+    cham_t_callback_get_task_wallclock_time     = 14,
+    cham_t_callback_train_prediction_model      = 15,
+    cham_t_callback_load_prediction_model       = 16
 } cham_t_callback_types_t;
 
 typedef enum cham_t_set_result_t {
@@ -102,6 +101,13 @@ typedef struct cham_t_rank_info_t {
     int32_t comm_size;
 } cham_t_rank_info_t;
 
+typedef struct cham_t_task_param_info_t {
+    int32_t num_args;
+    int64_t *arg_sizes;
+    int64_t *arg_types;
+    void **arg_pointers;
+} cham_t_task_param_info_t;
+
 typedef void (*cham_t_interface_fn_t) (void);
 
 typedef cham_t_interface_fn_t (*cham_t_function_lookup_t) (
@@ -164,9 +170,6 @@ typedef struct cham_t_start_tool_result_t {
     cham_t_data_t tool_data;
 } cham_t_start_tool_result_t;
 
-/*****************************************************************************
- * Data for the tool
- ****************************************************************************/
 
 /*****************************************************************************
  * Getter / Setter
@@ -184,6 +187,8 @@ typedef int (*cham_t_get_callback_t) (
 typedef cham_t_data_t *(*cham_t_get_thread_data_t) (void);
 typedef cham_t_data_t *(*cham_t_get_rank_data_t) (void);
 typedef cham_t_data_t *(*cham_t_get_task_data_t) (TYPE_TASK_ID);
+typedef cham_t_task_param_info_t (*cham_t_get_task_param_info_by_id_t) (TYPE_TASK_ID);
+typedef cham_t_task_param_info_t (*cham_t_get_task_param_info_t) (cham_migratable_task_t*);
 typedef cham_t_rank_info_t *(*cham_t_get_rank_info_t) (void);
 
 /*****************************************************************************
@@ -287,17 +292,25 @@ typedef int32_t (*cham_t_callback_change_freq_for_execution_t)(
     int32_t total_created_tasks_per_rank
 );
 
-typedef double (*cham_t_callback_get_load_stats_per_taskwait_t)(
+typedef void (*cham_t_callback_get_load_stats_per_taskwait_t)(
     int32_t taskwait_counter,
     int32_t thread_id,
     double taskwait_load
 );
 
-typedef bool (*cham_t_callback_train_prediction_model_t)(
-    int32_t taskwait_counter
+typedef void (*cham_t_callback_get_task_wallclock_time_t)(
+    int32_t taskwait_counter,
+    int32_t thread_id,
+    int task_id,
+    double wallclock_time
 );
 
-typedef std::vector<double> (*cham_t_callback_valid_prediction_model_t)(
+typedef bool (*cham_t_callback_train_prediction_model_t)(
+    int32_t taskwait_counter,
+    int prediction_mode
+);
+
+typedef std::vector<double> (*cham_t_callback_load_prediction_model_t)(
     int32_t taskwait_counter,
     int prediction_mode
 );

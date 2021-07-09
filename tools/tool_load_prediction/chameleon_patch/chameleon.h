@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <omp.h>
+#include <sched.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -86,8 +87,8 @@ typedef enum chameleon_result_types_t {
 
 typedef struct chameleon_map_data_entry_t {
     void *valptr;
-    size_t size;
-    int type;
+    size_t size;    // size of parameter in bytes
+    int type;       // int representing bitwise combination of chameleon_tgt_map_type values
 } chameleon_map_data_entry_t;
 
 static chameleon_map_data_entry_t chameleon_map_data_entry_create(void* arg_ptr, size_t arg_size, int arg_type) {
@@ -165,6 +166,8 @@ int32_t chameleon_taskyield();
 void chameleon_print(int print_prefix, const char *prefix, int rank, ... );
 
 int32_t chameleon_determine_base_addresses(void * main_ptr);
+
+void chameleon_set_proc_cpuset(cpu_set_t mask);
 
 void chameleon_set_tracing_enabled(int enabled);
 
