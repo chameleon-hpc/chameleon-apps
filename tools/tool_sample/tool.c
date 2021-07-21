@@ -40,39 +40,6 @@ typedef struct my_task_data_t {
     double * sample_data;    
 } my_task_data_t;
 
-// static cham_t_get_state_t cham_t_get_state;
-// static cham_t_get_thread_data_t cham_t_get_thread_data;
-// static cham_t_get_parallel_info_t cham_t_get_parallel_info;
-// static cham_t_get_unique_id_t cham_t_get_unique_id;
-// static cham_t_get_num_procs_t cham_t_get_num_procs;
-// static cham_t_get_num_places_t cham_t_get_num_places;
-// static cham_t_get_place_proc_ids_t cham_t_get_place_proc_ids;
-// static cham_t_get_place_num_t cham_t_get_place_num;
-// static cham_t_get_partition_place_nums_t cham_t_get_partition_place_nums;
-// static cham_t_get_proc_id_t cham_t_get_proc_id;
-// static cham_t_enumerate_states_t cham_t_enumerate_states;
-// static cham_t_enumerate_mutex_impls_t cham_t_enumerate_mutex_impls;
-
-// static void print_ids(int level)
-// {
-//   int task_type, thread_num;
-//   cham_t_frame_t *frame;
-//   cham_t_data_t *task_parallel_data;
-//   cham_t_data_t *task_data;
-//   int exists_task = cham_t_get_task_info(level, &task_type, &task_data, &frame,
-//                                        &task_parallel_data, &thread_num);
-//   char buffer[2048];
-//   format_task_type(task_type, buffer);
-//   if (frame)
-//     printf("%" PRIu64 ": task level %d: parallel_id=%" PRIu64
-//            ", task_id=%" PRIu64 ", exit_frame=%p, reenter_frame=%p, "
-//            "task_type=%s=%d, thread_num=%d\n",
-//            cham_t_get_thread_data()->value, level,
-//            exists_task ? task_parallel_data->value : 0,
-//            exists_task ? task_data->value : 0, frame->exit_frame.ptr,
-//            frame->enter_frame.ptr, buffer, task_type, thread_num);
-// }
-
 static void
 on_cham_t_callback_thread_init(
     cham_t_data_t *thread_data)
@@ -539,19 +506,9 @@ int cham_t_initialize(
     cham_t_get_task_param_info_by_id= (cham_t_get_task_param_info_by_id_t)  lookup("cham_t_get_task_param_info_by_id");
     cham_t_get_task_data            = (cham_t_get_task_data_t)              lookup("cham_t_get_task_data");
 
+    // not sure whether we have such things. I don't believe it
     // cham_t_get_unique_id = (cham_t_get_unique_id_t) lookup("cham_t_get_unique_id");
     // cham_t_get_num_procs = (cham_t_get_num_procs_t) lookup("cham_t_get_num_procs");
-
-    // cham_t_get_state = (cham_t_get_state_t) lookup("cham_t_get_state");
-    // cham_t_get_thread_data = (cham_t_get_thread_data_t) lookup("cham_t_get_thread_data");
-    // cham_t_get_parallel_info = (cham_t_get_parallel_info_t) lookup("cham_t_get_parallel_info");
-    // cham_t_get_num_places = (cham_t_get_num_places_t) lookup("cham_t_get_num_places");
-    // cham_t_get_place_proc_ids = (cham_t_get_place_proc_ids_t) lookup("cham_t_get_place_proc_ids");
-    // cham_t_get_place_num = (cham_t_get_place_num_t) lookup("cham_t_get_place_num");
-    // cham_t_get_partition_place_nums = (cham_t_get_partition_place_nums_t) lookup("cham_t_get_partition_place_nums");
-    // cham_t_get_proc_id = (cham_t_get_proc_id_t) lookup("cham_t_get_proc_id");
-    // cham_t_enumerate_states = (cham_t_enumerate_states_t) lookup("cham_t_enumerate_states");
-    // cham_t_enumerate_mutex_impls = (cham_t_enumerate_mutex_impls_t) lookup("cham_t_enumerate_mutex_impls");
 
     register_callback(cham_t_callback_thread_init);
     register_callback(cham_t_callback_thread_finalize);
@@ -565,8 +522,7 @@ int cham_t_initialize(
     // Priority is cham_t_callback_select_tasks_for_migration (fine-grained)
     // if not registered cham_t_callback_select_num_tasks_to_offload is used (coarse-grained)
     // register_callback(cham_t_callback_select_tasks_for_migration);
-    register_callback(cham_t_callback_select_num_tasks_to_offload);
- 
+    register_callback(cham_t_callback_select_num_tasks_to_offload); 
     register_callback(cham_t_callback_select_num_tasks_to_replicate);
 
     cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
