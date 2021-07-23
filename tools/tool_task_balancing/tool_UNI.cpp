@@ -17,12 +17,14 @@
 #include <sys/syscall.h>
 #include <inttypes.h>
 #include <assert.h>
+#include <ctime>
 
 // @jusch includes
 #include <map>
 #include <string>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 
 #include <mutex>
 #include <atomic>
@@ -35,18 +37,13 @@
 #include <iomanip>
 #include <limits>
 
-#include "tool_likwid.h"
+// #include "tool_likwid.h"
+#include "likwid_metric_calculation.h"
 
 
 #define UNIFORM
 const int MAX_EVENT_SIZE = 10000;
 const int MAX_NUMBER_TASKS = 150;
-
-#ifdef TRACE
-#include "VT.h"
-static int event_tool_task_create = -1;
-static int event_tool_task_exec = -1;
-#endif
 
 static cham_t_set_callback_t cham_t_set_callback;
 static cham_t_get_callback_t cham_t_get_callback;
@@ -72,6 +69,22 @@ typedef struct my_task_log_t {
     int id;
 } my_task_log_t;
 
+// Likwid Variables
+static std::atomic<int> lkw_perfom_is_init = 0;
+static std::mutex lkw_mtx_init;
+static std::mutex lkw_mtx_output;
+static std::mutex lkw_mtx_uncore;
+static std::atomic<int> lkw_header_printed = 0;
+
+static std::string estr("");
+static std::vector<std::string> enames;
+static int n_events = -1;
+static int n_threads;
+static int* cpu_ids;
+static double inverseClock = -1;
+static int lkw_grp_id = -1;
+static std::vector<std::map<std::string, double>> maps_per_thread;
+static std::vector<likwid_metric_info_t> metric_infos = lkw_init_metric_list();
 
 // @jusch functionalities
 
@@ -85,129 +98,50 @@ const std::string currentTime() {
     return buf;
 }
 
-std::vector<std::string> getEventnames(){
-    /* Group ID will let us get group and event names */
-    auto gid = perfmon_getIdOfActiveGroup();
-
-    /* Get group name and number of events */
-    auto group_name = perfmon_getGroupName(gid);
-    auto number_events = perfmon_getNumberOfEvents(gid);
-
-    std::vector<std::string> events;
-
-    for (int i=0; i<number_events; i++)
-        events.push_back(std::string(perfmon_getEventName(gid, i)));
-
-    return events;
+double get_seconds(timespec spec) {
+    double sec = spec.tv_sec + (double)spec.tv_nsec / 1e9;
+    return sec;
 }
 
-static void printResults(){
-    const char *region_name, *group_name, *event_name, *metric_name;
-    double event_value, metric_value;
-    int gid = 0;
-    int t, i, k;
-
-    /* Read file output by likwid so that we can process results */
-    perfmon_readMarkerFile(getenv("LIKWID_FILEPATH"));
-
-    /* Get information like region name, number of events, and number of
-     * metrics. Notice that number of regions printed here is actually
-     * (num_regions*num_groups), because perfmon considers a region to be the
-     * region/group combo. In other words, each time a region is measured with
-     * a different group or event set, perfmon considers it a new region.
-     *
-     * Therefore, if we have two regions and 3 groups measured for each,
-     * perfmon_getNumberOfRegions() will return 6.
-     */
-    printf("Marker API measured %d regions\n", perfmon_getNumberOfRegions());
-    for (i=0;i<perfmon_getNumberOfRegions();i++)
-    {
-        gid = perfmon_getGroupOfRegion(i);
-        printf("Region %s with %d events and %d metrics\n",
-               perfmon_getTagOfRegion(i), perfmon_getEventsOfRegion(i),
-               perfmon_getMetricsOfRegion(i));
-    }
-    printf("\n");
-
-    /* Print per-thread results. */
-    printf("detailed results follow. Notice that the region \"calc_flops\"\n"
-           "will not appear, as it was reset after each time it was measured.\n");
-    printf("\n");
-
-    const char * result_header = "%6s : %15s : %10s : %6s : %40s : %30s \n";
-    const char * result_format = "%6d : %15s : %10s : %6s : %40s : %30f \n";
-    printf(result_header, "thread", "region", "group", "type",
-           "result name", "result value");
-
-    /* Uncomment the for loop if you'd like to inspect all threads */
-    t = 0;
-    //for (t = 0; t < NUM_THREADS; t++)
-    {
-        for (i = 0; i < perfmon_getNumberOfRegions(); i++)
-        {
-            /* Returns the user-supplied region name */
-            region_name = perfmon_getTagOfRegion(i);
-
-            /* gid is the group ID independent of region, where as i is the ID
-             * of the region/group combo
-             */
-            gid = perfmon_getGroupOfRegion(i);
-            /* Get the name of the group measured, like "FLOPS_DP" or "L2" */
-            group_name = perfmon_getGroupName(gid);
-
-            /* Get info for each event */
-            for (k = 0; k < perfmon_getNumberOfEvents(gid); k++)
-            {
-                /* Get the event name, like "INSTR_RETIRED_ANY" */
-                event_name = perfmon_getEventName(gid, k);
-                /* Get the associated value */
-                event_value = perfmon_getResultOfRegionThread(i, k, t);
-
-                printf(result_format, t, region_name, group_name, "event",
-                       event_name, event_value);
-            }
-
-            /* Get info for each metric */
-            for (k = 0; k < perfmon_getNumberOfMetrics(gid); k++)
-            {
-                /* Get the metric name, like "L2 bandwidth [MBytes/s]" */
-                metric_name = perfmon_getMetricName(gid, k);
-                /* Get the associated value */
-                metric_value = perfmon_getMetricOfRegionThread(i, k, t);
-
-                printf(result_format, t, region_name, group_name, "metric",
-                       metric_name, metric_value);
-            }
-        }
-    }
+static void
+on_cham_t_callback_thread_init(
+    cham_t_data_t *thread_data)
+{
+    int cur_proc_id = likwid_getProcessorId();
+    cpu_ids[omp_get_thread_num()] = cur_proc_id;
 }
-
 
 static void
 on_cham_t_callback_task_create(
         cham_migratable_task_t *task,
         cham_t_data_t *task_data,
         const void *codeptr_ra) {
-#ifdef TRACE
-    if(event_tool_task_create == -1) {
-        const char *event_tool_task_create_name = "tool_task_create";
-        int ierr = VT_funcdef(event_tool_task_create_name, VT_NOCLASS, &event_tool_task_create);
-    }
-    VT_begin(event_tool_task_create);
-#endif
-    TYPE_TASK_ID internal_task_id = chameleon_get_task_id(task);
 
-    // late equipment of task with annotations
-    chameleon_annotations_t *ann = chameleon_get_task_annotations_opaque(task);
-    if (!ann) {
-        ann = chameleon_create_annotation_container();
-        chameleon_set_task_annotations(task, ann);
-    }
-    chameleon_set_annotation_int(ann, "TID", (int) internal_task_id);
+    if(!lkw_perfom_is_init.load()) {
+        // need lock here
+        lkw_mtx_init.lock();
+        // need to check again
+        if(!lkw_perfom_is_init.load()) {
+            int err;
+            err = perfmon_init(n_threads, cpu_ids);
+            if (err < 0) 
+                fprintf(stderr, "Failed to initialize LIKWID's performance monitoring module\n");
+            lkw_grp_id = perfmon_addEventSet(estr.c_str()); // Add eventset string to the perfmon module.
+            if (lkw_grp_id < 0)
+                fprintf(stderr, "Failed to add event string %s to LIKWID's performance monitoring module\n", estr.c_str());
+            err = perfmon_setupCounters(lkw_grp_id);
+            if (err < 0)
+                fprintf(stderr, "Failed to setup group %d in LIKWID's performance monitoring module\n", lkw_grp_id);
 
-#ifdef TRACE
-    VT_end(event_tool_task_create);
-#endif
+            err = perfmon_startCounters();
+            if (err < 0)
+                fprintf(stderr, "Failed to start counters for group %d for thread %d\n", lkw_grp_id, (-1*err)-1);
+
+            // mark as done
+            lkw_perfom_is_init = 1;
+        }
+        lkw_mtx_init.unlock();
+    }
 }
 
 static void
@@ -219,34 +153,38 @@ on_cham_t_callback_task_schedule(
         cham_migratable_task_t *prior_task,
         cham_t_task_flag_t prior_task_flag,
         cham_t_data_t *prior_task_data) {
-#ifdef TRACE
-    if(cham_t_task_start == schedule_type) {
-        if(event_tool_task_exec == -1) {
-            const char *event_tool_task_exec_name = "tool_task_exec";
-            int ierr = VT_funcdef(event_tool_task_exec_name, VT_NOCLASS, &event_tool_task_exec);
-        }
-        VT_begin(event_tool_task_exec);
-    }
-#endif
-    TYPE_TASK_ID internal_task_id = chameleon_get_task_id(task);
+
     cham_t_data_t *rank_data = cham_t_get_rank_data();
 
-    char val_task_flag[50];
-    char val_prior_task_flag[50];
-    cham_t_task_flag_t_value(task_flag, val_task_flag);
-    cham_t_task_flag_t_value(prior_task_flag, val_prior_task_flag);
-
-    // validate that every task (also migrated tasks) keeps annotations
-    //chameleon_annotations_t* ann = chameleon_get_task_annotations_opaque(task);
-    //int tmp_validation_id;
-    //int found = chameleon_get_annotation_int(ann, "TID", &tmp_validation_id);
-    //assert(found == 1 && tmp_validation_id == (int)internal_task_id);
+    int cur_proc_id = likwid_getProcessorId();
+    int thread_num  = omp_get_thread_num();
+    int err;
+    double result;
 
     if (cham_t_task_start == schedule_type) {
 
         auto tmpID = ++ID;
-        auto tag = std::to_string(rank_data->value) + "R" + std::to_string(tmpID);
-        LIKWID_MARKER_START(tag.c_str());
+        auto tag = "R" + std::to_string(rank_data->value) + "T" + std::to_string(tmpID);
+        
+        err = perfmon_readCountersCpu(cur_proc_id);
+        if (lkw_has_uncore_counters(enames, n_events)) {
+            int tmp_first = lkw_find_first_thread_on_socket(thread_num, cpu_ids, n_threads);
+            if (tmp_first != thread_num) {
+                lkw_mtx_uncore.lock();
+                err = perfmon_readCountersCpu(cpu_ids[tmp_first]);
+                lkw_mtx_uncore.unlock();
+            }
+        }
+        if (err < 0)
+            fprintf(stderr, "Failed to read counters for group %d for thread %d\n", lkw_grp_id, (-1*err)-1);
+
+        maps_per_thread[thread_num].clear();
+        for (int j = 0; j < n_events; j++)
+        {
+            std::string cur_event(enames[j]);
+            result = lkw_get_counter_result(lkw_grp_id, j, cur_event, thread_num, cpu_ids, n_threads);
+            maps_per_thread[thread_num][cur_event] = result;
+        }
 
         struct timespec t;
         clock_gettime(CLOCK_MONOTONIC, &t);
@@ -256,19 +194,64 @@ on_cham_t_callback_task_schedule(
         cur_task_data->id = tmpID;
         task_data->ptr = (void *) cur_task_data;
 
-
-    }
-    else if (cham_t_task_end == schedule_type){
+    } else if (cham_t_task_end == schedule_type) {
+        
         struct timespec end_time;
         clock_gettime(CLOCK_MONOTONIC, &end_time);
 
         my_task_log_t *cur_task_data = (my_task_log_t *) task_data->ptr;
         auto start_time = cur_task_data->start;
         int tmpID = cur_task_data->id;
+        auto tag = "R" + std::to_string(rank_data->value) + "T" + std::to_string(tmpID);
 
-        auto tag = std::to_string(rank_data->value) + "R" + std::to_string(tmpID);
-        LIKWID_MARKER_STOP(tag.c_str());
+        err = perfmon_readCountersCpu(cur_proc_id);
+        if (lkw_has_uncore_counters(enames, n_events)) {
+            int tmp_first = lkw_find_first_thread_on_socket(thread_num, cpu_ids, n_threads);
+            if (tmp_first != thread_num) {
+                lkw_mtx_uncore.lock();
+                err = perfmon_readCountersCpu(cpu_ids[tmp_first]);
+                lkw_mtx_uncore.unlock();
+            }
+        }
+        if (err < 0)
+            fprintf(stderr, "Failed to read counters for group %d for thread %d\n", lkw_grp_id, (-1*err)-1);
 
+        for (int j = 0; j < n_events; j++)
+        {
+            std::string cur_event(enames[j]);
+            result = lkw_get_counter_result(lkw_grp_id, j, cur_event, thread_num, cpu_ids, n_threads);
+            maps_per_thread[thread_num][cur_event] = lkw_calculate_difference(cur_event, maps_per_thread[thread_num][cur_event], result);
+        }
+        maps_per_thread[thread_num]["time"] = get_seconds(end_time) - get_seconds(start_time);
+        maps_per_thread[thread_num]["inverseClock"] = inverseClock;
+
+        // calculate metrics
+        std::vector<likwid_metric_value_t> results = lkw_calculate_metrics(metric_infos, maps_per_thread[thread_num]);
+
+        // ========== DEBUG: Metric output
+        std::stringstream ss_vals("");
+        std::stringstream ss_header("");
+
+        if(!lkw_header_printed.load()) {
+            ss_header << "TaskTag;CPU;Rank;Thread;ExecTime;";
+        }
+        ss_vals << "Tag#" << tag << ";" << cur_proc_id << ";" << rank_data->value << ";" << thread_num << ";" << maps_per_thread[thread_num]["time"] << ";";
+        for (const auto &entry : results) {
+            if (!lkw_header_printed.load()) {
+                ss_header << entry.metric_name << ";";
+            }
+            ss_vals << entry.value << ";";
+        }
+        lkw_mtx_output.lock();
+        if (!lkw_header_printed.load()) {
+            fprintf(stderr, "%s\n", ss_header.str().c_str());
+            lkw_header_printed = 1;
+        }
+        fprintf(stderr, "%s\n", ss_vals.str().c_str());
+        lkw_mtx_output.unlock();
+        // ========== DEBUG: Metric output
+        
+        /*
         cham_t_task_param_info_t p_info = cham_t_get_task_param_info(task);
         std::vector<long double> inSizes, outSizes;
         long double overallSize = 0;
@@ -294,12 +277,10 @@ on_cham_t_callback_task_schedule(
                                                                                               inSizes, outSizes,
                                                                                               overallSize});
         m.unlock();
+        */
 
         // dont need tool data any more ==> clean up
         free(task_data->ptr);
-#ifdef TRACE
-        VT_end(event_tool_task_exec);
-#endif
     }
 }
 
@@ -316,6 +297,48 @@ do{                                                                             
 int cham_t_initialize(
         cham_t_function_lookup_t lookup,
         cham_t_data_t *tool_data) {
+    
+    timer_init();
+    inverseClock = 1.0/timer_getCycleClock();
+
+    // Read out env variable which events should be measured
+    estr = std::string("INSTR_RETIRED_ANY:FIXC0,") +
+        std::string("CPU_CLK_UNHALTED_CORE:FIXC1,") + 
+        std::string("CPU_CLK_UNHALTED_REF:FIXC2,") +
+        std::string("TEMP_CORE:TMP0,") +
+        std::string("PWR_PKG_ENERGY:PWR0,") +
+        std::string("PWR_PP0_ENERGY:PWR1,") +
+        std::string("PWR_DRAM_ENERGY:PWR3");
+
+    enames.push_back("INSTR_RETIRED_ANY:FIXC0");
+    enames.push_back("CPU_CLK_UNHALTED_CORE:FIXC1"); 
+    enames.push_back("CPU_CLK_UNHALTED_REF:FIXC2");
+    enames.push_back("TEMP_CORE:TMP0");
+    enames.push_back("PWR_PKG_ENERGY:PWR0");
+    enames.push_back("PWR_PP0_ENERGY:PWR1");
+    enames.push_back("PWR_DRAM_ENERGY:PWR3");
+
+    // estr = std::string("INSTR_RETIRED_ANY:FIXC0,") +
+    //     std::string("CPU_CLK_UNHALTED_CORE:FIXC1,") + 
+    //     std::string("CPU_CLK_UNHALTED_REF:FIXC2,") +
+    //     std::string("UOPS_EXECUTED_USED_CYCLES:PMC0,") +
+    //     std::string("UOPS_EXECUTED_STALL_CYCLES:PMC1,") +
+    //     std::string("CPU_CLOCK_UNHALTED_TOTAL_CYCLES:PMC2,") +
+    //     std::string("UOPS_EXECUTED_STALL_CYCLES:PMC3:EDGEDETECT");
+
+    // enames.push_back("INSTR_RETIRED_ANY:FIXC0");
+    // enames.push_back("CPU_CLK_UNHALTED_CORE:FIXC1"); 
+    // enames.push_back("CPU_CLK_UNHALTED_REF:FIXC2");
+    // enames.push_back("UOPS_EXECUTED_USED_CYCLES:PMC0");
+    // enames.push_back("UOPS_EXECUTED_STALL_CYCLES:PMC1");
+    // enames.push_back("CPU_CLOCK_UNHALTED_TOTAL_CYCLES:PMC2");
+    // enames.push_back("UOPS_EXECUTED_STALL_CYCLES:PMC3:EDGEDETECT");
+
+    // allocate relevant data structures for likwid workaround
+    n_events = enames.size();
+    n_threads = omp_get_max_threads();
+    cpu_ids = (int*)malloc(sizeof(int)*n_threads);
+    maps_per_thread.resize(n_threads);
 
     cham_t_set_callback = (cham_t_set_callback_t) lookup("cham_t_set_callback");
     cham_t_get_callback = (cham_t_get_callback_t) lookup("cham_t_get_callback");
@@ -326,7 +349,7 @@ int cham_t_initialize(
     cham_t_get_task_param_info_by_id = (cham_t_get_task_param_info_by_id_t) lookup("cham_t_get_task_param_info_by_id");
     cham_t_get_task_data = (cham_t_get_task_data_t) lookup("cham_t_get_task_data");
 
-
+    register_callback(cham_t_callback_thread_init);
     register_callback(cham_t_callback_task_create);
     register_callback(cham_t_callback_task_schedule);
 
@@ -340,6 +363,7 @@ int cham_t_initialize(
 void cham_t_finalize(cham_t_data_t *tool_data) {
     cham_t_data_t *rank_data = cham_t_get_rank_data();
 
+    /*
     std::vector<long double> inSize;
     std::vector<long double> outSize;
 
@@ -501,6 +525,7 @@ void cham_t_finalize(cham_t_data_t *tool_data) {
     file_N.close();
 
     LIKWID_MARKER_CLOSE;
+    */
 
     printf("0: cham_t_event_runtime_shutdown\n");
 }

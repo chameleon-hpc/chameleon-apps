@@ -15,8 +15,7 @@ debug:
 likwid: LIKWID_LIB=$(shell echo $$(dirname $$(which likwid-perfctr)))/../lib/
 likwid: LIKWID_INCLUDE=$(shell echo $$(dirname $$(which likwid-perfctr)))/../include/
 likwid:
-	$(CC) -g -O0 -shared -fPIC -std=gnu++11 -pthread -DLIKWID_PERFMON -L${LIKWID_LIB} -I${LIKWID_INCLUDE} -o $(TOOL_NAME)_UNI.so $(TOOL_NAME)_UNI.cpp -llikwid
-	$(CC) -g -O0 -shared -fPIC -std=gnu++11 -pthread -DLIKWID_PERFMON -L${LIKWID_LIB} -I${LIKWID_INCLUDE} -o $(TOOL_NAME)_NU.so $(TOOL_NAME)_NU.cpp -llikwid
-
+	icc -fPIC -O3 -c -o tinyexpr.o tinyexpr.c
+	icpc -shared -fPIC -qopenmp -O3 -std=gnu++11 -pthread -L/opt/likwid/bin/../lib/ -I/opt/likwid/bin/../include/ -DLIKWID_PERFMON -o $(TOOL_NAME)_UNI.so $(TOOL_NAME)_UNI.cpp tinyexpr.o -llikwid
 
 ###### -std=gnu++11
