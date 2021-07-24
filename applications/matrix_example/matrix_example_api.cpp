@@ -499,7 +499,10 @@ int main(int argc, char **argv)
         int num_to_replicate            = 10;
 #endif
         // Testing with serial task creation for static task order
+        // int i=0;
         // #pragma omp single
+        //     for(int j=0; j<numberOfTasks; j++) {
+        //         i=(j*12)%48+ (int)(j/4); // Round Robin domain distribution (48 threads, no Comm thread)
 		#pragma omp for
     		for(int i=0; i<numberOfTasks; i++) {
                 int cur_size = matrixSize;
