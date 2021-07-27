@@ -3,3 +3,4 @@ __pycache__
 output_*
 core*
 applications/matrix_example/testOutputs/
+tools/tool_topo/testing
