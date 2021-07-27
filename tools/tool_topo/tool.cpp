@@ -8,13 +8,14 @@
 #define __STDC_FORMAT_MACROS
 #endif
 
-// #include "tool.h"
 #include <mpi.h>
 #include <mutex>
+#include <fstream>
+#include <cstring>
+using namespace std;
 
 #include "chameleon.h"
 #include "chameleon_tools.h"
-// #include "commthread.h"
 
 #include <unistd.h>
 #include <sys/syscall.h>
@@ -52,9 +53,56 @@ typedef struct my_task_data_t {
     double * sample_data;    
 } my_task_data_t;
 
-// returns true if the nodes are in the same rack
-bool checkSameRack(char* node1, char* node2){
-
+// return true if nodes are directly connected to the same switch
+// (returns also false if node couldn't be found)
+bool checkSameRack(char* node1_chars, char* node2_chars){
+    // printf("CheckSameRack for %s %s\n",node1_chars,node2_chars);
+    string node1 = node1_chars;
+    string node2 = node2_chars;
+    std::ifstream topo_file;
+    // topo_file.open("testinput.log");
+    topo_file.open("mapping_switches_nodes.log");
+    int curLine = 0;
+    int line1 = -1;
+    bool found1 = false;
+    std::string switch1;
+    std::string switch2;
+    int line2 = -1;
+    bool found2 = false;
+    std::string line;
+    std::string currentSwitch;
+    // search for the lines
+    while(getline(topo_file, line)){
+        // printf("Checking Line %d of topo_file.\n",curLine);
+        if (line.find("Switch")!=string::npos){
+            currentSwitch = line;
+        }
+        if (!found1 && line.find(node1)!=string::npos){
+            // printf("Found Node1 in line %d!\n",curLine);
+            line1 = curLine;
+            switch1 = currentSwitch;
+            found1 = true;
+        }
+        if (!found2 && line.find(node2)!=string::npos){
+            // printf("Found Node2 in line %d!\n",curLine);
+            line2 = curLine;
+            switch2 = currentSwitch;
+            found2 = true;
+        }
+        if (found1 && found2){
+            // printf("Both nodes have been found!\n");
+            break;
+        }
+        curLine++;
+    }
+    // printf("Found Node1 (%s) in line %d and Node2 (%s) in line %d\n",node1_chars,line1,node2_chars,line2);
+    if (found1 && found2){
+        // printf("Node1:%s Switch1:%s Node2:%s Switch2:%s\n",node1_chars,switch1.c_str(),node2_chars,switch2.c_str());
+        if (switch1.compare(switch2) == 0){
+            return true;
+        }
+    }
+    topo_file.close();
     return false;
 }
 
@@ -198,92 +246,32 @@ void compute_distance_matrix(){
         printf("Rank %d thinks rank %d runs on node %s\n",myRank,i,rank_nodes[i]);
     }
 
-    // testing Allgather: working correctly with int
-    // int* rank_nodes = (int*)malloc(r_info->comm_size * sizeof(int));
-    // MPI_Allgather(
-    //     &myRank, //void* send_data,
-    //     1, //int send_count,
-    //     MPI_INT, //MPI_Datatype send_datatype,
-    //     rank_nodes, //void* recv_data,
-    //     1, //int recv_count,
-    //     MPI_INT, //MPI_Datatype recv_datatype,
-    //     topotool_comm //MPI_Comm communicator
-    // ); 
-    // for(int i = 0; i<r_info->comm_size; i++){
-    //     printf("Rank %d has on array position %d the value: %d\n",myRank,i,rank_nodes[i]);
-    // }
+    topo_distances = (uint8_t*)malloc(r_info->comm_size * sizeof(uint8_t));
 
-    // testing if MPI works: yes it does
-    // if (myRank == 0){
-    //     int testint = 42;
-    //     MPI_Send(
-    //         &testint, //void* data,
-    //         1, //int count,
-    //         MPI_INT, // MPI_Datatype datatype,
-    //         1, //int destination,
-    //         0, //int tag,
-    //         topotool_comm //MPI_Comm communicator)
-    //     );
-    // }
-    // else if (myRank == 1){
-    //     int testint = 0;
-    //     MPI_Recv(
-    //         &testint, //void* data,
-    //         1, //int count,
-    //         MPI_INT, //MPI_Datatype datatype,
-    //         0, //int source,
-    //         MPI_ANY_TAG, //int tag,
-    //         topotool_comm, //MPI_Comm communicator,
-    //         MPI_STATUS_IGNORE //MPI_Status* status)
-    //     );
-    //     printf("Rank %d just received int %d\n",myRank,testint);
-    // }
+    // Calculate distances to other ranks
+    for (int i = 0; i<r_info->comm_size; i++){
+        // On the same node
+        if (strcmp(my_nodename, rank_nodes[i]) == 0){
+            topo_distances[i]=0;
+        }
+        // On the same rack
+        else if (checkSameRack(my_nodename, rank_nodes[i])){
+            topo_distances[i]=2;
+        }
+        // Not on the same rack
+        else{
+            topo_distances[i]=4;
+        }
+    }
 
-    // testing if MPI works with strings: "nullterminating char arrays" were the problem! Now it works:
-    // if (myRank == 0){
-    //     MPI_Send(
-    //         my_nodename, //void* data,
-    //         nodename_length+1, //int count,
-    //         MPI_CHAR, // MPI_Datatype datatype,
-    //         1, //int destination,
-    //         0, //int tag,
-    //         topotool_comm //MPI_Comm communicator)
-    //     );
-    //     printf("Rank 0 sent the string %s.\n",my_nodename);
-    // }
-    // else if (myRank == 1){
-    //     char teststring[nodename_length+1];// = new char [nodename_length+1]();
-    //     strncpy(teststring,"1234567",7);
-    //     printf("Teststring before receiving anything: %s\n",teststring);
-    //     MPI_Recv(
-    //         teststring, //void* data,
-    //         nodename_length+1, //int count,
-    //         MPI_CHAR, //MPI_Datatype datatype,
-    //         0, //int source,
-    //         MPI_ANY_TAG, //int tag,
-    //         topotool_comm, //MPI_Comm communicator,
-    //         MPI_STATUS_IGNORE //MPI_Status* status)
-    //     );
-    //     printf("Rank %d just received string %s\n",myRank,teststring);
-    // }
-
-    // topo_distances = (uint8_t*)malloc(r_info->comm_size * sizeof(uint8_t));
-
-    // // Calculate distances to other ranks
-    // for (int i = 0; i<r_info->comm_size; i++){
-    //     // On the same node
-    //     if (strcmp(my_nodename, rank_nodes[i]) == 0){
-    //         topo_distances[i]=0;
-    //     }
-    //     // On the same rack
-    //     else if (checkSameRack(my_nodename, rank_nodes[i])){
-    //         topo_distances[i]=2;
-    //     }
-    //     // Not on the same rack
-    //     else{
-    //         topo_distances[i]=4;
-    //     }
-    // }
+    // print distance matrix
+    string print_distances = "";
+    for(int i = 0; i<r_info->comm_size; i++){
+        // printf("Rank %d from node %s has distance %d to rank %d on node%s\n",myRank,my_nodename,topo_distances[i],i,rank_nodes[i]);
+        print_distances += to_string(topo_distances[i])+" ";
+    }
+    printf("Distances from rank %d: %s\n",myRank,print_distances.c_str());
+    
 }
 
 #define register_callback_t(name, type)                                         \
