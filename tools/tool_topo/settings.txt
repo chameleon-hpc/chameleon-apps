@@ -1,0 +1,8 @@
+compile with
+    make
+
+Environment Variables (when running chameleon):
+
+TOPO_MIGRATION_STRAT (default 0):
+    0: default chameleon, not topology aware, load ordered migration
+    1: aggressive offload to nearest nodes until load equals average load

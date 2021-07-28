@@ -12,6 +12,7 @@
 #include <mutex>
 #include <fstream>
 #include <cstring>
+#include <atomic>
 using namespace std;
 
 #include "chameleon.h"
@@ -21,6 +22,7 @@ using namespace std;
 #include <sys/syscall.h>
 #include <inttypes.h>
 #include <assert.h>
+#include <numeric>
 
 #ifdef TRACE
 #include "VT.h"
@@ -39,7 +41,16 @@ static cham_t_get_task_param_info_t cham_t_get_task_param_info;
 static cham_t_get_task_param_info_by_id_t cham_t_get_task_param_info_by_id;
 static cham_t_get_task_data_t cham_t_get_task_data;
 
+std::atomic<int> TOPO_MIGRATION_STRAT(0);
+
 static uint8_t* topo_distances; // distance in hops from the current rank to the rank at the corresponding index (sorted after ranks) 
+static uint8_t* topo_region_0; // all ranks in the same node as the current rank
+static uint8_t* topo_region_2; // all ranks in the same rack but not the same node as the current rank
+static uint8_t* topo_region_4; // all ranks not in the same rack
+static uint8_t ranks_in_r0; // number of ranks in topo region 0
+static uint8_t ranks_in_r2; // number of ranks in topo region 2
+static uint8_t ranks_in_r4; // number of ranks in topo region 4
+
 static const int nodename_length = 7; // 56=8*7, nodename has max 7 chars
 static char my_nodename[nodename_length+1]; // +1 for the string terminator
 std::mutex comp_topology_mutex;
@@ -52,6 +63,15 @@ typedef struct my_task_data_t {
     size_t size_data;
     double * sample_data;    
 } my_task_data_t;
+
+void getEnvironment(){
+    char *tmp = nullptr;
+    tmp = nullptr;
+    tmp = std::getenv("TOPO_MIGRATION_STRAT");
+    if(tmp) {
+         TOPO_MIGRATION_STRAT = std::atof(tmp);
+    }
+}
 
 // return true if nodes are directly connected to the same switch
 // (returns also false if node couldn't be found)
@@ -159,55 +179,121 @@ on_cham_t_callback_select_num_tasks_to_offload(
         //printf("R#%d MIN_REL_LOAD_IMBALANCE_BEFORE_MIGRATION=%f\n", r_info->comm_rank, min_rel_imbalance_before_migration);
     }
 
-    // Sort rank loads and keep track of indices
-    int tmp_sorted_array[r_info->comm_size][2];
-    int i;
-    for (i = 0; i < r_info->comm_size; i++)
-	{
-        tmp_sorted_array[i][0] = load_info_per_rank[i];
-        tmp_sorted_array[i][1] = i;
-    }
+    switch(TOPO_MIGRATION_STRAT){
+        // aggressive offload everything to the nearest ranks till they have average load
+        case 1:
+            // compute avg load
+            int total_l = 0;
+            total_l =std::accumulate(&load_info_per_rank[0], &load_info_per_rank[r_info->comm_size], total_l);  
+            int avg_l = total_l / r_info->comm_size;
 
-    qsort(tmp_sorted_array, r_info->comm_size, sizeof tmp_sorted_array[0], compare);
-
-    double min_val      = (double) load_info_per_rank[tmp_sorted_array[0][1]];
-    double max_val      = (double) load_info_per_rank[tmp_sorted_array[r_info->comm_size-1][1]];
-    double cur_load     = (double) load_info_per_rank[r_info->comm_rank];
-
-    double ratio_lb                 = 0.0; // 1 = high imbalance, 0 = no imbalance
-    if (max_val > 0) {
-        ratio_lb = (double)(max_val-min_val) / (double)max_val;
-    }
-
-    if((cur_load-min_val) < min_abs_imbalance_before_migration)
-        return;
-    
-    if(ratio_lb >= min_rel_imbalance_before_migration) {
-        int pos = 0;
-        for(i = 0; i < r_info->comm_size; i++) {
-            if(tmp_sorted_array[i][1] == r_info->comm_rank) {
-                pos = i;
-                break;
-            }
-        }
-
-        // only offload if on the upper side
-        if((pos) >= ((double)r_info->comm_size/2.0))
-        {
-            int other_pos = r_info->comm_size-pos-1;
-            int other_idx = tmp_sorted_array[other_pos][1];
-            double other_val = (double) load_info_per_rank[other_idx];
-
-            double cur_diff = cur_load-other_val;
-            // check absolute condition
-            if(cur_diff < min_abs_imbalance_before_migration)
+            // return if load of current task is lower than some threshold, dependending on avg load
+            int myLoad = load_info_per_rank[r_info->comm_rank];
+            if (myLoad-avg_l < min_abs_imbalance_before_migration){
                 return;
-            double ratio = cur_diff / (double)cur_load;
-            if(other_val < cur_load && ratio >= min_rel_imbalance_before_migration) {
-                //printf("R#%d Migrating\t%d\ttasks to rank:\t%d\tload:\t%f\tload_victim:\t%f\tratio:\t%f\tdiff:\t%f\n", r_info->comm_rank, 1, other_idx, cur_load, other_val, ratio, cur_diff);
-                num_tasks_to_offload_per_rank[other_idx] = 1;
             }
-        }
+
+            // distribute number of tasks higher than avg to ranks with lower than avg load
+            int moveable = myLoad-avg_l;
+            int tmp_ldiff;
+            int inc_l;
+
+            // start searching for migration victims with distance 0
+            for (int i=0; i<ranks_in_r0; i++){
+                tmp_ldiff = avg_l-load_info_per_rank[topo_region_0[i]];
+                if(!(tmp_ldiff<min_rel_imbalance_before_migration)){
+                    inc_l = std::min( tmp_ldiff, moveable );
+                    num_tasks_to_offload_per_rank[topo_region_0[i]] = inc_l;
+                    moveable -= inc_l;
+                    if (moveable < min_abs_imbalance_before_migration){
+                        return;
+                    }
+                }
+            }
+
+            // search for migration victims with distance 2
+            for (int i=0; i<ranks_in_r2; i++){
+                tmp_ldiff = avg_l-load_info_per_rank[topo_region_2[i]];
+                if(!(tmp_ldiff<min_rel_imbalance_before_migration)){
+                    inc_l = std::min( tmp_ldiff, moveable );
+                    num_tasks_to_offload_per_rank[topo_region_2[i]] = inc_l;
+                    moveable -= inc_l;
+                    if (moveable < min_abs_imbalance_before_migration){
+                        return;
+                    }
+                }
+            }
+
+            // search for migration victims with distance 4
+            for (int i=0; i<ranks_in_r4; i++){
+                tmp_ldiff = avg_l-load_info_per_rank[topo_region_4[i]];
+                if(!(tmp_ldiff<min_rel_imbalance_before_migration)){
+                    inc_l = std::min( tmp_ldiff, moveable );
+                    num_tasks_to_offload_per_rank[topo_region_4[i]] = inc_l;
+                    moveable -= inc_l;
+                    if (moveable < min_abs_imbalance_before_migration){
+                        return;
+                    }
+                }
+            }
+
+        break;
+
+        // default non-topology-aware chameleon strat
+        // sort after load per rank, migrate tasks from upper to lower ends
+        case 0:
+        default: 
+            // Sort rank loads and keep track of indices
+            int tmp_sorted_array[r_info->comm_size][2];
+            int i;
+            for (i = 0; i < r_info->comm_size; i++)
+            {
+                tmp_sorted_array[i][0] = load_info_per_rank[i];
+                tmp_sorted_array[i][1] = i;
+            }
+
+            qsort(tmp_sorted_array, r_info->comm_size, sizeof tmp_sorted_array[0], compare);
+
+            double min_val      = (double) load_info_per_rank[tmp_sorted_array[0][1]];
+            double max_val      = (double) load_info_per_rank[tmp_sorted_array[r_info->comm_size-1][1]];
+            double cur_load     = (double) load_info_per_rank[r_info->comm_rank];
+
+            double ratio_lb                 = 0.0; // 1 = high imbalance, 0 = no imbalance
+            if (max_val > 0) {
+                ratio_lb = (double)(max_val-min_val) / (double)max_val;
+            }
+
+            if((cur_load-min_val) < min_abs_imbalance_before_migration)
+                return;
+            
+            if(ratio_lb >= min_rel_imbalance_before_migration) {
+                int pos = 0;
+                for(i = 0; i < r_info->comm_size; i++) {
+                    if(tmp_sorted_array[i][1] == r_info->comm_rank) {
+                        pos = i;
+                        break;
+                    }
+                }
+
+                // only offload if on the upper side
+                if((pos) >= ((double)r_info->comm_size/2.0))
+                {
+                    int other_pos = r_info->comm_size-pos-1;
+                    int other_idx = tmp_sorted_array[other_pos][1];
+                    double other_val = (double) load_info_per_rank[other_idx];
+
+                    double cur_diff = cur_load-other_val;
+                    // check absolute condition
+                    if(cur_diff < min_abs_imbalance_before_migration)
+                        return;
+                    double ratio = cur_diff / (double)cur_load;
+                    if(other_val < cur_load && ratio >= min_rel_imbalance_before_migration) {
+                        //printf("R#%d Migrating\t%d\ttasks to rank:\t%d\tload:\t%f\tload_victim:\t%f\tratio:\t%f\tdiff:\t%f\n", r_info->comm_rank, 1, other_idx, cur_load, other_val, ratio, cur_diff);
+                        num_tasks_to_offload_per_rank[other_idx] = 1;
+                    }
+                }
+            }
+        break;
     }
 }
 
@@ -242,9 +328,9 @@ void compute_distance_matrix(){
     ); 
     // Definition of Allgather: The block of data sent from the jth process is received by every process and placed in the jth block of the buffer recvbuf.
     // Hence, rank_nodes[i] should have the node from rank i
-    for(int i = 0; i<r_info->comm_size; i++){
-        printf("Rank %d thinks rank %d runs on node %s\n",myRank,i,rank_nodes[i]);
-    }
+    // for(int i = 0; i<r_info->comm_size; i++){
+    //     printf("Rank %d thinks rank %d runs on node %s\n",myRank,i,rank_nodes[i]);
+    // }
 
     topo_distances = (uint8_t*)malloc(r_info->comm_size * sizeof(uint8_t));
 
@@ -272,6 +358,33 @@ void compute_distance_matrix(){
     }
     printf("Distances from rank %d: %s\n",myRank,print_distances.c_str());
     
+}
+
+// iterate over the distance matrix and save the ranks of all regions to extra matrices seperated
+void filter_distance_matrices(){
+    cham_t_rank_info_t *r_info  = cham_t_get_rank_info();
+    topo_region_0 = (uint8_t*)malloc((r_info->comm_size+1) * sizeof(uint8_t));
+    topo_region_2 = (uint8_t*)malloc((r_info->comm_size+1) * sizeof(uint8_t));
+    topo_region_4 = (uint8_t*)malloc((r_info->comm_size+1) * sizeof(uint8_t));
+
+    ranks_in_r0 = 0;
+    ranks_in_r2 = 0;
+    ranks_in_r4 = 0;
+
+    for (int i = 0; i<r_info->comm_size; i++){
+        if (topo_distances[i]==0){
+            topo_region_0[ranks_in_r0]=i;
+            ranks_in_r0++;
+        }
+        else if (topo_distances[i]==2){
+            topo_region_2[ranks_in_r2]=i;
+            ranks_in_r2++;
+        }
+        else {
+            topo_region_4[ranks_in_r4]=i;
+            ranks_in_r4++;
+        }
+    }
 }
 
 #define register_callback_t(name, type)                                         \
@@ -322,7 +435,7 @@ int cham_t_initialize(
     // Priority is cham_t_callback_select_tasks_for_migration (fine-grained)
     // if not registered cham_t_callback_select_num_tasks_to_offload is used (coarse-grained)
     // register_callback(cham_t_callback_select_tasks_for_migration);
-    // register_callback(cham_t_callback_select_num_tasks_to_offload);
+    register_callback(cham_t_callback_select_num_tasks_to_offload);
  
     // register_callback(cham_t_callback_select_num_tasks_to_replicate);
 
@@ -346,7 +459,9 @@ int cham_t_initialize(
                 MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &provided);
             }
             MPI_Comm_dup(MPI_COMM_WORLD, &topotool_comm);
+            getEnvironment();
             compute_distance_matrix();
+            filter_distance_matrices();
             topo_distances_initialized = true;
             comp_topology_mutex.unlock();
         }
