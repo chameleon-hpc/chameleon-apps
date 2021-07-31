@@ -42,6 +42,7 @@ static cham_t_get_task_param_info_by_id_t cham_t_get_task_param_info_by_id;
 static cham_t_get_task_data_t cham_t_get_task_data;
 
 std::atomic<int> TOPO_MIGRATION_STRAT(0);
+std::atomic<int> MIGRATION_OFFLOAD_TO_SINGLE_RANK(0);
 
 static uint8_t* topo_distances; // distance in hops from the current rank to the rank at the corresponding index (sorted after ranks) 
 static uint8_t* topo_region_0; // all ranks in the same node as the current rank
@@ -70,6 +71,11 @@ void getEnvironment(){
     tmp = std::getenv("TOPO_MIGRATION_STRAT");
     if(tmp) {
          TOPO_MIGRATION_STRAT = std::atof(tmp);
+    }
+    tmp = nullptr;
+    tmp = std::getenv("MIGRATION_OFFLOAD_TO_SINGLE_RANK");
+    if(tmp) {
+         MIGRATION_OFFLOAD_TO_SINGLE_RANK = std::atof(tmp);
     }
 }
 
@@ -204,63 +210,6 @@ on_cham_t_callback_select_num_tasks_to_offload(
             // int i;
             int inspected_Rank_id;
             int inspected_Rank_ld;
-            // int** tmp_sorted_array;
-
-            // // iterate over the distance hierarchy
-            // for (int i_dist = 0; i<3; i++){
-            //     switch(i_dist){
-            //         case 0:
-            //             // Sort rank loads and keep track of ranks for distance 0
-            //             tmp_sorted_array[ranks_in_r0][2];
-            //             for (i = 0; i < ranks_in_r0; i++)
-            //             {
-            //                 tmp_sorted_array[i][0] = load_info_per_rank[topo_region_0[i]]; // load
-            //                 tmp_sorted_array[i][1] = topo_region_0[i];      // rank
-            //             }
-            //             qsort(tmp_sorted_array, ranks_in_r0, sizeof tmp_sorted_array[0], compare);
-            //         break;
-            //         case 1:
-            //             // Sort rank loads and keep track of ranks for distance 2
-            //             tmp_sorted_array[ranks_in_r2][2];
-            //             for (i = 0; i < ranks_in_r2; i++)
-            //             {
-            //                 tmp_sorted_array[i][0] = load_info_per_rank[topo_region_2[i]]; // load
-            //                 tmp_sorted_array[i][1] = topo_region_2[i];      // rank
-            //             }
-            //             qsort(tmp_sorted_array, ranks_in_r2, sizeof tmp_sorted_array[0], compare);
-            //         break;
-            //         case 2:
-            //             // Sort rank loads and keep track of ranks for distance 4
-            //             tmp_sorted_array[ranks_in_r4][2];
-            //             for (i = 0; i < ranks_in_r4; i++)
-            //             {
-            //                 tmp_sorted_array[i][0] = load_info_per_rank[topo_region_4[i]]; // load
-            //                 tmp_sorted_array[i][1] = topo_region_4[i];      // rank
-            //             }
-            //             qsort(tmp_sorted_array, ranks_in_r4, sizeof tmp_sorted_array[0], compare);
-            //         break;
-            //     }
-
-            //     // search for migration victims (first with distance 0, then 2, then 4)
-            //     for (i=0; i<ranks_in_r0; i++){
-            //         inspected_Rank_ld = tmp_sorted_array[i][0];
-            //         inspected_Rank_id = tmp_sorted_array[i][1];
-            //         tmp_ldiff = avg_l-inspected_Rank_ld;
-            //         if(!(tmp_ldiff<min_rel_imbalance_before_migration)){
-            //             inc_l = std::min( tmp_ldiff, moveable );
-            //             num_tasks_to_offload_per_rank[inspected_Rank_id] = inc_l;
-            //             moveable -= inc_l;
-            //             if (moveable < min_abs_imbalance_before_migration){
-            //                 return;
-            //             }
-            //         }
-            //         else { 
-            //             // load of inspected rank is not low enough
-            //             // array is sortet, hence the next ranks wont have less load
-            //             break;
-            //         }
-            //     }
-            // }
 
             // Sort rank loads and keep track of ranks for distance 0
             int tmp_sorted_array0[ranks_in_r0][2];
@@ -271,7 +220,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
             }
             qsort(tmp_sorted_array0, ranks_in_r0, sizeof tmp_sorted_array0[0], compare);
 
-            // search for migration victims (first with distance 0, then 2, then 4)
+            // search for migration victims with distance 0
             for (i=0; i<ranks_in_r0; i++){
                 inspected_Rank_ld = tmp_sorted_array0[i][0];
                 inspected_Rank_id = tmp_sorted_array0[i][1];
@@ -280,7 +229,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                     inc_l = std::min( tmp_ldiff, moveable );
                     num_tasks_to_offload_per_rank[inspected_Rank_id] = inc_l;
                     moveable -= inc_l;
-                    if (moveable < min_abs_imbalance_before_migration){
+                    if (moveable < min_abs_imbalance_before_migration || MIGRATION_OFFLOAD_TO_SINGLE_RANK == 1){
                         return;
                     }
                 }
@@ -300,7 +249,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
             }
             qsort(tmp_sorted_array2, ranks_in_r2, sizeof tmp_sorted_array2[0], compare);
 
-            // search for migration victims (first with distance 0, then 2, then 4)
+            // search for migration victims with distance 2
             for (i=0; i<ranks_in_r0; i++){
                 inspected_Rank_ld = tmp_sorted_array2[i][0];
                 inspected_Rank_id = tmp_sorted_array2[i][1];
@@ -309,7 +258,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                     inc_l = std::min( tmp_ldiff, moveable );
                     num_tasks_to_offload_per_rank[inspected_Rank_id] = inc_l;
                     moveable -= inc_l;
-                    if (moveable < min_abs_imbalance_before_migration){
+                    if (moveable < min_abs_imbalance_before_migration || MIGRATION_OFFLOAD_TO_SINGLE_RANK == 1){
                         return;
                     }
                 }
@@ -329,7 +278,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
             }
             qsort(tmp_sorted_array4, ranks_in_r4, sizeof tmp_sorted_array4[0], compare);
 
-            // search for migration victims (first with distance 0, then 2, then 4)
+            // search for migration victims with distance 4
             for (i=0; i<ranks_in_r0; i++){
                 inspected_Rank_ld = tmp_sorted_array4[i][0];
                 inspected_Rank_id = tmp_sorted_array4[i][1];
@@ -338,7 +287,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                     inc_l = std::min( tmp_ldiff, moveable );
                     num_tasks_to_offload_per_rank[inspected_Rank_id] = inc_l;
                     moveable -= inc_l;
-                    if (moveable < min_abs_imbalance_before_migration){
+                    if (moveable < min_abs_imbalance_before_migration || MIGRATION_OFFLOAD_TO_SINGLE_RANK == 1){
                         return;
                     }
                 }
@@ -349,49 +298,119 @@ on_cham_t_callback_select_num_tasks_to_offload(
                 }
             }
 
-            // implementation without sorting the arrays by load
-
-            // // start searching for migration victims with distance 0
-            // for (i=0; i<ranks_in_r0; i++){
-            //     tmp_ldiff = avg_l-load_info_per_rank[topo_region_0[i]];
-            //     if(!(tmp_ldiff<min_rel_imbalance_before_migration)){
-            //         inc_l = std::min( tmp_ldiff, moveable );
-            //         num_tasks_to_offload_per_rank[topo_region_0[i]] = inc_l;
-            //         moveable -= inc_l;
-            //         if (moveable < min_abs_imbalance_before_migration){
-            //             return;
-            //         }
-            //     }
-            // }
-
-            // // search for migration victims with distance 2
-            // for (i=0; i<ranks_in_r2; i++){
-            //     tmp_ldiff = avg_l-load_info_per_rank[topo_region_2[i]];
-            //     if(!(tmp_ldiff<min_rel_imbalance_before_migration)){
-            //         inc_l = std::min( tmp_ldiff, moveable );
-            //         num_tasks_to_offload_per_rank[topo_region_2[i]] = inc_l;
-            //         moveable -= inc_l;
-            //         if (moveable < min_abs_imbalance_before_migration){
-            //             return;
-            //         }
-            //     }
-            // }
-
-            // // search for migration victims with distance 4
-            // for (i=0; i<ranks_in_r4; i++){
-            //     tmp_ldiff = avg_l-load_info_per_rank[topo_region_4[i]];
-            //     if(!(tmp_ldiff<min_rel_imbalance_before_migration)){
-            //         inc_l = std::min( tmp_ldiff, moveable );
-            //         num_tasks_to_offload_per_rank[topo_region_4[i]] = inc_l;
-            //         moveable -= inc_l;
-            //         if (moveable < min_abs_imbalance_before_migration){
-            //             return;
-            //         }
-            //     }
-            // }
-
         break;
         } // case 1
+
+        // offload first to ranks with high distance
+        case 2: {
+            // compute avg load
+            int total_l = 0;
+            total_l =std::accumulate(&load_info_per_rank[0], &load_info_per_rank[r_info->comm_size], total_l);  
+            int avg_l = total_l / r_info->comm_size;
+
+            // return if load of current task is lower than some threshold, dependending on avg load
+            int myLoad = load_info_per_rank[r_info->comm_rank];
+            if (myLoad-avg_l < min_abs_imbalance_before_migration){
+                return;
+            }
+
+            // distribute number of tasks higher than avg to ranks with lower than avg load
+            int moveable = myLoad-avg_l;
+            int tmp_ldiff;
+            int inc_l;
+            // int i;
+            int inspected_Rank_id;
+            int inspected_Rank_ld;
+
+            // Sort rank loads and keep track of ranks for distance 4
+            int tmp_sorted_array4[ranks_in_r4][2];
+            for (i = 0; i < ranks_in_r4; i++)
+            {
+                tmp_sorted_array4[i][0] = load_info_per_rank[topo_region_4[i]]; // load
+                tmp_sorted_array4[i][1] = topo_region_4[i];      // rank
+            }
+            qsort(tmp_sorted_array4, ranks_in_r4, sizeof tmp_sorted_array4[0], compare);
+
+            // search for migration victims with distance 4
+            for (i=0; i<ranks_in_r0; i++){
+                inspected_Rank_ld = tmp_sorted_array4[i][0];
+                inspected_Rank_id = tmp_sorted_array4[i][1];
+                tmp_ldiff = avg_l-inspected_Rank_ld;
+                if(!(tmp_ldiff<min_rel_imbalance_before_migration)){
+                    inc_l = std::min( tmp_ldiff, moveable );
+                    num_tasks_to_offload_per_rank[inspected_Rank_id] = inc_l;
+                    moveable -= inc_l;
+                    if (moveable < min_abs_imbalance_before_migration || MIGRATION_OFFLOAD_TO_SINGLE_RANK == 1){
+                        return;
+                    }
+                }
+                else { 
+                    // load of inspected rank is not low enough
+                    // array is sortet, hence the next ranks wont have less load
+                    break;
+                }
+            }
+
+            // Sort rank loads and keep track of ranks for distance 2
+            int tmp_sorted_array2[ranks_in_r2][2];
+            for (i = 0; i < ranks_in_r2; i++)
+            {
+                tmp_sorted_array2[i][0] = load_info_per_rank[topo_region_2[i]]; // load
+                tmp_sorted_array2[i][1] = topo_region_2[i];      // rank
+            }
+            qsort(tmp_sorted_array2, ranks_in_r2, sizeof tmp_sorted_array2[0], compare);
+
+            // search for migration victims with distance 2
+            for (i=0; i<ranks_in_r0; i++){
+                inspected_Rank_ld = tmp_sorted_array2[i][0];
+                inspected_Rank_id = tmp_sorted_array2[i][1];
+                tmp_ldiff = avg_l-inspected_Rank_ld;
+                if(!(tmp_ldiff<min_rel_imbalance_before_migration)){
+                    inc_l = std::min( tmp_ldiff, moveable );
+                    num_tasks_to_offload_per_rank[inspected_Rank_id] = inc_l;
+                    moveable -= inc_l;
+                    if (moveable < min_abs_imbalance_before_migration || MIGRATION_OFFLOAD_TO_SINGLE_RANK == 1){
+                        return;
+                    }
+                }
+                else { 
+                    // load of inspected rank is not low enough
+                    // array is sortet, hence the next ranks wont have less load
+                    break;
+                }
+            }
+
+            // Sort rank loads and keep track of ranks for distance 0
+            int tmp_sorted_array0[ranks_in_r0][2];
+            for (i = 0; i < ranks_in_r0; i++)
+            {
+                tmp_sorted_array0[i][0] = load_info_per_rank[topo_region_0[i]]; // load
+                tmp_sorted_array0[i][1] = topo_region_0[i];      // rank
+            }
+            qsort(tmp_sorted_array0, ranks_in_r0, sizeof tmp_sorted_array0[0], compare);
+
+            // search for migration victims with distance 0
+            for (i=0; i<ranks_in_r0; i++){
+                inspected_Rank_ld = tmp_sorted_array0[i][0];
+                inspected_Rank_id = tmp_sorted_array0[i][1];
+                tmp_ldiff = avg_l-inspected_Rank_ld;
+                if(!(tmp_ldiff<min_rel_imbalance_before_migration)){
+                    inc_l = std::min( tmp_ldiff, moveable );
+                    num_tasks_to_offload_per_rank[inspected_Rank_id] = inc_l;
+                    moveable -= inc_l;
+                    if (moveable < min_abs_imbalance_before_migration || MIGRATION_OFFLOAD_TO_SINGLE_RANK == 1){
+                        return;
+                    }
+                }
+                else { 
+                    // load of inspected rank is not low enough
+                    // array is sortet, hence the next ranks wont have less load
+                    break;
+                }
+            }
+
+        break;
+        } // case 2
 
         // default non-topology-aware chameleon strat
         // sort after load per rank, migrate tasks from upper to lower ends

@@ -6,3 +6,7 @@ Environment Variables (when running chameleon):
 TOPO_MIGRATION_STRAT (default 0):
     0: default chameleon, not topology aware, load ordered migration
     1: aggressive offload to nearest nodes until load equals average load
+
+MIGRATION_OFFLOAD_TO_SINGLE_RANK (default 0):
+    0: just perform the normal migration strategies
+    1: only offload to at most one rank
