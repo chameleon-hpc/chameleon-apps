@@ -1,12 +1,29 @@
 compile with
     make
 
-Environment Variables (when running chameleon):
+=============== Environment Variables =============== 
+(when running chameleon)
 
 TOPO_MIGRATION_STRAT (default 0):
     0: default chameleon, not topology aware, load ordered migration
-    1: aggressive offload to nearest nodes until load equals average load
+    1: topology aware migration with priority [same node > over 1 switch > over 3 switches]
+    2: topology aware migration with priority [over 3 switches > over 1 switch > same node]
+    3: topology aware migration with priority [over 1 switch > over 3 switches > same node]
+
 
 MIGRATION_OFFLOAD_TO_SINGLE_RANK (default 0):
     0: just perform the normal migration strategies
     1: only offload to at most one rank
+    
+
+=============== Explainations =============== 
+"topology aware migration with priority":
+    static hierarchy with levels 
+        "on the same node (distance 0 hops)",
+        "over 1 switch (distance 2 hops)", 
+        "over 3 switches (distance 4 hops)
+    sort the ranks of the observed level by load
+    offload tasks to ranks with lowest load, start searching in the level with the highest priority
+
+When offloading with the normal "topology aware migration with priority" it is possible that when distributing the tasks to ranks multiple ranks get chosen (e.g. because the first rank has not enough difference to average load to accompany all tasks that need to be offloaded) and therefore multiple tasks will be offloaded in total.
+To make the strategies more comparable to the default Chameleon strategy, where only on rank is chosen to offload to, the MIGRATION_OFFLOAD_TO_SINGLE_RANK variable limits the offloading to only one rank.
