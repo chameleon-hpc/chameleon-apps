@@ -1,5 +1,6 @@
 compile with
-    make
+    (load chameleon with tool support)
+    make (in tool_topo dir)
 
 =============== Environment Variables =============== 
 (when running chameleon)
@@ -14,6 +15,10 @@ TOPO_MIGRATION_STRAT (default 0):
 MIGRATION_OFFLOAD_TO_SINGLE_RANK (default 0):
     0: just perform the normal migration strategies
     1: only offload to at most one rank
+
+TOPO_ORDERED_LIST_SELECT (default 0):
+    0: perform normal migration strat
+    1: for the topo aware strategies, include the current rank when ordering by load and offload tasks to the corresponding rank on the other side of the array
     
 
 =============== Explainations =============== 
