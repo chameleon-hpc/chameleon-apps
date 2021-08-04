@@ -347,11 +347,13 @@ on_cham_t_callback_select_num_tasks_to_offload(
 
                 // Sort rank loads and keep track of ranks for distance 2
                 int tmp_sorted_array2[ranks_in_r2+1][2]; // +1 for current rank
-                for (i = 0; i < ranks_in_r2+1; i++)
+                for (i = 0; i < ranks_in_r2; i++)
                 {
                     tmp_sorted_array2[i][0] = load_info_per_rank[topo_region_2[i]]; // load
                     tmp_sorted_array2[i][1] = topo_region_2[i];      // rank
                 }
+                tmp_sorted_array2[ranks_in_r2][0]=myLoad;
+                tmp_sorted_array2[ranks_in_r2][1]=r_info->comm_rank;
                 qsort(tmp_sorted_array2, ranks_in_r2+1, sizeof tmp_sorted_array2[0], compare);
 
                 //search my position in the sorted array
@@ -383,11 +385,13 @@ on_cham_t_callback_select_num_tasks_to_offload(
 
                 // Sort rank loads and keep track of ranks for distance 4
                 int tmp_sorted_array4[ranks_in_r4+1][2];
-                for (i = 0; i < ranks_in_r4+1; i++)
+                for (i = 0; i < ranks_in_r4; i++)
                 {
                     tmp_sorted_array4[i][0] = load_info_per_rank[topo_region_4[i]]; // load
                     tmp_sorted_array4[i][1] = topo_region_4[i];      // rank
                 }
+                tmp_sorted_array4[ranks_in_r4][0]=myLoad;
+                tmp_sorted_array4[ranks_in_r4][1]=r_info->comm_rank;
                 qsort(tmp_sorted_array4, ranks_in_r4+1, sizeof tmp_sorted_array4[0], compare);
 
                 //search my position in the sorted array
@@ -536,11 +540,13 @@ on_cham_t_callback_select_num_tasks_to_offload(
 
                 // Sort rank loads and keep track of ranks for distance 4
                 int tmp_sorted_array4[ranks_in_r4+1][2];
-                for (i = 0; i < ranks_in_r4+1; i++)
+                for (i = 0; i < ranks_in_r4; i++)
                 {
                     tmp_sorted_array4[i][0] = load_info_per_rank[topo_region_4[i]]; // load
                     tmp_sorted_array4[i][1] = topo_region_4[i];      // rank
                 }
+                tmp_sorted_array4[ranks_in_r4][0]=myLoad;
+                tmp_sorted_array4[ranks_in_r4][1]=r_info->comm_rank;
                 qsort(tmp_sorted_array4, ranks_in_r4+1, sizeof tmp_sorted_array4[0], compare);
 
                 //search my position in the sorted array
@@ -572,11 +578,13 @@ on_cham_t_callback_select_num_tasks_to_offload(
 
                 // Sort rank loads and keep track of ranks for distance 2
                 int tmp_sorted_array2[ranks_in_r2+1][2]; // +1 for current rank
-                for (i = 0; i < ranks_in_r2+1; i++)
+                for (i = 0; i < ranks_in_r2; i++)
                 {
                     tmp_sorted_array2[i][0] = load_info_per_rank[topo_region_2[i]]; // load
                     tmp_sorted_array2[i][1] = topo_region_2[i];      // rank
                 }
+                tmp_sorted_array2[ranks_in_r2][0]=myLoad;
+                tmp_sorted_array2[ranks_in_r2][1]=r_info->comm_rank;
                 qsort(tmp_sorted_array2, ranks_in_r2+1, sizeof tmp_sorted_array2[0], compare);
 
                 //search my position in the sorted array
@@ -762,11 +770,13 @@ on_cham_t_callback_select_num_tasks_to_offload(
 
                 // Sort rank loads and keep track of ranks for distance 2
                 int tmp_sorted_array2[ranks_in_r2+1][2]; // +1 for current rank
-                for (i = 0; i < ranks_in_r2+1; i++)
+                for (i = 0; i < ranks_in_r2; i++)
                 {
                     tmp_sorted_array2[i][0] = load_info_per_rank[topo_region_2[i]]; // load
                     tmp_sorted_array2[i][1] = topo_region_2[i];      // rank
                 }
+                tmp_sorted_array2[ranks_in_r2][0]=myLoad;
+                tmp_sorted_array2[ranks_in_r2][1]=r_info->comm_rank;
                 qsort(tmp_sorted_array2, ranks_in_r2+1, sizeof tmp_sorted_array2[0], compare);
 
                 //search my position in the sorted array
@@ -798,11 +808,13 @@ on_cham_t_callback_select_num_tasks_to_offload(
 
                 // Sort rank loads and keep track of ranks for distance 4
                 int tmp_sorted_array4[ranks_in_r4+1][2];
-                for (i = 0; i < ranks_in_r4+1; i++)
+                for (i = 0; i < ranks_in_r4; i++)
                 {
                     tmp_sorted_array4[i][0] = load_info_per_rank[topo_region_4[i]]; // load
                     tmp_sorted_array4[i][1] = topo_region_4[i];      // rank
                 }
+                tmp_sorted_array4[ranks_in_r4][0]=myLoad;
+                tmp_sorted_array4[ranks_in_r4][1]=r_info->comm_rank;
                 qsort(tmp_sorted_array4, ranks_in_r4+1, sizeof tmp_sorted_array4[0], compare);
 
                 //search my position in the sorted array
