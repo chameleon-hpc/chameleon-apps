@@ -197,6 +197,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
 
     switch(TOPO_MIGRATION_STRAT){
         // aggressive offload everything to the nearest ranks till they have average load
+        // topology aware priority [0>2>4]
         case 1: { // without the bracket compiler is concerned about the tmp_sorted_arrays...
             // compute avg load
             int total_l = 0;
@@ -258,7 +259,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                 qsort(tmp_sorted_array2, ranks_in_r2, sizeof tmp_sorted_array2[0], compare);
 
                 // search for migration victims with distance 2
-                for (i=0; i<ranks_in_r0; i++){
+                for (i=0; i<ranks_in_r2; i++){
                     inspected_Rank_ld = tmp_sorted_array2[i][0];
                     inspected_Rank_id = tmp_sorted_array2[i][1];
                     tmp_ldiff = avg_l-inspected_Rank_ld;
@@ -287,7 +288,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                 qsort(tmp_sorted_array4, ranks_in_r4, sizeof tmp_sorted_array4[0], compare);
 
                 // search for migration victims with distance 4
-                for (i=0; i<ranks_in_r0; i++){
+                for (i=0; i<ranks_in_r4; i++){
                     inspected_Rank_ld = tmp_sorted_array4[i][0];
                     inspected_Rank_id = tmp_sorted_array4[i][1];
                     tmp_ldiff = avg_l-inspected_Rank_ld;
@@ -458,7 +459,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                 qsort(tmp_sorted_array4, ranks_in_r4, sizeof tmp_sorted_array4[0], compare);
 
                 // search for migration victims with distance 4
-                for (i=0; i<ranks_in_r0; i++){
+                for (i=0; i<ranks_in_r4; i++){
                     inspected_Rank_ld = tmp_sorted_array4[i][0];
                     inspected_Rank_id = tmp_sorted_array4[i][1];
                     tmp_ldiff = avg_l-inspected_Rank_ld;
@@ -487,7 +488,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                 qsort(tmp_sorted_array2, ranks_in_r2, sizeof tmp_sorted_array2[0], compare);
 
                 // search for migration victims with distance 2
-                for (i=0; i<ranks_in_r0; i++){
+                for (i=0; i<ranks_in_r2; i++){
                     inspected_Rank_ld = tmp_sorted_array2[i][0];
                     inspected_Rank_id = tmp_sorted_array2[i][1];
                     tmp_ldiff = avg_l-inspected_Rank_ld;
@@ -688,7 +689,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                 qsort(tmp_sorted_array2, ranks_in_r2, sizeof tmp_sorted_array2[0], compare);
 
                 // search for migration victims with distance 2
-                for (i=0; i<ranks_in_r0; i++){
+                for (i=0; i<ranks_in_r2; i++){
                     inspected_Rank_ld = tmp_sorted_array2[i][0];
                     inspected_Rank_id = tmp_sorted_array2[i][1];
                     tmp_ldiff = avg_l-inspected_Rank_ld;
@@ -717,7 +718,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                 qsort(tmp_sorted_array4, ranks_in_r4, sizeof tmp_sorted_array4[0], compare);
 
                 // search for migration victims with distance 4
-                for (i=0; i<ranks_in_r0; i++){
+                for (i=0; i<ranks_in_r4; i++){
                     inspected_Rank_ld = tmp_sorted_array4[i][0];
                     inspected_Rank_id = tmp_sorted_array4[i][1];
                     tmp_ldiff = avg_l-inspected_Rank_ld;
