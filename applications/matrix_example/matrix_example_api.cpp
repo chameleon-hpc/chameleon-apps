@@ -603,7 +603,6 @@ int main(int argc, char **argv)
     if( iMyRank==0 ) {
         printf("#R%d: Computations with chameleon took %.5f\n", iMyRank, wTimeCham);
     }
-    LOG(iMyRank, "Validation:");
     if(numberOfTasks>0) {
         for(int t=0; t<numberOfTasks; t++) {
             int cur_size = matrixSize;
@@ -616,9 +615,9 @@ int main(int argc, char **argv)
             pass &= check_test_matrix(matrices_c[t], t, cur_size, cur_size);
         }
         if(pass)
-            LOG(iMyRank, "TEST SUCCESS");
+            LOG(iMyRank, "Validation: TEST SUCCESS");
         else
-            LOG(iMyRank, "TEST FAILED");
+            LOG(iMyRank, "Validation: TEST FAILED");
     }
 #endif /* COMPILE_CHAMELEON */
 
@@ -671,8 +670,7 @@ int main(int argc, char **argv)
     if( iMyRank==0 ) {
         printf("#R%d: Computations with normal tasking took %.5f\n", iMyRank, wTimeHost);
     }
-
-    LOG(iMyRank, "Validation:");
+    
     pass = true;
     if(numberOfTasks>0) {
         for(int t=0; t<numberOfTasks; t++) {
@@ -686,9 +684,9 @@ int main(int argc, char **argv)
             pass &= check_test_matrix(matrices_c[t], t, cur_size, cur_size);
         }
         if(pass)
-            LOG(iMyRank, "TEST SUCCESS");
+            LOG(iMyRank, "Validation: TEST SUCCESS");
         else
-            LOG(iMyRank, "TEST FAILED");
+            LOG(iMyRank, "Validation: TEST FAILED");
     }
 #endif /* COMPILE_TASKING */
 
