@@ -68,6 +68,14 @@
 #define USE_EXTERNAL_CALLBACK 0
 #endif
 
+#ifndef USE_ALIGNMENT
+#define USE_ALIGNMENT 1
+#endif
+
+#ifndef USE_HUGE_PAGES
+#define USE_HUGE_PAGES 0
+#endif
+
 //#define LOG(rank, str) fprintf(stderr, "#R%d: %s\n", rank, str)
 #define LOG(rank, str) printf("#R%d: %s\n", rank, str)
 
@@ -84,8 +92,10 @@
 #include <string.h>
 #include <sstream>
 #include "math.h"
+#include <malloc.h>
 #include <cmath>
 #include <unistd.h>
+#include <sys/mman.h>
 #include <sys/syscall.h>
 #include <atomic>
 #include <list>
@@ -156,6 +166,21 @@ void print_finish_message(void *param) {
 }
 #endif
 
+#define MEM_ALIGNMENT 4096
+
+static inline void* alloc(size_t size)
+{
+#if USE_ALIGNMENT
+    void* p = memalign(MEM_ALIGNMENT, size);
+#else
+    void* p = malloc(size);
+#endif
+#if !USE_HUGE_PAGES
+    madvise(p, size, MADV_NOHUGEPAGE);
+#endif
+    return p;
+}
+
 void initialize_matrix_rnd(double *mat, int matrixSize) {
 	double lower_bound = 0;
 	double upper_bound = 10000;
@@ -194,14 +219,16 @@ void compute_matrix_matrix(double * SPEC_RESTRICT a, double * SPEC_RESTRICT b, d
 }
 
 bool check_test_matrix(double *c, int matrix_idx, double val, int matrixSize) {
-	for(int i=0;i<matrixSize;i++) {
-		for(int j=0;j<matrixSize;j++) {
-			if(fabs(c[i*matrixSize+j] - val) > 1e-3) {
-				printf("#R%d (OS_TID:%ld): Error in matrix %03d entry (%d,%d) expected:%f but value is %f\n", my_rank_id, syscall(SYS_gettid),matrix_idx,i,j,val,c[i*matrixSize+j]);
-				return false;
-			}
-		}
-	}
+    if (NUM_REPETITIONS > 0) {
+        for(int i=0;i<matrixSize;i++) {
+            for(int j=0;j<matrixSize;j++) {
+                if(fabs(c[i*matrixSize+j] - val) > 1e-3) {
+                    printf("#R%d (OS_TID:%ld): Error in matrix %03d entry (%d,%d) expected:%f but value is %f\n", my_rank_id, syscall(SYS_gettid),matrix_idx,i,j,val,c[i*matrixSize+j]);
+                    return false;
+                }
+            }
+        }
+    }
 	return true;
 }
 
@@ -449,9 +476,9 @@ int main(int argc, char **argv)
             cur_size = non_uniform_full_array_matrix_sizes[i];
         }
 
- 		matrices_a[i] = new double[(long)cur_size*cur_size];
-    	matrices_b[i] = new double[(long)cur_size*cur_size];
-    	matrices_c[i] = new double[(long)cur_size*cur_size];
+ 		matrices_a[i] = (double*) alloc((long)cur_size*cur_size*sizeof(double));
+    	matrices_b[i] = (double*) alloc((long)cur_size*cur_size*sizeof(double));
+    	matrices_c[i] = (double*) alloc((long)cur_size*cur_size*sizeof(double));
     	if(RANDOMINIT) {
     		initialize_matrix_rnd(matrices_a[i], cur_size);
     		initialize_matrix_rnd(matrices_b[i], cur_size);
@@ -698,9 +725,9 @@ int main(int argc, char **argv)
 
     //deallocate matrices
     for(int i=0; i<numberOfTasks; i++) {
-    	delete[] matrices_a[i];
-    	delete[] matrices_b[i];
-    	delete[] matrices_c[i];
+    	free(matrices_a[i]);
+    	free(matrices_b[i]);
+    	free(matrices_c[i]);
     }
 
     delete[] matrices_a;
