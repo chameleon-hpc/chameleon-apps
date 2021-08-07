@@ -431,6 +431,8 @@ int main(int argc, char **argv)
     }
     // necessary to be aware of binary base addresses to calculate offset for target entry functions
     chameleon_determine_base_addresses((void *)&main);
+    chameleon_post_init_serial();
+    #pragma omp barrier
 
 #if USE_EXTERNAL_CALLBACK
     chameleon_external_callback_t call_back_fcn = print_finish_message;

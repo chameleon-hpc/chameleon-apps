@@ -49,6 +49,13 @@ on_cham_t_callback_thread_init(
 }
 
 static void
+on_cham_t_callback_post_init_serial(
+    cham_t_data_t *thread_data)
+{
+    printf("on_cham_t_callback_post_init_serial ==> thread_id=%d\n", thread_data->value);
+}
+
+static void
 on_cham_t_callback_thread_finalize(
     cham_t_data_t *thread_data)
 {
@@ -511,6 +518,7 @@ int cham_t_initialize(
     // cham_t_get_num_procs = (cham_t_get_num_procs_t) lookup("cham_t_get_num_procs");
 
     register_callback(cham_t_callback_thread_init);
+    register_callback(cham_t_callback_post_init_serial);
     register_callback(cham_t_callback_thread_finalize);
     register_callback(cham_t_callback_task_create);
     register_callback(cham_t_callback_task_schedule);
