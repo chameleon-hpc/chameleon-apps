@@ -365,7 +365,7 @@ int main(int argc, char *argv[])
 {
         // add to diagonal
         if (check) {
-            Ans[i][i][i*ts+i] = (double)nt;
+            Ans[i][i][ts/2*ts+ts/2] = (double)nt;
         }
         if (block_rank[i*nt+i] == mype) {
             A[i][i][ts/2*ts+ts/2] = (double)nt;
@@ -415,7 +415,7 @@ int main(int argc, char *argv[])
                         // if (Ans[i][j][k] != A[i][j][k]) check = 2;
                         if (Ans[i][j][k] != A[i][j][k]) {
                             check = 2;
-                            printf("Expected: %f    Value: %f    Diff: %f\n", Ans[i][j][k], A[i][j][k], abs(Ans[i][j][k]-A[i][j][k]));
+                            printf("Rank R#%2d: A[%4d][%4d][%4d] --> Expected: %11.5f Value: %11.5f Diff: %11.5f\n", mype, i,j,k, Ans[i][j][k], A[i][j][k], abs(Ans[i][j][k]-A[i][j][k]));
                             break;
                         }
                     }

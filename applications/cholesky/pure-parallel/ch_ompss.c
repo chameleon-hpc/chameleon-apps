@@ -12,8 +12,10 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
     }
     // necessary to be aware of binary base addresses to calculate offset for target entry functions
     chameleon_determine_base_addresses((void *)&cholesky_mpi);
+    chameleon_post_init_serial();
     void* literal_ts = *(void**)(&ts);
     #endif
+    double * SPEC_RESTRICT tmp_b = B;
 
     #ifdef USE_TIMING
 #if !defined(OMPSS_VER)
@@ -102,12 +104,6 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
             }
         }
 
-<<<<<<< HEAD
-        void* literal_ts            = *(void**)(&ts);
-=======
-        double * SPEC_RESTRICT tmp_b = B;
->>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
-
         #pragma omp for nowait
         for (int i = k + 1; i < nt; i++) {
             if (block_rank[k*nt+i] == mype) {
@@ -140,19 +136,11 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                     #ifdef CHAMELEON_TARGET
                     #pragma omp target map(to: B[0:ts*ts]) map(tofrom: tmp_a_k_i[0:ts*ts]) device(1002)
                     {
-<<<<<<< HEAD
-                        omp_trsm(B, tmp_a_k_i, ts, ts);
-                    }
-                    #elif CHAMELEON
-                    chameleon_map_data_entry_t* args = (chameleon_map_data_entry_t*) malloc(4*sizeof(chameleon_map_data_entry_t));
-                    args[0] = chameleon_map_data_entry_create(B, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
-=======
                         omp_trsm(tmp_b, tmp_a_k_i, ts, ts);
                     }
                     #elif CHAMELEON
                     chameleon_map_data_entry_t* args = (chameleon_map_data_entry_t*) malloc(4*sizeof(chameleon_map_data_entry_t));
                     args[0] = chameleon_map_data_entry_create(tmp_b, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO);
->>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
                     args[1] = chameleon_map_data_entry_create(tmp_a_k_i, ts*ts*sizeof(double), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_FROM);
                     args[2] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
                     args[3] = chameleon_map_data_entry_create(literal_ts, sizeof(void*), CHAM_OMP_TGT_MAPTYPE_TO | CHAM_OMP_TGT_MAPTYPE_LITERAL);
@@ -162,11 +150,7 @@ void cholesky_mpi(const int ts, const int nt, double *A[nt][nt], double *B, doub
                     #else
                     #pragma omp task
                     {
-<<<<<<< HEAD
-                        omp_trsm(B, tmp_a_k_i, ts, ts);
-=======
                         omp_trsm(tmp_b, tmp_a_k_i, ts, ts);
->>>>>>> a6fe163e5c2c3b760678780248eabfa1d604c9df
                     }
                     #endif
                 }
