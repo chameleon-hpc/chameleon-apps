@@ -320,7 +320,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                 qsort(tmp_sorted_array0, ranks_in_r0, sizeof tmp_sorted_array0[0], compare);
 
                 //search my position in the sorted array
-                pos = 0;
+                pos = ranks_in_r0-1;
                 for(i = 0; i < ranks_in_r0; i++) {
                     if(tmp_sorted_array0[i][1] == r_info->comm_rank) {
                         pos = i;
@@ -343,6 +343,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                     if(other_val < myLoad && ratio >= min_rel_imbalance_before_migration) {
                         //printf("R#%d Migrating\t%d\ttasks to rank:\t%d\tload:\t%f\tload_victim:\t%f\tratio:\t%f\tdiff:\t%f\n", r_info->comm_rank, 1, other_idx, myLoad, other_val, ratio, cur_diff);
                         num_tasks_to_offload_per_rank[other_idx] = 1;
+                        return;
                     }
                 }
 
@@ -358,7 +359,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                 qsort(tmp_sorted_array2, ranks_in_r2+1, sizeof tmp_sorted_array2[0], compare);
 
                 //search my position in the sorted array
-                pos = 0;
+                pos = ranks_in_r2;
                 for(i = 0; i < ranks_in_r2+1; i++) {
                     if(tmp_sorted_array2[i][1] == r_info->comm_rank) {
                         pos = i;
@@ -381,6 +382,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                     if(other_val < myLoad && ratio >= min_rel_imbalance_before_migration) {
                         //printf("R#%d Migrating\t%d\ttasks to rank:\t%d\tload:\t%f\tload_victim:\t%f\tratio:\t%f\tdiff:\t%f\n", r_info->comm_rank, 1, other_idx, myLoad, other_val, ratio, cur_diff);
                         num_tasks_to_offload_per_rank[other_idx] = 1;
+                        return;
                     }
                 }
 
@@ -396,7 +398,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                 qsort(tmp_sorted_array4, ranks_in_r4+1, sizeof tmp_sorted_array4[0], compare);
 
                 //search my position in the sorted array
-                pos = 0;
+                pos = ranks_in_r4;
                 for(i = 0; i < ranks_in_r4+1; i++) {
                     if(tmp_sorted_array4[i][1] == r_info->comm_rank) {
                         pos = i;
@@ -419,6 +421,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                     if(other_val < myLoad && ratio >= min_rel_imbalance_before_migration) {
                         //printf("R#%d Migrating\t%d\ttasks to rank:\t%d\tload:\t%f\tload_victim:\t%f\tratio:\t%f\tdiff:\t%f\n", r_info->comm_rank, 1, other_idx, myLoad, other_val, ratio, cur_diff);
                         num_tasks_to_offload_per_rank[other_idx] = 1;
+                        return;
                     }
                 }
             }
@@ -551,7 +554,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                 qsort(tmp_sorted_array4, ranks_in_r4+1, sizeof tmp_sorted_array4[0], compare);
 
                 //search my position in the sorted array
-                pos = 0;
+                pos = ranks_in_r4;
                 for(i = 0; i < ranks_in_r4+1; i++) {
                     if(tmp_sorted_array4[i][1] == r_info->comm_rank) {
                         pos = i;
@@ -574,6 +577,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                     if(other_val < myLoad && ratio >= min_rel_imbalance_before_migration) {
                         //printf("R#%d Migrating\t%d\ttasks to rank:\t%d\tload:\t%f\tload_victim:\t%f\tratio:\t%f\tdiff:\t%f\n", r_info->comm_rank, 1, other_idx, myLoad, other_val, ratio, cur_diff);
                         num_tasks_to_offload_per_rank[other_idx] = 1;
+                        return;
                     }
                 }
 
@@ -589,7 +593,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                 qsort(tmp_sorted_array2, ranks_in_r2+1, sizeof tmp_sorted_array2[0], compare);
 
                 //search my position in the sorted array
-                pos = 0;
+                pos = ranks_in_r2;
                 for(i = 0; i < ranks_in_r2+1; i++) {
                     if(tmp_sorted_array2[i][1] == r_info->comm_rank) {
                         pos = i;
@@ -612,6 +616,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                     if(other_val < myLoad && ratio >= min_rel_imbalance_before_migration) {
                         //printf("R#%d Migrating\t%d\ttasks to rank:\t%d\tload:\t%f\tload_victim:\t%f\tratio:\t%f\tdiff:\t%f\n", r_info->comm_rank, 1, other_idx, myLoad, other_val, ratio, cur_diff);
                         num_tasks_to_offload_per_rank[other_idx] = 1;
+                        return;
                     }
                 }
 
@@ -625,7 +630,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                 qsort(tmp_sorted_array0, ranks_in_r0, sizeof tmp_sorted_array0[0], compare);
 
                 //search my position in the sorted array
-                pos = 0;
+                pos = ranks_in_r0-1;
                 for(i = 0; i < ranks_in_r0; i++) {
                     if(tmp_sorted_array0[i][1] == r_info->comm_rank) {
                         pos = i;
@@ -648,6 +653,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                     if(other_val < myLoad && ratio >= min_rel_imbalance_before_migration) {
                         //printf("R#%d Migrating\t%d\ttasks to rank:\t%d\tload:\t%f\tload_victim:\t%f\tratio:\t%f\tdiff:\t%f\n", r_info->comm_rank, 1, other_idx, myLoad, other_val, ratio, cur_diff);
                         num_tasks_to_offload_per_rank[other_idx] = 1;
+                        return;
                     }
                 }
 
@@ -781,7 +787,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                 qsort(tmp_sorted_array2, ranks_in_r2+1, sizeof tmp_sorted_array2[0], compare);
 
                 //search my position in the sorted array
-                pos = 0;
+                pos = ranks_in_r2;
                 for(i = 0; i < ranks_in_r2+1; i++) {
                     if(tmp_sorted_array2[i][1] == r_info->comm_rank) {
                         pos = i;
@@ -804,6 +810,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                     if(other_val < myLoad && ratio >= min_rel_imbalance_before_migration) {
                         //printf("R#%d Migrating\t%d\ttasks to rank:\t%d\tload:\t%f\tload_victim:\t%f\tratio:\t%f\tdiff:\t%f\n", r_info->comm_rank, 1, other_idx, myLoad, other_val, ratio, cur_diff);
                         num_tasks_to_offload_per_rank[other_idx] = 1;
+                        return;
                     }
                 }
 
@@ -819,7 +826,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                 qsort(tmp_sorted_array4, ranks_in_r4+1, sizeof tmp_sorted_array4[0], compare);
 
                 //search my position in the sorted array
-                pos = 0;
+                pos = ranks_in_r4;
                 for(i = 0; i < ranks_in_r4+1; i++) {
                     if(tmp_sorted_array4[i][1] == r_info->comm_rank) {
                         pos = i;
@@ -842,6 +849,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                     if(other_val < myLoad && ratio >= min_rel_imbalance_before_migration) {
                         //printf("R#%d Migrating\t%d\ttasks to rank:\t%d\tload:\t%f\tload_victim:\t%f\tratio:\t%f\tdiff:\t%f\n", r_info->comm_rank, 1, other_idx, myLoad, other_val, ratio, cur_diff);
                         num_tasks_to_offload_per_rank[other_idx] = 1;
+                        return;
                     }
                 }
 
@@ -855,7 +863,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                 qsort(tmp_sorted_array0, ranks_in_r0, sizeof tmp_sorted_array0[0], compare);
 
                 //search my position in the sorted array
-                pos = 0;
+                pos = ranks_in_r0-1;
                 for(i = 0; i < ranks_in_r0; i++) {
                     if(tmp_sorted_array0[i][1] == r_info->comm_rank) {
                         pos = i;
@@ -878,6 +886,7 @@ on_cham_t_callback_select_num_tasks_to_offload(
                     if(other_val < myLoad && ratio >= min_rel_imbalance_before_migration) {
                         //printf("R#%d Migrating\t%d\ttasks to rank:\t%d\tload:\t%f\tload_victim:\t%f\tratio:\t%f\tdiff:\t%f\n", r_info->comm_rank, 1, other_idx, myLoad, other_val, ratio, cur_diff);
                         num_tasks_to_offload_per_rank[other_idx] = 1;
+                        return;
                     }
                 }
             }
