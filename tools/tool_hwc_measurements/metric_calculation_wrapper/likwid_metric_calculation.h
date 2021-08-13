@@ -1,0 +1,651 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <algorithm>
+#include <iostream>
+#include <string>
+#include <sstream>
+#include <vector>
+#include <list>
+#include <map>
+
+#include <likwid.h>
+#include "tinyexpr.h"
+
+#include <linux/perf_event.h>
+#include <linux/hw_breakpoint.h>
+
+/******************************************************************************
+ * 
+ * General data structures and helper functions
+ * 
+ ******************************************************************************/
+typedef struct likwid_metric_info_t {
+    std::string metric_name;
+    std::string metric_formula;
+    std::vector<std::string> required_events;
+} likwid_metric_info_t;
+
+typedef struct likwid_metric_value_t {
+    std::string metric_name;
+    double value;
+} likwid_metric_value_t;
+
+static void replaceAll(std::string& str, const std::string& from, const std::string& to) {
+    if(from.empty())
+        return;
+    size_t start_pos = 0;
+    while((start_pos = str.find(from, start_pos)) != std::string::npos) {
+        str.replace(start_pos, from.length(), to);
+        start_pos += to.length();
+    }
+}
+
+std::vector<std::string> split_string(std::string str, char delimiter) {
+    std::vector<std::string> ret;
+    std::stringstream test(str);
+    std::string segment;
+    while(std::getline(test, segment, delimiter))
+    {
+        ret.push_back(segment);
+    }
+    return ret;
+}
+
+template <typename T>
+std::string to_string_with_precision(const T a_value, const int n = 12)
+{
+    std::ostringstream out;
+    out.precision(n);
+    out << std::fixed << a_value;
+    return out.str();
+}
+
+/******************************************************************************
+ * 
+ * PAPI mapping specific section
+ * 
+ ******************************************************************************/
+
+typedef struct likwid_papi_mapping_entry_t {
+    std::string name_likwid;
+    std::string name_papi;
+} likwid_papi_mapping_entry_t;
+
+static std::vector<likwid_papi_mapping_entry_t> init_mapping_likwid_papi() {
+    std::vector<likwid_papi_mapping_entry_t> ret;
+
+    // didnt find any matching event here
+    // ret.push_back({"CYCLE_ACTIVITY_CYCLES_NO_EXECUTE", ""});
+    // ret.push_back({"ARITH_DIVIDER_COUNT", ""});
+    // ret.push_back({"L1D_M_EVICT", ""});
+
+    // FIX Likwid Counters
+    ret.push_back({"INSTR_RETIRED_ANY", "INST_RETIRED:ANY_P"});
+    ret.push_back({"CPU_CLK_UNHALTED_CORE", "CPU_CLK_UNHALTED"});
+    ret.push_back({"CPU_CLK_UNHALTED_REF", "UNHALTED_REFERENCE_CYCLES"});
+    
+    ret.push_back({"ARITH_DIVIDER_ACTIVE", "ARITH:DIVIDER_ACTIVE"});
+    ret.push_back({"BR_INST_RETIRED_ALL_BRANCHES", "BR_INST_RETIRED:ALL_BRANCHES"});
+    ret.push_back({"BR_MISP_RETIRED_ALL_BRANCHES", "BR_MISP_RETIRED:ALL_BRANCHES"});
+    ret.push_back({"CPU_CLOCK_UNHALTED_TOTAL_CYCLES", "UNHALTED_CORE_CYCLES"});
+    ret.push_back({"CYCLE_ACTIVITY_CYCLES_L1D_PENDING", "CYCLE_ACTIVITY:CYCLES_L1D_PENDING"});
+    ret.push_back({"CYCLE_ACTIVITY_CYCLES_L2_PENDING", "CYCLE_ACTIVITY:CYCLES_L2_PENDING"});
+    ret.push_back({"CYCLE_ACTIVITY_CYCLES_LDM_PENDING", "CYCLE_ACTIVITY:CYCLES_LDM_PENDING"});    
+    ret.push_back({"CYCLE_ACTIVITY_STALLS_L1D_PENDING", "CYCLE_ACTIVITY:STALLS_L1D_MISS"});
+    ret.push_back({"CYCLE_ACTIVITY_STALLS_L2_PENDING", "CYCLE_ACTIVITY:STALLS_L2_MISS"});
+    ret.push_back({"CYCLE_ACTIVITY_STALLS_LDM_PENDING", "CYCLE_ACTIVITY:STALLS_MEM_ANY"});
+    ret.push_back({"CYCLE_ACTIVITY_STALLS_TOTAL", "CYCLE_ACTIVITY:STALLS_TOTAL"});
+    ret.push_back({"DTLB_LOAD_MISSES_CAUSES_A_WALK", "DTLB_LOAD_MISSES:MISS_CAUSES_A_WALK"});
+    ret.push_back({"DTLB_LOAD_MISSES_WALK_ACTIVE", "DTLB_LOAD_MISSES:WALK_ACTIVE"});
+    ret.push_back({"DTLB_STORE_MISSES_CAUSES_A_WALK", "DTLB_STORE_MISSES:MISS_CAUSES_A_WALK"});
+    ret.push_back({"DTLB_STORE_MISSES_WALK_ACTIVE", "DTLB_STORE_MISSES:WALK_ACTIVE"});
+    ret.push_back({"FP_ARITH_INST_RETIRED_128B_PACKED_DOUBLE", "FP_ARITH_INST_RETIRED:128B_PACKED_DOUBLE"});
+    ret.push_back({"FP_ARITH_INST_RETIRED_128B_PACKED_SINGLE", "FP_ARITH_INST_RETIRED:128B_PACKED_SINGLE"});
+    ret.push_back({"FP_ARITH_INST_RETIRED_256B_PACKED_DOUBLE", "FP_ARITH_INST_RETIRED:256B_PACKED_DOUBLE"});
+    ret.push_back({"FP_ARITH_INST_RETIRED_256B_PACKED_SINGLE", "FP_ARITH_INST_RETIRED:256B_PACKED_SINGLE"});
+    ret.push_back({"FP_ARITH_INST_RETIRED_512B_PACKED_DOUBLE", "FP_ARITH_INST_RETIRED:512B_PACKED_DOUBLE"});
+    ret.push_back({"FP_ARITH_INST_RETIRED_512B_PACKED_SINGLE", "FP_ARITH_INST_RETIRED:512B_PACKED_SINGLE"});
+    ret.push_back({"FP_ARITH_INST_RETIRED_SCALAR_DOUBLE", "FP_ARITH_INST_RETIRED:SCALAR_DOUBLE"});
+    ret.push_back({"FP_ARITH_INST_RETIRED_SCALAR_SINGLE", "FP_ARITH_INST_RETIRED:SCALAR_SINGLE"});
+    ret.push_back({"ICACHE_64B_IFTAG_MISS", "ICACHE_64B:IFTAG_MISS"});
+    ret.push_back({"IDI_MISC_WB_DOWNGRADE", "IDI_MISC:WB_DOWNGRADE"});
+    ret.push_back({"IDI_MISC_WB_UPGRADE", "IDI_MISC:WB_UPGRADE"});
+    ret.push_back({"IDQ_UOPS_NOT_DELIVERED_CORE", "IDQ:MS_UOPS"});
+    ret.push_back({"INT_MISC_RECOVERY_CYCLES", "INT_MISC:RECOVERY_CYCLES"});
+    ret.push_back({"ITLB_MISSES_CAUSES_A_WALK", "ITLB_MISSES:MISS_CAUSES_A_WALK"});    
+    ret.push_back({"ITLB_MISSES_WALK_ACTIVE", "ITLB_MISSES:WALK_PENDING"});
+    ret.push_back({"L1D_REPLACEMENT", "L1D:REPLACEMENT"});
+    ret.push_back({"L2_LINES_IN_ALL", "L2_LINES_IN:ALL"});
+    ret.push_back({"L2_RQSTS_MISS", "L2_RQSTS:MISS"});
+    ret.push_back({"L2_TRANS_ALL_REQUESTS", "L2_RQSTS:REFERENCES"});
+    ret.push_back({"L2_TRANS_L2_WB", "L2_TRANS:L2_WB"});
+    ret.push_back({"MEM_INST_RETIRED_ALL_LOADS", "MEM_INST_RETIRED:ALL_LOADS"});
+    ret.push_back({"MEM_INST_RETIRED_ALL_STORES", "MEM_INST_RETIRED:ALL_STORES"});
+    ret.push_back({"MEM_LOAD_RETIRED_L3_HIT", "MEM_LOAD_RETIRED:L3_HIT"});
+    ret.push_back({"MEM_LOAD_RETIRED_L3_MISS", "MEM_LOAD_RETIRED:L3_MISS"});
+    ret.push_back({"UOPS_EXECUTED_STALL_CYCLES", "UOPS_EXECUTED:STALL_CYCLES"});
+    ret.push_back({"UOPS_EXECUTED_USED_CYCLES", "UOPS_EXECUTED:CORE"});
+    ret.push_back({"UOPS_ISSUED_ANY", "UOPS_ISSUED:ANY"});
+    ret.push_back({"UOPS_ISSUED_STALL_CYCLES", "UOPS_ISSUED:STALL_CYCLES"});
+    ret.push_back({"UOPS_ISSUED_USED_CYCLES", "UOPS_ISSUED:ANY"});
+    ret.push_back({"UOPS_RETIRED_ALL", "UOPS_RETIRED:ALL"});
+    ret.push_back({"UOPS_RETIRED_RETIRE_SLOTS", "UOPS_RETIRED:RETIRE_SLOTS"});
+    ret.push_back({"UOPS_RETIRED_STALL_CYCLES", "UOPS_RETIRED:STALL_CYCLES"});
+    ret.push_back({"UOPS_RETIRED_USED_CYCLES", "UOPS_RETIRED:TOTAL_CYCLES"});
+
+    return ret;
+}
+
+static std::vector<std::string> mapping_convert_likwid_to_papi(std::vector<std::string> likwid_names, std::vector<likwid_papi_mapping_entry_t> mapping) {
+    std::vector<std::string> ret;
+    for (auto &name : likwid_names) {
+        bool found = false;        
+        std::vector<std::string> spl = split_string(name, ':');
+        for (auto &entry : mapping) {
+            if(spl[0] == entry.name_likwid) {
+                ret.push_back(entry.name_papi);
+                found = true;
+                break;
+            }
+        }
+        if(!found) {
+            fprintf(stderr, "Could not find PAPI mapping for the following Likwid Event: %s --> %s\n", name.c_str(), spl[0].c_str());
+            ret.push_back("-1");
+        }
+    }
+    return ret;
+}
+
+/******************************************************************************
+ * 
+ * Perf mapping specific section
+ * 
+ ******************************************************************************/
+
+typedef struct perf_event_t {
+	int type;
+	int config;
+} perf_event_t;
+
+typedef struct likwid_perf_mapping_entry_t {
+    std::string name_likwid;
+    int type;
+    int config;
+} likwid_perf_mapping_entry_t;
+
+static std::vector<likwid_perf_mapping_entry_t> init_mapping_likwid_perf() {
+    std::vector<likwid_perf_mapping_entry_t> ret;
+
+    // FIX Likwid Counters
+    ret.push_back({"INSTR_RETIRED_ANY", PERF_TYPE_HARDWARE, PERF_COUNT_HW_INSTRUCTIONS});
+    ret.push_back({"CPU_CLK_UNHALTED_CORE", PERF_TYPE_HARDWARE, PERF_COUNT_HW_CPU_CYCLES});
+    ret.push_back({"CPU_CLK_UNHALTED_REF", PERF_TYPE_HARDWARE, PERF_COUNT_HW_REF_CPU_CYCLES});
+
+    // BRANCH
+    ret.push_back({"BR_INST_RETIRED_ALL_BRANCHES", PERF_TYPE_RAW, 0x4100C4});
+    ret.push_back({"BR_MISP_RETIRED_ALL_BRANCHES", PERF_TYPE_RAW, 0x4100C5});
+
+    // CACHES
+    ret.push_back({"L1D_REPLACEMENT", PERF_TYPE_RAW, 0x410151});
+    ret.push_back({"L1D_M_EVICT", PERF_TYPE_RAW, 0x410451});
+    ret.push_back({"L2_LINES_IN_ALL", PERF_TYPE_RAW, 0x411FF1});
+    ret.push_back({"L2_TRANS_L2_WB", PERF_TYPE_RAW, 0x4140F0});
+
+    // CLOCK
+
+    // CYCLE_ACTIVITY
+    ret.push_back({"CYCLE_ACTIVITY_CYCLES_L2_PENDING", PERF_TYPE_RAW, 0x14101A3});  
+    ret.push_back({"CYCLE_ACTIVITY_CYCLES_LDM_PENDING", PERF_TYPE_RAW, 0x104110A3});
+    ret.push_back({"CYCLE_ACTIVITY_CYCLES_L1D_PENDING", PERF_TYPE_RAW, 0x84108A3}); 
+    ret.push_back({"CYCLE_ACTIVITY_CYCLES_NO_EXECUTE", PERF_TYPE_RAW, 0x44104A3});  
+
+    // CYCLE_STALLS
+    ret.push_back({"CYCLE_ACTIVITY_STALLS_L2_PENDING", PERF_TYPE_RAW, 0x54105A3});
+    ret.push_back({"CYCLE_ACTIVITY_STALLS_LDM_PENDING", PERF_TYPE_RAW, 0x144114A3});
+    ret.push_back({"CYCLE_ACTIVITY_STALLS_L1D_PENDING", PERF_TYPE_RAW, 0xC410CA3});
+    ret.push_back({"CYCLE_ACTIVITY_STALLS_TOTAL", PERF_TYPE_RAW, 0x44104A3});
+
+    // DATA
+    ret.push_back({"MEM_INST_RETIRED_ALL_LOADS", PERF_TYPE_RAW, 0x4181D0});
+    ret.push_back({"MEM_INST_RETIRED_ALL_STORES", PERF_TYPE_RAW, 0x4182D0});
+
+    // DIVIDE
+    ret.push_back({"ARITH_DIVIDER_COUNT", PERF_TYPE_RAW, 0x1450114});
+    ret.push_back({"ARITH_DIVIDER_ACTIVE", PERF_TYPE_RAW, 0x410114});
+
+    // ENERGY
+
+    // FLOPS_AVX
+    ret.push_back({"FP_ARITH_INST_RETIRED_256B_PACKED_SINGLE", PERF_TYPE_RAW, 0x4120C7});
+    ret.push_back({"FP_ARITH_INST_RETIRED_256B_PACKED_DOUBLE", PERF_TYPE_RAW, 0x4110C7});
+    ret.push_back({"FP_ARITH_INST_RETIRED_512B_PACKED_SINGLE", PERF_TYPE_RAW, 0x4180C7});
+    ret.push_back({"FP_ARITH_INST_RETIRED_512B_PACKED_DOUBLE", PERF_TYPE_RAW, 0x4140C7});
+
+    // FLOPS_DP
+    ret.push_back({"FP_ARITH_INST_RETIRED_128B_PACKED_DOUBLE", PERF_TYPE_RAW, 0x4104C7});
+    ret.push_back({"FP_ARITH_INST_RETIRED_SCALAR_DOUBLE", PERF_TYPE_RAW, 0x4101C7});
+
+    // FLOPS_SP
+    ret.push_back({"FP_ARITH_INST_RETIRED_128B_PACKED_SINGLE", PERF_TYPE_RAW, 0x4108C7});
+    ret.push_back({"FP_ARITH_INST_RETIRED_SCALAR_SINGLE", PERF_TYPE_RAW, 0x4102C7});
+
+    // L2
+    ret.push_back({"ICACHE_64B_IFTAG_MISS", PERF_TYPE_RAW, 0x410283});
+
+    // L2CACHE
+    ret.push_back({"L2_TRANS_ALL_REQUESTS", PERF_TYPE_RAW, 0x4180F0});
+    ret.push_back({"L2_RQSTS_MISS", PERF_TYPE_RAW, 0x413F24});
+
+    // L3
+    ret.push_back({"IDI_MISC_WB_DOWNGRADE", PERF_TYPE_RAW, 0x4104FE});
+    ret.push_back({"IDI_MISC_WB_UPGRADE", PERF_TYPE_RAW, 0x4102FE});
+
+    // L3CACHE
+    ret.push_back({"MEM_LOAD_RETIRED_L3_HIT", PERF_TYPE_RAW, 0x4104D1});
+    ret.push_back({"MEM_LOAD_RETIRED_L3_MISS", PERF_TYPE_RAW, 0x4120D1});
+    ret.push_back({"UOPS_RETIRED_ALL", PERF_TYPE_RAW, 0x4101C2});
+
+    // MEM
+
+    // MEM_DP
+
+    // MEM_DS
+
+    // TLB_DATA
+    ret.push_back({"DTLB_LOAD_MISSES_CAUSES_A_WALK", PERF_TYPE_RAW, 0x410108});
+    ret.push_back({"DTLB_STORE_MISSES_CAUSES_A_WALK", PERF_TYPE_RAW, 0x410149});
+    ret.push_back({"DTLB_LOAD_MISSES_WALK_ACTIVE", PERF_TYPE_RAW, 0x1411008});
+    ret.push_back({"DTLB_STORE_MISSES_WALK_ACTIVE", PERF_TYPE_RAW, 0x1411049});
+
+    // TLB_INSTR
+    ret.push_back({"ITLB_MISSES_CAUSES_A_WALK", PERF_TYPE_RAW, 0x410185});
+    ret.push_back({"ITLB_MISSES_WALK_ACTIVE", PERF_TYPE_RAW, 0x1411085});
+
+    // TMA
+    ret.push_back({"UOPS_ISSUED_ANY", PERF_TYPE_RAW, 0x41010E});
+    ret.push_back({"UOPS_RETIRED_RETIRE_SLOTS", PERF_TYPE_RAW, 0x4102C2});
+    ret.push_back({"IDQ_UOPS_NOT_DELIVERED_CORE", PERF_TYPE_RAW, 0x41019C});
+    ret.push_back({"INT_MISC_RECOVERY_CYCLES", PERF_TYPE_RAW, 0x41010D});
+
+    // UOPS_EXEC
+    ret.push_back({"UOPS_EXECUTED_USED_CYCLES", PERF_TYPE_RAW, 0x14101B1});
+    ret.push_back({"UOPS_EXECUTED_STALL_CYCLES", PERF_TYPE_RAW, 0x1C101B1});
+    ret.push_back({"CPU_CLOCK_UNHALTED_TOTAL_CYCLES", PERF_TYPE_RAW, 0x2C1003C});
+    ret.push_back({"UOPS_EXECUTED_STALL_CYCLES:EDGEDETECT", PERF_TYPE_RAW, 0x1C501B1});
+
+    // UOPS_ISSUE
+    ret.push_back({"UOPS_ISSUED_USED_CYCLES", PERF_TYPE_RAW, 0x141010E});
+    ret.push_back({"UOPS_ISSUED_STALL_CYCLES", PERF_TYPE_RAW, 0x1C1010E});
+    ret.push_back({"UOPS_ISSUED_STALL_CYCLES:EDGEDETECT", PERF_TYPE_RAW, 0x1C5010E});
+
+    // UOPS_RETIRE
+    ret.push_back({"UOPS_RETIRED_USED_CYCLES", PERF_TYPE_RAW, 0x14101C2});
+    ret.push_back({"UOPS_RETIRED_STALL_CYCLES", PERF_TYPE_RAW, 0x1C101C2});
+    ret.push_back({"UOPS_RETIRED_STALL_CYCLES:EDGEDETECT", PERF_TYPE_RAW, 0x1C501C2});
+
+    // UPI
+
+    return ret;
+}
+
+static std::vector<perf_event_t> mapping_convert_likwid_to_perf(std::vector<std::string> likwid_names, std::vector<likwid_perf_mapping_entry_t> mapping) {
+    std::vector<perf_event_t> ret;
+    for (auto &name : likwid_names) {
+        bool found = false;        
+        std::vector<std::string> spl = split_string(name, ':');
+
+        std::string cur_name = spl[0];
+        if (name.find("EDGEDETECT") != std::string::npos) {
+            cur_name += ":EDGEDETECT";
+        }
+        for (auto &entry : mapping) {
+            if(cur_name == entry.name_likwid) {
+                ret.push_back({entry.type, entry.config});
+                found = true;
+                break;
+            }
+        }
+        if(!found) {
+            fprintf(stderr, "Could not find Perf mapping for the following Likwid Event: %s --> %s\n", name.c_str(), cur_name.c_str());
+            ret.push_back({-1,-1});
+        }
+    }
+    return ret;
+}
+
+/******************************************************************************
+ * 
+ * Likwid specific section
+ * 
+ ******************************************************************************/
+static std::vector<likwid_metric_info_t> lkw_init_metric_list() {
+    
+    std::vector<likwid_metric_info_t> ret;
+
+    // BRANCH
+    ret.push_back({"Clock [MHz]", "1.E-06*($CPU_CLK_UNHALTED_CORE#0$/$CPU_CLK_UNHALTED_REF#0$)/$inverseClock$", {"CPU_CLK_UNHALTED_CORE#0", "CPU_CLK_UNHALTED_REF#0", "inverseClock"}});
+    ret.push_back({"CPI", "$CPU_CLK_UNHALTED_CORE#0$/$INSTR_RETIRED_ANY#0$", {"CPU_CLK_UNHALTED_CORE#0", "INSTR_RETIRED_ANY#0"}});
+    ret.push_back({"Branch rate", "$BR_INST_RETIRED_ALL_BRANCHES#0$/$INSTR_RETIRED_ANY#0$", {"BR_INST_RETIRED_ALL_BRANCHES#0", "INSTR_RETIRED_ANY#0"}});
+    ret.push_back({"Branch misprediction rate", "$BR_MISP_RETIRED_ALL_BRANCHES#0$/$INSTR_RETIRED_ANY#0$", {"BR_MISP_RETIRED_ALL_BRANCHES#0", "INSTR_RETIRED_ANY#0"}});
+    ret.push_back({"Branch misprediction ratio", "$BR_MISP_RETIRED_ALL_BRANCHES#0$/$BR_INST_RETIRED_ALL_BRANCHES#0$", {"BR_INST_RETIRED_ALL_BRANCHES#0", "BR_MISP_RETIRED_ALL_BRANCHES#0"}});
+    ret.push_back({"Instructions per branch", "$INSTR_RETIRED_ANY#0$/$BR_INST_RETIRED_ALL_BRANCHES#0$", {"BR_INST_RETIRED_ALL_BRANCHES#0", "INSTR_RETIRED_ANY#0"}});
+
+    // CACHES
+    ret.push_back({"L2 to L1 load bandwidth [MBytes/s]", "1.0E-06*$L1D_REPLACEMENT#0$*64.0/$time$", {"L1D_REPLACEMENT#0", "time"}});
+    ret.push_back({"L2 to L1 load data volume [GBytes]", "1.0E-09*$L1D_REPLACEMENT#0$*64.0", {"L1D_REPLACEMENT#0"}});
+    ret.push_back({"L1 to L2 evict bandwidth [MBytes/s]", "1.0E-06*$L1D_M_EVICT#0$*64.0/$time$", {"L1D_M_EVICT#0", "time"}});
+    ret.push_back({"L1 to L2 evict data volume [GBytes]", "1.0E-09*$L1D_M_EVICT#0$*64.0", {"L1D_M_EVICT#0"}});
+    ret.push_back({"L1 to/from L2 bandwidth [MBytes/s]", "1.0E-06*($L1D_REPLACEMENT#0$+$L1D_M_EVICT#0$)*64.0/$time$", {"L1D_M_EVICT#0", "L1D_REPLACEMENT#0", "time"}});
+    ret.push_back({"L1 to/from L2 data volume [GBytes]", "1.0E-09*($L1D_REPLACEMENT#0$+$L1D_M_EVICT#0$)*64.0", {"L1D_M_EVICT#0", "L1D_REPLACEMENT#0"}});
+    ret.push_back({"L3 to L2 load bandwidth [MBytes/s]", "1.0E-06*$L2_LINES_IN_ALL#0$*64.0/$time$", {"L2_LINES_IN_ALL#0", "time"}});
+    ret.push_back({"L3 to L2 load data volume [GBytes]", "1.0E-09*$L2_LINES_IN_ALL#0$*64.0", {"L2_LINES_IN_ALL#0"}});
+    ret.push_back({"L2 to L3 evict bandwidth [MBytes/s]", "1.0E-06*$L2_TRANS_L2_WB#0$*64.0/$time$", {"L2_TRANS_L2_WB#0", "time"}});
+    ret.push_back({"L2 to L3 evict data volume [GBytes]", "1.0E-09*$L2_TRANS_L2_WB#0$*64.0", {"L2_TRANS_L2_WB#0"}});
+    ret.push_back({"L2 to/from L3 bandwidth [MBytes/s]", "1.0E-06*($L2_LINES_IN_ALL#0$+$L2_TRANS_L2_WB#0$)*64.0/$time$", {"L2_LINES_IN_ALL#0", "L2_TRANS_L2_WB#0", "time"}});
+    ret.push_back({"L2 to/from L3 data volume [GBytes]", "1.0E-09*($L2_LINES_IN_ALL#0$+$L2_TRANS_L2_WB#0$)*64.0", {"L2_LINES_IN_ALL#0", "L2_TRANS_L2_WB#0"}});
+    ret.push_back({"System to L3 bandwidth [MBytes/s]", "1.0E-06*($LLC_LOOKUP_DATA_READ#0$+$LLC_LOOKUP_DATA_READ#1$+$LLC_LOOKUP_DATA_READ#2$+$LLC_LOOKUP_DATA_READ#3$+$LLC_LOOKUP_DATA_READ#4$+$LLC_LOOKUP_DATA_READ#5$+$LLC_LOOKUP_DATA_READ#6$+$LLC_LOOKUP_DATA_READ#7$+$LLC_LOOKUP_DATA_READ#8$+$LLC_LOOKUP_DATA_READ#9$+$LLC_LOOKUP_DATA_READ#10$+$LLC_LOOKUP_DATA_READ#11$+$LLC_LOOKUP_DATA_READ#12$+$LLC_LOOKUP_DATA_READ#13$+$LLC_LOOKUP_DATA_READ#14$+$LLC_LOOKUP_DATA_READ#15$+$LLC_LOOKUP_DATA_READ#16$+$LLC_LOOKUP_DATA_READ#17$+$LLC_LOOKUP_DATA_READ#18$+$LLC_LOOKUP_DATA_READ#19$+$LLC_LOOKUP_DATA_READ#20$+$LLC_LOOKUP_DATA_READ#21$+$LLC_LOOKUP_DATA_READ#22$+$LLC_LOOKUP_DATA_READ#23$+$LLC_LOOKUP_DATA_READ#24$+$LLC_LOOKUP_DATA_READ#25$+$LLC_LOOKUP_DATA_READ#26$+$LLC_LOOKUP_DATA_READ#27$)*64.0/$time$", {"LLC_LOOKUP_DATA_READ#0", "LLC_LOOKUP_DATA_READ#1", "LLC_LOOKUP_DATA_READ#10", "LLC_LOOKUP_DATA_READ#11", "LLC_LOOKUP_DATA_READ#12", "LLC_LOOKUP_DATA_READ#13", "LLC_LOOKUP_DATA_READ#14", "LLC_LOOKUP_DATA_READ#15", "LLC_LOOKUP_DATA_READ#16", "LLC_LOOKUP_DATA_READ#17", "LLC_LOOKUP_DATA_READ#18", "LLC_LOOKUP_DATA_READ#19", "LLC_LOOKUP_DATA_READ#2", "LLC_LOOKUP_DATA_READ#20", "LLC_LOOKUP_DATA_READ#21", "LLC_LOOKUP_DATA_READ#22", "LLC_LOOKUP_DATA_READ#23", "LLC_LOOKUP_DATA_READ#24", "LLC_LOOKUP_DATA_READ#25", "LLC_LOOKUP_DATA_READ#26", "LLC_LOOKUP_DATA_READ#27", "LLC_LOOKUP_DATA_READ#3", "LLC_LOOKUP_DATA_READ#4", "LLC_LOOKUP_DATA_READ#5", "LLC_LOOKUP_DATA_READ#6", "LLC_LOOKUP_DATA_READ#7", "LLC_LOOKUP_DATA_READ#8", "LLC_LOOKUP_DATA_READ#9", "time"}});
+    ret.push_back({"System to L3 data volume [GBytes]", "1.0E-09*($LLC_LOOKUP_DATA_READ#0$+$LLC_LOOKUP_DATA_READ#1$+$LLC_LOOKUP_DATA_READ#2$+$LLC_LOOKUP_DATA_READ#3$+$LLC_LOOKUP_DATA_READ#4$+$LLC_LOOKUP_DATA_READ#5$+$LLC_LOOKUP_DATA_READ#6$+$LLC_LOOKUP_DATA_READ#7$+$LLC_LOOKUP_DATA_READ#8$+$LLC_LOOKUP_DATA_READ#9$+$LLC_LOOKUP_DATA_READ#10$+$LLC_LOOKUP_DATA_READ#11$+$LLC_LOOKUP_DATA_READ#12$+$LLC_LOOKUP_DATA_READ#13$+$LLC_LOOKUP_DATA_READ#14$+$LLC_LOOKUP_DATA_READ#15$+$LLC_LOOKUP_DATA_READ#16$+$LLC_LOOKUP_DATA_READ#17$+$LLC_LOOKUP_DATA_READ#18$+$LLC_LOOKUP_DATA_READ#19$+$LLC_LOOKUP_DATA_READ#20$+$LLC_LOOKUP_DATA_READ#21$+$LLC_LOOKUP_DATA_READ#22$+$LLC_LOOKUP_DATA_READ#23$+$LLC_LOOKUP_DATA_READ#24$+$LLC_LOOKUP_DATA_READ#25$+$LLC_LOOKUP_DATA_READ#26$+$LLC_LOOKUP_DATA_READ#27$)*64.0", {"LLC_LOOKUP_DATA_READ#0", "LLC_LOOKUP_DATA_READ#1", "LLC_LOOKUP_DATA_READ#10", "LLC_LOOKUP_DATA_READ#11", "LLC_LOOKUP_DATA_READ#12", "LLC_LOOKUP_DATA_READ#13", "LLC_LOOKUP_DATA_READ#14", "LLC_LOOKUP_DATA_READ#15", "LLC_LOOKUP_DATA_READ#16", "LLC_LOOKUP_DATA_READ#17", "LLC_LOOKUP_DATA_READ#18", "LLC_LOOKUP_DATA_READ#19", "LLC_LOOKUP_DATA_READ#2", "LLC_LOOKUP_DATA_READ#20", "LLC_LOOKUP_DATA_READ#21", "LLC_LOOKUP_DATA_READ#22", "LLC_LOOKUP_DATA_READ#23", "LLC_LOOKUP_DATA_READ#24", "LLC_LOOKUP_DATA_READ#25", "LLC_LOOKUP_DATA_READ#26", "LLC_LOOKUP_DATA_READ#27", "LLC_LOOKUP_DATA_READ#3", "LLC_LOOKUP_DATA_READ#4", "LLC_LOOKUP_DATA_READ#5", "LLC_LOOKUP_DATA_READ#6", "LLC_LOOKUP_DATA_READ#7", "LLC_LOOKUP_DATA_READ#8", "LLC_LOOKUP_DATA_READ#9"}});
+    ret.push_back({"L3 to system bandwidth [MBytes/s]", "1.0E-06*($LLC_VICTIMS_M_STATE#0$+$LLC_VICTIMS_M_STATE#1$+$LLC_VICTIMS_M_STATE#2$+$LLC_VICTIMS_M_STATE#3$+$LLC_VICTIMS_M_STATE#4$+$LLC_VICTIMS_M_STATE#5$+$LLC_VICTIMS_M_STATE#6$+$LLC_VICTIMS_M_STATE#7$+$LLC_VICTIMS_M_STATE#8$+$LLC_VICTIMS_M_STATE#9$+$LLC_VICTIMS_M_STATE#10$+$LLC_VICTIMS_M_STATE#11$+$LLC_VICTIMS_M_STATE#12$+$LLC_VICTIMS_M_STATE#13$+$LLC_VICTIMS_M_STATE#14$+$LLC_VICTIMS_M_STATE#15$+$LLC_VICTIMS_M_STATE#16$+$LLC_VICTIMS_M_STATE#17$+$LLC_VICTIMS_M_STATE#18$+$LLC_VICTIMS_M_STATE#19$+$LLC_VICTIMS_M_STATE#20$+$LLC_VICTIMS_M_STATE#21$+$LLC_VICTIMS_M_STATE#22$+$LLC_VICTIMS_M_STATE#23$+$LLC_VICTIMS_M_STATE#24$+$LLC_VICTIMS_M_STATE#25$+$LLC_VICTIMS_M_STATE#26$+$LLC_VICTIMS_M_STATE#27$)*64/$time$", {"LLC_VICTIMS_M_STATE#0", "LLC_VICTIMS_M_STATE#1", "LLC_VICTIMS_M_STATE#10", "LLC_VICTIMS_M_STATE#11", "LLC_VICTIMS_M_STATE#12", "LLC_VICTIMS_M_STATE#13", "LLC_VICTIMS_M_STATE#14", "LLC_VICTIMS_M_STATE#15", "LLC_VICTIMS_M_STATE#16", "LLC_VICTIMS_M_STATE#17", "LLC_VICTIMS_M_STATE#18", "LLC_VICTIMS_M_STATE#19", "LLC_VICTIMS_M_STATE#2", "LLC_VICTIMS_M_STATE#20", "LLC_VICTIMS_M_STATE#21", "LLC_VICTIMS_M_STATE#22", "LLC_VICTIMS_M_STATE#23", "LLC_VICTIMS_M_STATE#24", "LLC_VICTIMS_M_STATE#25", "LLC_VICTIMS_M_STATE#26", "LLC_VICTIMS_M_STATE#27", "LLC_VICTIMS_M_STATE#3", "LLC_VICTIMS_M_STATE#4", "LLC_VICTIMS_M_STATE#5", "LLC_VICTIMS_M_STATE#6", "LLC_VICTIMS_M_STATE#7", "LLC_VICTIMS_M_STATE#8", "LLC_VICTIMS_M_STATE#9", "time"}});
+    ret.push_back({"L3 to system data volume [GBytes]", "1.0E-09*($LLC_VICTIMS_M_STATE#0$+$LLC_VICTIMS_M_STATE#1$+$LLC_VICTIMS_M_STATE#2$+$LLC_VICTIMS_M_STATE#3$+$LLC_VICTIMS_M_STATE#4$+$LLC_VICTIMS_M_STATE#5$+$LLC_VICTIMS_M_STATE#6$+$LLC_VICTIMS_M_STATE#7$+$LLC_VICTIMS_M_STATE#8$+$LLC_VICTIMS_M_STATE#9$+$LLC_VICTIMS_M_STATE#10$+$LLC_VICTIMS_M_STATE#11$+$LLC_VICTIMS_M_STATE#12$+$LLC_VICTIMS_M_STATE#13$+$LLC_VICTIMS_M_STATE#14$+$LLC_VICTIMS_M_STATE#15$+$LLC_VICTIMS_M_STATE#16$+$LLC_VICTIMS_M_STATE#17$+$LLC_VICTIMS_M_STATE#18$+$LLC_VICTIMS_M_STATE#19$+$LLC_VICTIMS_M_STATE#20$+$LLC_VICTIMS_M_STATE#21$+$LLC_VICTIMS_M_STATE#22$+$LLC_VICTIMS_M_STATE#23$+$LLC_VICTIMS_M_STATE#24$+$LLC_VICTIMS_M_STATE#25$+$LLC_VICTIMS_M_STATE#26$+$LLC_VICTIMS_M_STATE#27$)*64", {"LLC_VICTIMS_M_STATE#0", "LLC_VICTIMS_M_STATE#1", "LLC_VICTIMS_M_STATE#10", "LLC_VICTIMS_M_STATE#11", "LLC_VICTIMS_M_STATE#12", "LLC_VICTIMS_M_STATE#13", "LLC_VICTIMS_M_STATE#14", "LLC_VICTIMS_M_STATE#15", "LLC_VICTIMS_M_STATE#16", "LLC_VICTIMS_M_STATE#17", "LLC_VICTIMS_M_STATE#18", "LLC_VICTIMS_M_STATE#19", "LLC_VICTIMS_M_STATE#2", "LLC_VICTIMS_M_STATE#20", "LLC_VICTIMS_M_STATE#21", "LLC_VICTIMS_M_STATE#22", "LLC_VICTIMS_M_STATE#23", "LLC_VICTIMS_M_STATE#24", "LLC_VICTIMS_M_STATE#25", "LLC_VICTIMS_M_STATE#26", "LLC_VICTIMS_M_STATE#27", "LLC_VICTIMS_M_STATE#3", "LLC_VICTIMS_M_STATE#4", "LLC_VICTIMS_M_STATE#5", "LLC_VICTIMS_M_STATE#6", "LLC_VICTIMS_M_STATE#7", "LLC_VICTIMS_M_STATE#8", "LLC_VICTIMS_M_STATE#9"}});
+    ret.push_back({"L3 to/from system bandwidth [MBytes/s]", "1.0E-06*($LLC_LOOKUP_DATA_READ#0$+$LLC_LOOKUP_DATA_READ#1$+$LLC_LOOKUP_DATA_READ#2$+$LLC_LOOKUP_DATA_READ#3$+$LLC_LOOKUP_DATA_READ#4$+$LLC_LOOKUP_DATA_READ#5$+$LLC_LOOKUP_DATA_READ#6$+$LLC_LOOKUP_DATA_READ#7$+$LLC_LOOKUP_DATA_READ#8$+$LLC_LOOKUP_DATA_READ#9$+$LLC_LOOKUP_DATA_READ#10$+$LLC_LOOKUP_DATA_READ#11$+$LLC_LOOKUP_DATA_READ#12$+$LLC_LOOKUP_DATA_READ#13$+$LLC_LOOKUP_DATA_READ#14$+$LLC_LOOKUP_DATA_READ#15$+$LLC_LOOKUP_DATA_READ#16$+$LLC_LOOKUP_DATA_READ#17$+$LLC_LOOKUP_DATA_READ#18$+$LLC_LOOKUP_DATA_READ#19$+$LLC_LOOKUP_DATA_READ#20$+$LLC_LOOKUP_DATA_READ#21$+$LLC_LOOKUP_DATA_READ#22$+$LLC_LOOKUP_DATA_READ#23$+$LLC_LOOKUP_DATA_READ#24$+$LLC_LOOKUP_DATA_READ#25$+$LLC_LOOKUP_DATA_READ#26$+$LLC_LOOKUP_DATA_READ#27$+$LLC_VICTIMS_M_STATE#0$+$LLC_VICTIMS_M_STATE#1$+$LLC_VICTIMS_M_STATE#2$+$LLC_VICTIMS_M_STATE#3$+$LLC_VICTIMS_M_STATE#4$+$LLC_VICTIMS_M_STATE#5$+$LLC_VICTIMS_M_STATE#6$+$LLC_VICTIMS_M_STATE#7$+$LLC_VICTIMS_M_STATE#8$+$LLC_VICTIMS_M_STATE#9$+$LLC_VICTIMS_M_STATE#10$+$LLC_VICTIMS_M_STATE#11$+$LLC_VICTIMS_M_STATE#12$+$LLC_VICTIMS_M_STATE#13$+$LLC_VICTIMS_M_STATE#14$+$LLC_VICTIMS_M_STATE#15$+$LLC_VICTIMS_M_STATE#16$+$LLC_VICTIMS_M_STATE#17$+$LLC_VICTIMS_M_STATE#18$+$LLC_VICTIMS_M_STATE#19$+$LLC_VICTIMS_M_STATE#20$+$LLC_VICTIMS_M_STATE#21$+$LLC_VICTIMS_M_STATE#22$+$LLC_VICTIMS_M_STATE#23$+$LLC_VICTIMS_M_STATE#24$+$LLC_VICTIMS_M_STATE#25$+$LLC_VICTIMS_M_STATE#26$+$LLC_VICTIMS_M_STATE#27$)*64.0/$time$", {"LLC_LOOKUP_DATA_READ#0", "LLC_LOOKUP_DATA_READ#1", "LLC_LOOKUP_DATA_READ#10", "LLC_LOOKUP_DATA_READ#11", "LLC_LOOKUP_DATA_READ#12", "LLC_LOOKUP_DATA_READ#13", "LLC_LOOKUP_DATA_READ#14", "LLC_LOOKUP_DATA_READ#15", "LLC_LOOKUP_DATA_READ#16", "LLC_LOOKUP_DATA_READ#17", "LLC_LOOKUP_DATA_READ#18", "LLC_LOOKUP_DATA_READ#19", "LLC_LOOKUP_DATA_READ#2", "LLC_LOOKUP_DATA_READ#20", "LLC_LOOKUP_DATA_READ#21", "LLC_LOOKUP_DATA_READ#22", "LLC_LOOKUP_DATA_READ#23", "LLC_LOOKUP_DATA_READ#24", "LLC_LOOKUP_DATA_READ#25", "LLC_LOOKUP_DATA_READ#26", "LLC_LOOKUP_DATA_READ#27", "LLC_LOOKUP_DATA_READ#3", "LLC_LOOKUP_DATA_READ#4", "LLC_LOOKUP_DATA_READ#5", "LLC_LOOKUP_DATA_READ#6", "LLC_LOOKUP_DATA_READ#7", "LLC_LOOKUP_DATA_READ#8", "LLC_LOOKUP_DATA_READ#9", "LLC_VICTIMS_M_STATE#0", "LLC_VICTIMS_M_STATE#1", "LLC_VICTIMS_M_STATE#10", "LLC_VICTIMS_M_STATE#11", "LLC_VICTIMS_M_STATE#12", "LLC_VICTIMS_M_STATE#13", "LLC_VICTIMS_M_STATE#14", "LLC_VICTIMS_M_STATE#15", "LLC_VICTIMS_M_STATE#16", "LLC_VICTIMS_M_STATE#17", "LLC_VICTIMS_M_STATE#18", "LLC_VICTIMS_M_STATE#19", "LLC_VICTIMS_M_STATE#2", "LLC_VICTIMS_M_STATE#20", "LLC_VICTIMS_M_STATE#21", "LLC_VICTIMS_M_STATE#22", "LLC_VICTIMS_M_STATE#23", "LLC_VICTIMS_M_STATE#24", "LLC_VICTIMS_M_STATE#25", "LLC_VICTIMS_M_STATE#26", "LLC_VICTIMS_M_STATE#27", "LLC_VICTIMS_M_STATE#3", "LLC_VICTIMS_M_STATE#4", "LLC_VICTIMS_M_STATE#5", "LLC_VICTIMS_M_STATE#6", "LLC_VICTIMS_M_STATE#7", "LLC_VICTIMS_M_STATE#8", "LLC_VICTIMS_M_STATE#9", "time"}});
+    ret.push_back({"L3 to/from system data volume [GBytes]", "1.0E-09*($LLC_LOOKUP_DATA_READ#0$+$LLC_LOOKUP_DATA_READ#1$+$LLC_LOOKUP_DATA_READ#2$+$LLC_LOOKUP_DATA_READ#3$+$LLC_LOOKUP_DATA_READ#4$+$LLC_LOOKUP_DATA_READ#5$+$LLC_LOOKUP_DATA_READ#6$+$LLC_LOOKUP_DATA_READ#7$+$LLC_LOOKUP_DATA_READ#8$+$LLC_LOOKUP_DATA_READ#9$+$LLC_LOOKUP_DATA_READ#10$+$LLC_LOOKUP_DATA_READ#11$+$LLC_LOOKUP_DATA_READ#12$+$LLC_LOOKUP_DATA_READ#13$+$LLC_LOOKUP_DATA_READ#14$+$LLC_LOOKUP_DATA_READ#15$+$LLC_LOOKUP_DATA_READ#16$+$LLC_LOOKUP_DATA_READ#17$+$LLC_LOOKUP_DATA_READ#18$+$LLC_LOOKUP_DATA_READ#19$+$LLC_LOOKUP_DATA_READ#20$+$LLC_LOOKUP_DATA_READ#21$+$LLC_LOOKUP_DATA_READ#22$+$LLC_LOOKUP_DATA_READ#23$+$LLC_LOOKUP_DATA_READ#24$+$LLC_LOOKUP_DATA_READ#25$+$LLC_LOOKUP_DATA_READ#26$+$LLC_LOOKUP_DATA_READ#27$+$LLC_VICTIMS_M_STATE#0$+$LLC_VICTIMS_M_STATE#1$+$LLC_VICTIMS_M_STATE#2$+$LLC_VICTIMS_M_STATE#3$+$LLC_VICTIMS_M_STATE#4$+$LLC_VICTIMS_M_STATE#5$+$LLC_VICTIMS_M_STATE#6$+$LLC_VICTIMS_M_STATE#7$+$LLC_VICTIMS_M_STATE#8$+$LLC_VICTIMS_M_STATE#9$+$LLC_VICTIMS_M_STATE#10$+$LLC_VICTIMS_M_STATE#11$+$LLC_VICTIMS_M_STATE#12$+$LLC_VICTIMS_M_STATE#13$+$LLC_VICTIMS_M_STATE#14$+$LLC_VICTIMS_M_STATE#15$+$LLC_VICTIMS_M_STATE#16$+$LLC_VICTIMS_M_STATE#17$+$LLC_VICTIMS_M_STATE#18$+$LLC_VICTIMS_M_STATE#19$+$LLC_VICTIMS_M_STATE#20$+$LLC_VICTIMS_M_STATE#21$+$LLC_VICTIMS_M_STATE#22$+$LLC_VICTIMS_M_STATE#23$+$LLC_VICTIMS_M_STATE#24$+$LLC_VICTIMS_M_STATE#25$+$LLC_VICTIMS_M_STATE#26$+$LLC_VICTIMS_M_STATE#27$)*64.0", {"LLC_LOOKUP_DATA_READ#0", "LLC_LOOKUP_DATA_READ#1", "LLC_LOOKUP_DATA_READ#10", "LLC_LOOKUP_DATA_READ#11", "LLC_LOOKUP_DATA_READ#12", "LLC_LOOKUP_DATA_READ#13", "LLC_LOOKUP_DATA_READ#14", "LLC_LOOKUP_DATA_READ#15", "LLC_LOOKUP_DATA_READ#16", "LLC_LOOKUP_DATA_READ#17", "LLC_LOOKUP_DATA_READ#18", "LLC_LOOKUP_DATA_READ#19", "LLC_LOOKUP_DATA_READ#2", "LLC_LOOKUP_DATA_READ#20", "LLC_LOOKUP_DATA_READ#21", "LLC_LOOKUP_DATA_READ#22", "LLC_LOOKUP_DATA_READ#23", "LLC_LOOKUP_DATA_READ#24", "LLC_LOOKUP_DATA_READ#25", "LLC_LOOKUP_DATA_READ#26", "LLC_LOOKUP_DATA_READ#27", "LLC_LOOKUP_DATA_READ#3", "LLC_LOOKUP_DATA_READ#4", "LLC_LOOKUP_DATA_READ#5", "LLC_LOOKUP_DATA_READ#6", "LLC_LOOKUP_DATA_READ#7", "LLC_LOOKUP_DATA_READ#8", "LLC_LOOKUP_DATA_READ#9", "LLC_VICTIMS_M_STATE#0", "LLC_VICTIMS_M_STATE#1", "LLC_VICTIMS_M_STATE#10", "LLC_VICTIMS_M_STATE#11", "LLC_VICTIMS_M_STATE#12", "LLC_VICTIMS_M_STATE#13", "LLC_VICTIMS_M_STATE#14", "LLC_VICTIMS_M_STATE#15", "LLC_VICTIMS_M_STATE#16", "LLC_VICTIMS_M_STATE#17", "LLC_VICTIMS_M_STATE#18", "LLC_VICTIMS_M_STATE#19", "LLC_VICTIMS_M_STATE#2", "LLC_VICTIMS_M_STATE#20", "LLC_VICTIMS_M_STATE#21", "LLC_VICTIMS_M_STATE#22", "LLC_VICTIMS_M_STATE#23", "LLC_VICTIMS_M_STATE#24", "LLC_VICTIMS_M_STATE#25", "LLC_VICTIMS_M_STATE#26", "LLC_VICTIMS_M_STATE#27", "LLC_VICTIMS_M_STATE#3", "LLC_VICTIMS_M_STATE#4", "LLC_VICTIMS_M_STATE#5", "LLC_VICTIMS_M_STATE#6", "LLC_VICTIMS_M_STATE#7", "LLC_VICTIMS_M_STATE#8", "LLC_VICTIMS_M_STATE#9"}});
+    ret.push_back({"Memory read bandwidth [MBytes/s]", "1.0E-06*($CAS_COUNT_RD#0$+$CAS_COUNT_RD#1$+$CAS_COUNT_RD#2$+$CAS_COUNT_RD#3$+$CAS_COUNT_RD#4$+$CAS_COUNT_RD#5$)*64.0/$time$", {"CAS_COUNT_RD#0", "CAS_COUNT_RD#1", "CAS_COUNT_RD#2", "CAS_COUNT_RD#3", "CAS_COUNT_RD#4", "CAS_COUNT_RD#5", "time"}});
+    ret.push_back({"Memory read data volume [GBytes]", "1.0E-09*($CAS_COUNT_RD#0$+$CAS_COUNT_RD#1$+$CAS_COUNT_RD#2$+$CAS_COUNT_RD#3$+$CAS_COUNT_RD#4$+$CAS_COUNT_RD#5$)*64.0", {"CAS_COUNT_RD#0", "CAS_COUNT_RD#1", "CAS_COUNT_RD#2", "CAS_COUNT_RD#3", "CAS_COUNT_RD#4", "CAS_COUNT_RD#5"}});
+    ret.push_back({"Memory write bandwidth [MBytes/s]", "1.0E-06*($CAS_COUNT_WR#0$+$CAS_COUNT_WR#1$+$CAS_COUNT_WR#2$+$CAS_COUNT_WR#3$+$CAS_COUNT_WR#4$+$CAS_COUNT_WR#5$)*64.0/$time$", {"CAS_COUNT_WR#0", "CAS_COUNT_WR#1", "CAS_COUNT_WR#2", "CAS_COUNT_WR#3", "CAS_COUNT_WR#4", "CAS_COUNT_WR#5", "time"}});
+    ret.push_back({"Memory write data volume [GBytes]", "1.0E-09*($CAS_COUNT_WR#0$+$CAS_COUNT_WR#1$+$CAS_COUNT_WR#2$+$CAS_COUNT_WR#3$+$CAS_COUNT_WR#4$+$CAS_COUNT_WR#5$)*64.0", {"CAS_COUNT_WR#0", "CAS_COUNT_WR#1", "CAS_COUNT_WR#2", "CAS_COUNT_WR#3", "CAS_COUNT_WR#4", "CAS_COUNT_WR#5"}});
+    ret.push_back({"Memory bandwidth [MBytes/s]", "1.0E-06*($CAS_COUNT_RD#0$+$CAS_COUNT_RD#1$+$CAS_COUNT_RD#2$+$CAS_COUNT_RD#3$+$CAS_COUNT_RD#4$+$CAS_COUNT_RD#5$+$CAS_COUNT_WR#0$+$CAS_COUNT_WR#1$+$CAS_COUNT_WR#2$+$CAS_COUNT_WR#3$+$CAS_COUNT_WR#4$+$CAS_COUNT_WR#5$)*64.0/$time$", {"CAS_COUNT_RD#0", "CAS_COUNT_RD#1", "CAS_COUNT_RD#2", "CAS_COUNT_RD#3", "CAS_COUNT_RD#4", "CAS_COUNT_RD#5", "CAS_COUNT_WR#0", "CAS_COUNT_WR#1", "CAS_COUNT_WR#2", "CAS_COUNT_WR#3", "CAS_COUNT_WR#4", "CAS_COUNT_WR#5", "time"}});
+    ret.push_back({"Memory data volume [GBytes]", "1.0E-09*($CAS_COUNT_RD#0$+$CAS_COUNT_RD#1$+$CAS_COUNT_RD#2$+$CAS_COUNT_RD#3$+$CAS_COUNT_RD#4$+$CAS_COUNT_RD#5$+$CAS_COUNT_WR#0$+$CAS_COUNT_WR#1$+$CAS_COUNT_WR#2$+$CAS_COUNT_WR#3$+$CAS_COUNT_WR#4$+$CAS_COUNT_WR#5$)*64.0", {"CAS_COUNT_RD#0", "CAS_COUNT_RD#1", "CAS_COUNT_RD#2", "CAS_COUNT_RD#3", "CAS_COUNT_RD#4", "CAS_COUNT_RD#5", "CAS_COUNT_WR#0", "CAS_COUNT_WR#1", "CAS_COUNT_WR#2", "CAS_COUNT_WR#3", "CAS_COUNT_WR#4", "CAS_COUNT_WR#5"}});
+
+    // CLOCK
+    ret.push_back({"Uncore Clock [MHz]", "1.E-06*$UNCORE_CLOCK#0$/$time$", {"UNCORE_CLOCK#0", "time"}});
+    ret.push_back({"Energy [J]", "$PWR_PKG_ENERGY#0$", {"PWR_PKG_ENERGY#0"}});
+    ret.push_back({"Power [W]", "$PWR_PKG_ENERGY#0$/$time$", {"PWR_PKG_ENERGY#0", "time"}});
+
+    // CYCLE_ACTIVITY
+    ret.push_back({"Cycles without execution [%]", "($CYCLE_ACTIVITY_CYCLES_NO_EXECUTE#0$/$CPU_CLK_UNHALTED_CORE#0$)*100", {"CPU_CLK_UNHALTED_CORE#0", "CYCLE_ACTIVITY_CYCLES_NO_EXECUTE#0"}});
+    ret.push_back({"Cycles without execution due to L1D [%]", "($CYCLE_ACTIVITY_CYCLES_L1D_PENDING#0$/$CPU_CLK_UNHALTED_CORE#0$)*100", {"CPU_CLK_UNHALTED_CORE#0", "CYCLE_ACTIVITY_CYCLES_L1D_PENDING#0"}});
+    ret.push_back({"Cycles without execution due to L2 [%]", "($CYCLE_ACTIVITY_CYCLES_L2_PENDING#0$/$CPU_CLK_UNHALTED_CORE#0$)*100", {"CPU_CLK_UNHALTED_CORE#0", "CYCLE_ACTIVITY_CYCLES_L2_PENDING#0"}});
+    ret.push_back({"Cycles without execution due to memory loads [%]", "($CYCLE_ACTIVITY_CYCLES_LDM_PENDING#0$/$CPU_CLK_UNHALTED_CORE#0$)*100", {"CPU_CLK_UNHALTED_CORE#0", "CYCLE_ACTIVITY_CYCLES_LDM_PENDING#0"}});
+
+    // CYCLE_STALLS
+    ret.push_back({"Total execution stalls", "$CYCLE_ACTIVITY_STALLS_TOTAL#0$", {"CYCLE_ACTIVITY_STALLS_TOTAL#0"}});
+    ret.push_back({"Stalls caused by L1D misses [%]", "($CYCLE_ACTIVITY_STALLS_L1D_PENDING#0$/$CYCLE_ACTIVITY_STALLS_TOTAL#0$)*100", {"CYCLE_ACTIVITY_STALLS_L1D_PENDING#0", "CYCLE_ACTIVITY_STALLS_TOTAL#0"}});
+    ret.push_back({"Stalls caused by L2 misses [%]", "($CYCLE_ACTIVITY_STALLS_L2_PENDING#0$/$CYCLE_ACTIVITY_STALLS_TOTAL#0$)*100", {"CYCLE_ACTIVITY_STALLS_L2_PENDING#0", "CYCLE_ACTIVITY_STALLS_TOTAL#0"}});
+    ret.push_back({"Stalls caused by memory loads [%]", "($CYCLE_ACTIVITY_STALLS_LDM_PENDING#0$/$CYCLE_ACTIVITY_STALLS_TOTAL#0$)*100", {"CYCLE_ACTIVITY_STALLS_LDM_PENDING#0", "CYCLE_ACTIVITY_STALLS_TOTAL#0"}});
+    ret.push_back({"Execution stall rate [%]", "($CYCLE_ACTIVITY_STALLS_TOTAL#0$/$CPU_CLK_UNHALTED_CORE#0$)*100", {"CPU_CLK_UNHALTED_CORE#0", "CYCLE_ACTIVITY_STALLS_TOTAL#0"}});
+    ret.push_back({"Stalls caused by L1D misses rate [%]", "($CYCLE_ACTIVITY_STALLS_L1D_PENDING#0$/$CPU_CLK_UNHALTED_CORE#0$)*100", {"CPU_CLK_UNHALTED_CORE#0", "CYCLE_ACTIVITY_STALLS_L1D_PENDING#0"}});
+    ret.push_back({"Stalls caused by L2 misses rate [%]", "($CYCLE_ACTIVITY_STALLS_L2_PENDING#0$/$CPU_CLK_UNHALTED_CORE#0$)*100", {"CPU_CLK_UNHALTED_CORE#0", "CYCLE_ACTIVITY_STALLS_L2_PENDING#0"}});
+    ret.push_back({"Stalls caused by memory loads rate [%]", "($CYCLE_ACTIVITY_STALLS_LDM_PENDING#0$/$CPU_CLK_UNHALTED_CORE#0$)*100", {"CPU_CLK_UNHALTED_CORE#0", "CYCLE_ACTIVITY_STALLS_LDM_PENDING#0"}});
+
+    // DATA
+    ret.push_back({"Load to store ratio", "$MEM_INST_RETIRED_ALL_LOADS#0$/$MEM_INST_RETIRED_ALL_STORES#0$", {"MEM_INST_RETIRED_ALL_LOADS#0", "MEM_INST_RETIRED_ALL_STORES#0"}});
+
+    // DIVIDE
+    ret.push_back({"Number of divide ops", "$ARITH_DIVIDER_COUNT#0$", {"ARITH_DIVIDER_COUNT#0"}});
+    ret.push_back({"Avg. divide unit usage duration", "$ARITH_DIVIDER_ACTIVE#0$/$ARITH_DIVIDER_COUNT#0$", {"ARITH_DIVIDER_ACTIVE#0", "ARITH_DIVIDER_COUNT#0"}});
+
+    // ENERGY
+    ret.push_back({"Temperature [C]", "$TEMP_CORE#0$", {"TEMP_CORE#0"}});
+    ret.push_back({"Energy PP0 [J]", "$PWR_PP0_ENERGY#0$", {"PWR_PP0_ENERGY#0"}});
+    ret.push_back({"Power PP0 [W]", "$PWR_PP0_ENERGY#0$/$time$", {"PWR_PP0_ENERGY#0", "time"}});
+    ret.push_back({"Energy DRAM [J]", "$PWR_DRAM_ENERGY#0$", {"PWR_DRAM_ENERGY#0"}});
+    ret.push_back({"Power DRAM [W]", "$PWR_DRAM_ENERGY#0$/$time$", {"PWR_DRAM_ENERGY#0", "time"}});
+
+    // FLOPS_AVX
+    ret.push_back({"Packed SP [MFLOP/s]", "1.0E-06*($FP_ARITH_INST_RETIRED_256B_PACKED_SINGLE#0$*8.0+$FP_ARITH_INST_RETIRED_512B_PACKED_SINGLE#0$*16.0)/$time$", {"FP_ARITH_INST_RETIRED_256B_PACKED_SINGLE#0", "FP_ARITH_INST_RETIRED_512B_PACKED_SINGLE#0", "time"}});
+    ret.push_back({"Packed DP [MFLOP/s]", "1.0E-06*($FP_ARITH_INST_RETIRED_256B_PACKED_DOUBLE#0$*4.0+$FP_ARITH_INST_RETIRED_512B_PACKED_DOUBLE#0$*8.0)/$time$", {"FP_ARITH_INST_RETIRED_256B_PACKED_DOUBLE#0", "FP_ARITH_INST_RETIRED_512B_PACKED_DOUBLE#0", "time"}});
+
+    // FLOPS_DP
+    ret.push_back({"DP [MFLOP/s]", "1.0E-06*($FP_ARITH_INST_RETIRED_128B_PACKED_DOUBLE#0$*2.0+$FP_ARITH_INST_RETIRED_SCALAR_DOUBLE#0$+$FP_ARITH_INST_RETIRED_256B_PACKED_DOUBLE#0$*4.0+$FP_ARITH_INST_RETIRED_512B_PACKED_DOUBLE#0$*8.0)/$time$", {"FP_ARITH_INST_RETIRED_128B_PACKED_DOUBLE#0", "FP_ARITH_INST_RETIRED_256B_PACKED_DOUBLE#0", "FP_ARITH_INST_RETIRED_512B_PACKED_DOUBLE#0", "FP_ARITH_INST_RETIRED_SCALAR_DOUBLE#0", "time"}});
+    ret.push_back({"AVX DP [MFLOP/s]", "1.0E-06*($FP_ARITH_INST_RETIRED_256B_PACKED_DOUBLE#0$*4.0+$FP_ARITH_INST_RETIRED_512B_PACKED_DOUBLE#0$*8.0)/$time$", {"FP_ARITH_INST_RETIRED_256B_PACKED_DOUBLE#0", "FP_ARITH_INST_RETIRED_512B_PACKED_DOUBLE#0", "time"}});
+    ret.push_back({"AVX512 DP [MFLOP/s]", "1.0E-06*($FP_ARITH_INST_RETIRED_512B_PACKED_DOUBLE#0$*8.0)/$time$", {"FP_ARITH_INST_RETIRED_512B_PACKED_DOUBLE#0", "time"}});
+    ret.push_back({"Packed [MUOPS/s]", "1.0E-06*($FP_ARITH_INST_RETIRED_128B_PACKED_DOUBLE#0$+$FP_ARITH_INST_RETIRED_256B_PACKED_DOUBLE#0$+$FP_ARITH_INST_RETIRED_512B_PACKED_DOUBLE#0$)/$time$", {"FP_ARITH_INST_RETIRED_128B_PACKED_DOUBLE#0", "FP_ARITH_INST_RETIRED_256B_PACKED_DOUBLE#0", "FP_ARITH_INST_RETIRED_512B_PACKED_DOUBLE#0", "time"}});
+    ret.push_back({"Scalar [MUOPS/s]", "1.0E-06*$FP_ARITH_INST_RETIRED_SCALAR_DOUBLE#0$/$time$", {"FP_ARITH_INST_RETIRED_SCALAR_DOUBLE#0", "time"}});
+    ret.push_back({"Vectorization ratio", "100*($FP_ARITH_INST_RETIRED_128B_PACKED_DOUBLE#0$+$FP_ARITH_INST_RETIRED_256B_PACKED_DOUBLE#0$+$FP_ARITH_INST_RETIRED_512B_PACKED_DOUBLE#0$)/($FP_ARITH_INST_RETIRED_128B_PACKED_DOUBLE#0$+$FP_ARITH_INST_RETIRED_SCALAR_DOUBLE#0$+$FP_ARITH_INST_RETIRED_256B_PACKED_DOUBLE#0$+$FP_ARITH_INST_RETIRED_512B_PACKED_DOUBLE#0$)", {"FP_ARITH_INST_RETIRED_128B_PACKED_DOUBLE#0", "FP_ARITH_INST_RETIRED_256B_PACKED_DOUBLE#0", "FP_ARITH_INST_RETIRED_512B_PACKED_DOUBLE#0", "FP_ARITH_INST_RETIRED_SCALAR_DOUBLE#0"}});
+
+    // FLOPS_SP
+    ret.push_back({"SP [MFLOP/s]", "1.0E-06*($FP_ARITH_INST_RETIRED_128B_PACKED_SINGLE#0$*4.0+$FP_ARITH_INST_RETIRED_SCALAR_SINGLE#0$+$FP_ARITH_INST_RETIRED_256B_PACKED_SINGLE#0$*8.0+$FP_ARITH_INST_RETIRED_512B_PACKED_SINGLE#0$*16.0)/$time$", {"FP_ARITH_INST_RETIRED_128B_PACKED_SINGLE#0", "FP_ARITH_INST_RETIRED_256B_PACKED_SINGLE#0", "FP_ARITH_INST_RETIRED_512B_PACKED_SINGLE#0", "FP_ARITH_INST_RETIRED_SCALAR_SINGLE#0", "time"}});
+    ret.push_back({"AVX SP [MFLOP/s]", "1.0E-06*($FP_ARITH_INST_RETIRED_256B_PACKED_SINGLE#0$*8.0+$FP_ARITH_INST_RETIRED_512B_PACKED_SINGLE#0$*16.0)/$time$", {"FP_ARITH_INST_RETIRED_256B_PACKED_SINGLE#0", "FP_ARITH_INST_RETIRED_512B_PACKED_SINGLE#0", "time"}});
+    ret.push_back({"AVX512 SP [MFLOP/s]", "1.0E-06*($FP_ARITH_INST_RETIRED_512B_PACKED_SINGLE#0$*16.0)/$time$", {"FP_ARITH_INST_RETIRED_512B_PACKED_SINGLE#0", "time"}});
+
+    // L2
+    ret.push_back({"L2D load bandwidth [MBytes/s]", "1.0E-06*$L1D_REPLACEMENT#0$*64.0/$time$", {"L1D_REPLACEMENT#0", "time"}});
+    ret.push_back({"L2D load data volume [GBytes]", "1.0E-09*$L1D_REPLACEMENT#0$*64.0", {"L1D_REPLACEMENT#0"}});
+    ret.push_back({"L2D evict bandwidth [MBytes/s]", "1.0E-06*$L1D_M_EVICT#0$*64.0/$time$", {"L1D_M_EVICT#0", "time"}});
+    ret.push_back({"L2D evict data volume [GBytes]", "1.0E-09*$L1D_M_EVICT#0$*64.0", {"L1D_M_EVICT#0"}});
+    ret.push_back({"L2 bandwidth [MBytes/s]", "1.0E-06*($L1D_REPLACEMENT#0$+$L1D_M_EVICT#0$+$ICACHE_64B_IFTAG_MISS#0$)*64.0/$time$", {"ICACHE_64B_IFTAG_MISS#0", "L1D_M_EVICT#0", "L1D_REPLACEMENT#0", "time"}});
+    ret.push_back({"L2 data volume [GBytes]", "1.0E-09*($L1D_REPLACEMENT#0$+$L1D_M_EVICT#0$+$ICACHE_64B_IFTAG_MISS#0$)*64.0", {"ICACHE_64B_IFTAG_MISS#0", "L1D_M_EVICT#0", "L1D_REPLACEMENT#0"}});
+
+    // L2CACHE
+    ret.push_back({"L2 request rate", "$L2_TRANS_ALL_REQUESTS#0$/$INSTR_RETIRED_ANY#0$", {"INSTR_RETIRED_ANY#0", "L2_TRANS_ALL_REQUESTS#0"}});
+    ret.push_back({"L2 miss rate", "$L2_RQSTS_MISS#0$/$INSTR_RETIRED_ANY#0$", {"INSTR_RETIRED_ANY#0", "L2_RQSTS_MISS#0"}});
+    ret.push_back({"L2 miss ratio", "$L2_RQSTS_MISS#0$/$L2_TRANS_ALL_REQUESTS#0$", {"L2_RQSTS_MISS#0", "L2_TRANS_ALL_REQUESTS#0"}});
+
+    // L3
+    ret.push_back({"L3 load bandwidth [MBytes/s]", "1.0E-06*$L2_LINES_IN_ALL#0$*64.0/$time$", {"L2_LINES_IN_ALL#0", "time"}});
+    ret.push_back({"L3 load data volume [GBytes]", "1.0E-09*$L2_LINES_IN_ALL#0$*64.0", {"L2_LINES_IN_ALL#0"}});
+    ret.push_back({"L3 evict bandwidth [MBytes/s]", "1.0E-06*$IDI_MISC_WB_UPGRADE#0$*64.0/$time$", {"IDI_MISC_WB_UPGRADE#0", "time"}});
+    ret.push_back({"L3 evict data volume [GBytes]", "1.0E-09*$IDI_MISC_WB_UPGRADE#0$*64.0", {"IDI_MISC_WB_UPGRADE#0"}});
+    ret.push_back({"L3|MEM evict bandwidth [MBytes/s]", "1.0E-06*$L2_TRANS_L2_WB#0$*64.0/$time$", {"L2_TRANS_L2_WB#0", "time"}});
+    ret.push_back({"L3|MEM evict data volume [GBytes]", "1.0E-09*$L2_TRANS_L2_WB#0$*64.0", {"L2_TRANS_L2_WB#0"}});
+    ret.push_back({"Dropped CLs bandwidth [MBytes/s]", "1.0E-6*$IDI_MISC_WB_DOWNGRADE#0$*64.0/$time$", {"IDI_MISC_WB_DOWNGRADE#0", "time"}});
+    ret.push_back({"Dropped CLs data volume [GBytes]", "1.0E-9*$IDI_MISC_WB_DOWNGRADE#0$*64.0", {"IDI_MISC_WB_DOWNGRADE#0"}});
+    ret.push_back({"L3 bandwidth [MBytes/s]", "1.0E-06*($L2_LINES_IN_ALL#0$+$L2_TRANS_L2_WB#0$)*64.0/$time$", {"L2_LINES_IN_ALL#0", "L2_TRANS_L2_WB#0", "time"}});
+    ret.push_back({"L3 data volume [GBytes]", "1.0E-09*($L2_LINES_IN_ALL#0$+$L2_TRANS_L2_WB#0$)*64.0", {"L2_LINES_IN_ALL#0", "L2_TRANS_L2_WB#0"}});
+
+    // L3CACHE
+    ret.push_back({"L3 request rate", "($MEM_LOAD_RETIRED_L3_HIT#0$+$MEM_LOAD_RETIRED_L3_MISS#0$)/$UOPS_RETIRED_ALL#0$", {"MEM_LOAD_RETIRED_L3_HIT#0", "MEM_LOAD_RETIRED_L3_MISS#0", "UOPS_RETIRED_ALL#0"}});
+    ret.push_back({"L3 miss rate", "$MEM_LOAD_RETIRED_L3_MISS#0$/$UOPS_RETIRED_ALL#0$", {"MEM_LOAD_RETIRED_L3_MISS#0", "UOPS_RETIRED_ALL#0"}});
+    ret.push_back({"L3 miss ratio", "$MEM_LOAD_RETIRED_L3_MISS#0$/($MEM_LOAD_RETIRED_L3_HIT#0$+$MEM_LOAD_RETIRED_L3_MISS#0$)", {"MEM_LOAD_RETIRED_L3_HIT#0", "MEM_LOAD_RETIRED_L3_MISS#0"}});
+
+    // MEM
+
+    // MEM_DP
+    ret.push_back({"Operational intensity", "($FP_ARITH_INST_RETIRED_128B_PACKED_DOUBLE#0$*2.0+$FP_ARITH_INST_RETIRED_SCALAR_DOUBLE#0$+$FP_ARITH_INST_RETIRED_256B_PACKED_DOUBLE#0$*4.0+$FP_ARITH_INST_RETIRED_512B_PACKED_DOUBLE#0$*8.0)/(($CAS_COUNT_RD#0$+$CAS_COUNT_RD#1$+$CAS_COUNT_RD#2$+$CAS_COUNT_RD#3$+$CAS_COUNT_RD#4$+$CAS_COUNT_RD#5$+$CAS_COUNT_WR#0$+$CAS_COUNT_WR#1$+$CAS_COUNT_WR#2$+$CAS_COUNT_WR#3$+$CAS_COUNT_WR#4$+$CAS_COUNT_WR#5$)*64.0)", {"CAS_COUNT_RD#0", "CAS_COUNT_RD#1", "CAS_COUNT_RD#2", "CAS_COUNT_RD#3", "CAS_COUNT_RD#4", "CAS_COUNT_RD#5", "CAS_COUNT_WR#0", "CAS_COUNT_WR#1", "CAS_COUNT_WR#2", "CAS_COUNT_WR#3", "CAS_COUNT_WR#4", "CAS_COUNT_WR#5", "FP_ARITH_INST_RETIRED_128B_PACKED_DOUBLE#0", "FP_ARITH_INST_RETIRED_256B_PACKED_DOUBLE#0", "FP_ARITH_INST_RETIRED_512B_PACKED_DOUBLE#0", "FP_ARITH_INST_RETIRED_SCALAR_DOUBLE#0"}});
+
+    // MEM_SP
+
+    // TLB_DATA
+    ret.push_back({"L1 DTLB load misses", "$DTLB_LOAD_MISSES_CAUSES_A_WALK#0$", {"DTLB_LOAD_MISSES_CAUSES_A_WALK#0"}});
+    ret.push_back({"L1 DTLB load miss rate", "$DTLB_LOAD_MISSES_CAUSES_A_WALK#0$/$INSTR_RETIRED_ANY#0$", {"DTLB_LOAD_MISSES_CAUSES_A_WALK#0", "INSTR_RETIRED_ANY#0"}});
+    ret.push_back({"L1 DTLB load miss duration [Cyc]", "$DTLB_LOAD_MISSES_WALK_ACTIVE#0$/$DTLB_LOAD_MISSES_CAUSES_A_WALK#0$", {"DTLB_LOAD_MISSES_CAUSES_A_WALK#0", "DTLB_LOAD_MISSES_WALK_ACTIVE#0"}});
+    ret.push_back({"L1 DTLB store misses", "$DTLB_STORE_MISSES_CAUSES_A_WALK#0$", {"DTLB_STORE_MISSES_CAUSES_A_WALK#0"}});
+    ret.push_back({"L1 DTLB store miss rate", "$DTLB_STORE_MISSES_CAUSES_A_WALK#0$/$INSTR_RETIRED_ANY#0$", {"DTLB_STORE_MISSES_CAUSES_A_WALK#0", "INSTR_RETIRED_ANY#0"}});
+    ret.push_back({"L1 DTLB store miss duration [Cyc]", "$DTLB_STORE_MISSES_WALK_ACTIVE#0$/$DTLB_STORE_MISSES_CAUSES_A_WALK#0$", {"DTLB_STORE_MISSES_CAUSES_A_WALK#0", "DTLB_STORE_MISSES_WALK_ACTIVE#0"}});
+
+    // TLB_INSTR
+    ret.push_back({"L1 ITLB misses", "$ITLB_MISSES_CAUSES_A_WALK#0$", {"ITLB_MISSES_CAUSES_A_WALK#0"}});
+    ret.push_back({"L1 ITLB miss rate", "$ITLB_MISSES_CAUSES_A_WALK#0$/$INSTR_RETIRED_ANY#0$", {"INSTR_RETIRED_ANY#0", "ITLB_MISSES_CAUSES_A_WALK#0"}});
+    ret.push_back({"L1 ITLB miss duration [Cyc]", "$ITLB_MISSES_WALK_ACTIVE#0$/$ITLB_MISSES_CAUSES_A_WALK#0$", {"ITLB_MISSES_CAUSES_A_WALK#0", "ITLB_MISSES_WALK_ACTIVE#0"}});
+
+    // TMA
+    ret.push_back({"IPC", "$INSTR_RETIRED_ANY#0$/$CPU_CLK_UNHALTED_CORE#0$", {"CPU_CLK_UNHALTED_CORE#0", "INSTR_RETIRED_ANY#0"}});
+    ret.push_back({"Total Slots", "4*$CPU_CLK_UNHALTED_CORE#0$", {"CPU_CLK_UNHALTED_CORE#0"}});
+    ret.push_back({"Slots Retired", "$UOPS_RETIRED_RETIRE_SLOTS#0$", {"UOPS_RETIRED_RETIRE_SLOTS#0"}});
+    ret.push_back({"Fetch Bubbles", "$IDQ_UOPS_NOT_DELIVERED_CORE#0$", {"IDQ_UOPS_NOT_DELIVERED_CORE#0"}});
+    ret.push_back({"Recovery Bubbles", "4*$INT_MISC_RECOVERY_CYCLES#0$", {"INT_MISC_RECOVERY_CYCLES#0"}});
+    ret.push_back({"Front End [%]", "$IDQ_UOPS_NOT_DELIVERED_CORE#0$/(4*$CPU_CLK_UNHALTED_CORE#0$)*100", {"CPU_CLK_UNHALTED_CORE#0", "IDQ_UOPS_NOT_DELIVERED_CORE#0"}});
+    ret.push_back({"Speculation [%]", "($UOPS_ISSUED_ANY#0$-$UOPS_RETIRED_RETIRE_SLOTS#0$+(4*$INT_MISC_RECOVERY_CYCLES#0$))/(4*$CPU_CLK_UNHALTED_CORE#0$)*100", {"CPU_CLK_UNHALTED_CORE#0", "INT_MISC_RECOVERY_CYCLES#0", "UOPS_ISSUED_ANY#0", "UOPS_RETIRED_RETIRE_SLOTS#0"}});
+    ret.push_back({"Retiring [%]", "$UOPS_RETIRED_RETIRE_SLOTS#0$/(4*$CPU_CLK_UNHALTED_CORE#0$)*100", {"CPU_CLK_UNHALTED_CORE#0", "UOPS_RETIRED_RETIRE_SLOTS#0"}});
+    ret.push_back({"Back End [%]", "(1-(($IDQ_UOPS_NOT_DELIVERED_CORE#0$+$UOPS_ISSUED_ANY#0$+(4*$INT_MISC_RECOVERY_CYCLES#0$))/(4*$CPU_CLK_UNHALTED_CORE#0$)))*100", {"CPU_CLK_UNHALTED_CORE#0", "IDQ_UOPS_NOT_DELIVERED_CORE#0", "INT_MISC_RECOVERY_CYCLES#0", "UOPS_ISSUED_ANY#0"}});
+
+    // UOPS_EXEC
+    ret.push_back({"Used cycles ratio [%] exec", "100*$UOPS_EXECUTED_USED_CYCLES#0$/$CPU_CLOCK_UNHALTED_TOTAL_CYCLES#0$", {"CPU_CLOCK_UNHALTED_TOTAL_CYCLES#0", "UOPS_EXECUTED_USED_CYCLES#0"}});
+    ret.push_back({"Unused cycles ratio [%] exec", "100*$UOPS_EXECUTED_STALL_CYCLES#0$/$CPU_CLOCK_UNHALTED_TOTAL_CYCLES#0$", {"CPU_CLOCK_UNHALTED_TOTAL_CYCLES#0", "UOPS_EXECUTED_STALL_CYCLES#0"}});
+    ret.push_back({"Avg stall duration [cycles] exec", "$UOPS_EXECUTED_STALL_CYCLES#0$/$UOPS_EXECUTED_STALL_CYCLES#1$", {"UOPS_EXECUTED_STALL_CYCLES#0", "UOPS_EXECUTED_STALL_CYCLES#1"}});
+
+    // UOPS_ISSUE
+    ret.push_back({"Used cycles ratio [%] issue", "100*$UOPS_ISSUED_USED_CYCLES#0$/$CPU_CLOCK_UNHALTED_TOTAL_CYCLES#0$", {"CPU_CLOCK_UNHALTED_TOTAL_CYCLES#0", "UOPS_ISSUED_USED_CYCLES#0"}});
+    ret.push_back({"Unused cycles ratio [%] issue", "100*$UOPS_ISSUED_STALL_CYCLES#0$/$CPU_CLOCK_UNHALTED_TOTAL_CYCLES#0$", {"CPU_CLOCK_UNHALTED_TOTAL_CYCLES#0", "UOPS_ISSUED_STALL_CYCLES#0"}});
+    ret.push_back({"Avg stall duration [cycles] issue", "$UOPS_ISSUED_STALL_CYCLES#0$/$UOPS_ISSUED_STALL_CYCLES#1$", {"UOPS_ISSUED_STALL_CYCLES#0", "UOPS_ISSUED_STALL_CYCLES#1"}});
+
+    // UOPS_RETIRE
+    ret.push_back({"Used cycles ratio [%] retire", "100*$UOPS_RETIRED_USED_CYCLES#0$/$CPU_CLOCK_UNHALTED_TOTAL_CYCLES#0$", {"CPU_CLOCK_UNHALTED_TOTAL_CYCLES#0", "UOPS_RETIRED_USED_CYCLES#0"}});
+    ret.push_back({"Unused cycles ratio [%] retire", "100*$UOPS_RETIRED_STALL_CYCLES#0$/$CPU_CLOCK_UNHALTED_TOTAL_CYCLES#0$", {"CPU_CLOCK_UNHALTED_TOTAL_CYCLES#0", "UOPS_RETIRED_STALL_CYCLES#0"}});
+    ret.push_back({"Avg stall duration [cycles] retire", "$UOPS_RETIRED_STALL_CYCLES#0$/$UOPS_RETIRED_STALL_CYCLES#1$", {"UOPS_RETIRED_STALL_CYCLES#0", "UOPS_RETIRED_STALL_CYCLES#1"}});
+
+    // UPI
+    ret.push_back({"Received data bandwidth [MByte/s]", "1.0E-06*(($RXL_FLITS_ALL_DATA#0$+$RXL_FLITS_ALL_DATA#1$+$RXL_FLITS_ALL_DATA#2$)/9.0)*64.0/$time$", {"RXL_FLITS_ALL_DATA#0", "RXL_FLITS_ALL_DATA#1", "RXL_FLITS_ALL_DATA#2", "time"}});
+    ret.push_back({"Received data volume [GByte]", "1.0E-09*(($RXL_FLITS_ALL_DATA#0$+$RXL_FLITS_ALL_DATA#1$+$RXL_FLITS_ALL_DATA#2$)/9.0)*64.0", {"RXL_FLITS_ALL_DATA#0", "RXL_FLITS_ALL_DATA#1", "RXL_FLITS_ALL_DATA#2"}});
+    ret.push_back({"Sent data bandwidth [MByte/s]", "1.0E-06*(($TXL_FLITS_ALL_DATA#0$+$TXL_FLITS_ALL_DATA#1$+$TXL_FLITS_ALL_DATA#2$)/9.0)*64.0/$time$", {"TXL_FLITS_ALL_DATA#0", "TXL_FLITS_ALL_DATA#1", "TXL_FLITS_ALL_DATA#2", "time"}});
+    ret.push_back({"Sent data volume [GByte]", "1.0E-09*(($TXL_FLITS_ALL_DATA#0$+$TXL_FLITS_ALL_DATA#1$+$TXL_FLITS_ALL_DATA#2$)/9.0)*64.0", {"TXL_FLITS_ALL_DATA#0", "TXL_FLITS_ALL_DATA#1", "TXL_FLITS_ALL_DATA#2"}});
+    ret.push_back({"Total data bandwidth [MByte/s]", "1.0E-06*(($TXL_FLITS_ALL_DATA#0$+$TXL_FLITS_ALL_DATA#1$+$TXL_FLITS_ALL_DATA#2$+$RXL_FLITS_ALL_DATA#0$+$RXL_FLITS_ALL_DATA#1$+$RXL_FLITS_ALL_DATA#2$)/9.0)*64.0/$time$", {"RXL_FLITS_ALL_DATA#0", "RXL_FLITS_ALL_DATA#1", "RXL_FLITS_ALL_DATA#2", "TXL_FLITS_ALL_DATA#0", "TXL_FLITS_ALL_DATA#1", "TXL_FLITS_ALL_DATA#2", "time"}});
+    ret.push_back({"Total data volume [GByte]", "1.0E-09*(($TXL_FLITS_ALL_DATA#0$+$TXL_FLITS_ALL_DATA#1$+$TXL_FLITS_ALL_DATA#2$+$RXL_FLITS_ALL_DATA#0$+$RXL_FLITS_ALL_DATA#1$+$RXL_FLITS_ALL_DATA#2$)/9.0)*64.0", {"RXL_FLITS_ALL_DATA#0", "RXL_FLITS_ALL_DATA#1", "RXL_FLITS_ALL_DATA#2", "TXL_FLITS_ALL_DATA#0", "TXL_FLITS_ALL_DATA#1", "TXL_FLITS_ALL_DATA#2"}});
+
+    return ret;
+}
+
+static std::map<std::string, double> lkw_convert_event_list(const std::map<std::string, double>& event_values) {
+    std::map<std::string, double> ret;
+
+    // Get unique event names w/o counter postfix
+    std::vector<std::string> unique_events;
+    for (const auto &cur_pair : event_values) {
+        std::vector<std::string> tmp_spl = split_string(cur_pair.first, ':');
+        unique_events.push_back(tmp_spl[0]);
+    }
+    std::sort(unique_events.begin(), unique_events.end());
+    unique_events.erase(std::unique(unique_events.begin(), unique_events.end()), unique_events.end());
+
+    // loop through list and adapt list according to formula requirements
+    for (const auto &ev_name : unique_events) {
+        int cur_count = 0;
+        for (const auto &cur_pair : event_values) {
+            std::vector<std::string> tmp_spl = split_string(cur_pair.first, ':');
+            if (tmp_spl[0] == ev_name) {
+                if (ev_name == "time" || ev_name == "inverseClock") {
+                    // fprintf(stderr, "DEBUG: %s=%.15f ==> %s=%.15f\n", cur_pair.first.c_str(), cur_pair.second, ev_name.c_str(), cur_pair.second);
+                    ret[ev_name] = cur_pair.second;
+                    break;
+                }
+                std::string new_name = ev_name + "#" + std::to_string(cur_count);
+                // fprintf(stderr, "DEBUG: %s=%.15f ==> %s=%.15f\n", cur_pair.first.c_str(), cur_pair.second, new_name.c_str(), cur_pair.second);
+                ret[new_name] = cur_pair.second;
+                cur_count++;
+            }
+        }
+    }
+    return ret;
+}
+
+static std::vector<likwid_metric_value_t> lkw_calculate_metrics(std::vector<likwid_metric_info_t> metrics, std::map<std::string, double> event_values) {
+    int err;
+    std::vector<likwid_metric_value_t> ret;
+
+    // convert event list to required format
+    std::map<std::string, double> events_converted = lkw_convert_event_list(event_values);
+
+    for(int m = 0; m < metrics.size(); m++) {
+        std::vector<std::string> cur_req = metrics[m].required_events;
+        std::string cur_formula(metrics[m].metric_formula);
+        bool all_available = true;
+
+        for(int r = 0; r < cur_req.size(); r++) {
+            std::string req_event = cur_req[r];
+            bool found = false;
+            for (const auto &cur_pair : events_converted) {
+                if (req_event == cur_pair.first) {
+                    found = true;
+                    replaceAll(cur_formula, "$"+req_event+"$", to_string_with_precision(cur_pair.second, 15));
+                    break;
+                }
+            }
+            if (!found) {
+                all_available = false;
+                break;
+            }
+        }
+        if (all_available) {
+            double tmp_result = te_interp(cur_formula.c_str(), &err);
+            if(err != 0) {
+                fprintf(stderr, "Error while evaluation metric \"%s\": Formula is \"%s\"\n", metrics[m].metric_name.c_str(), cur_formula.c_str());
+            } else {
+                // ===== DEBUG
+                // fprintf(stderr, "Metric \"%s\": original formula: \"%s\" -> \"%s\" = %.15f\n", metrics[m].metric_name.c_str(), metrics[m].metric_formula.c_str(), cur_formula.c_str(), tmp_result);
+                // ===== DEBUG
+                ret.push_back({std::string(metrics[m].metric_name), tmp_result});
+            }            
+        }
+    }
+    return ret;
+}
+
+// Currently only working on CLAIX-18 Skyalke with 48 cores w/o HT
+static int lkw_find_first_thread_on_socket(int thread, int *cpu_ids, int num_cpus) {
+    int my_cpu_id = cpu_ids[thread];
+    int threshold_cpuid = 0;
+    int min_cpu_id = 10000;
+    int min_thread = -1;
+    
+    if(my_cpu_id >= 24) {
+        threshold_cpuid = 24;
+    }
+
+    for(int i = 0; i < num_cpus; i++) {
+        if(cpu_ids[i] >= threshold_cpuid && cpu_ids[i] < min_cpu_id) {
+            min_cpu_id = cpu_ids[i];
+            min_thread = i;
+        }
+    }
+
+    return min_thread;
+}
+
+static bool lkw_is_first_thread_on_socket(int thread, int *cpu_ids, int num_cpus) {
+    int first = lkw_find_first_thread_on_socket(thread, cpu_ids, num_cpus);
+    return first==thread;
+}
+
+static bool lkw_has_uncore_counters(std::vector<std::string> event_names, int count) {
+    for(int i = 0; i < count; i++) {
+        std::string cur_name(event_names[i]);
+        std::vector<std::string> tmp_spl = split_string(cur_name, ':');
+        if (tmp_spl[1].rfind("PWR", 0) == 0 ||
+            tmp_spl[1].rfind("CBOX", 0) == 0 ||
+            tmp_spl[1].rfind("MBOX", 0) == 0 ||
+            tmp_spl[1].rfind("SBOX", 0) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool lkw_is_uncore_event(std::string event_name) {
+        std::vector<std::string> tmp_spl = split_string(event_name, ':');
+        if (tmp_spl[1].rfind("PWR", 0) == 0 ||
+        tmp_spl[1].rfind("CBOX", 0) == 0 ||
+        tmp_spl[1].rfind("MBOX", 0) == 0 ||
+        tmp_spl[1].rfind("SBOX", 0) == 0) {
+            return true;
+        }
+    return false;
+}
+
+static double lkw_get_counter_result(int gid, int event_id, std::string event_name, int thread, int *cpu_ids, int num_cpus) {
+    int err;
+    double result = 0.;    
+    int my_cpu_id = cpu_ids[thread];
+    std::vector<std::string> tmp_spl = split_string(event_name, ':');
+
+    if (tmp_spl[1].rfind("PWR", 0) == 0 ||
+        tmp_spl[1].rfind("CBOX", 0) == 0 ||
+        tmp_spl[1].rfind("MBOX", 0) == 0 ||
+        tmp_spl[1].rfind("SBOX", 0) == 0) {
+        int first_thread = lkw_find_first_thread_on_socket(thread, cpu_ids, num_cpus);
+        result = perfmon_getResult(gid, event_id, first_thread);
+    } else {
+        result = perfmon_getResult(gid, event_id, thread);
+    }
+    return result;
+}
+
+static double lkw_calculate_difference(std::string event_name, double result_first, double result_second) {
+    double diff = 0.;
+    std::vector<std::string> tmp_spl = split_string(event_name, ':');    
+    if(tmp_spl[0] == "TEMP_CORE") {
+        diff = result_second;
+    } else {
+        diff = result_second - result_first;
+    }
+    return diff;
+}
