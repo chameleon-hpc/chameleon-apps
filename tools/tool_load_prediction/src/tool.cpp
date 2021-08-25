@@ -238,11 +238,20 @@ int cham_t_initialize(
     int max_num_tasks_per_rank = DEFAULT_NUM_TASKS_PER_RANK;
     char *program_num_iters = std::getenv("EST_NUM_ITERS");
     char *program_num_tasks = std::getenv("TASKS_PER_RANK");
+
+    // parse numtasks per rank
+    std::string str_numtasks(program_num_tasks);
+    std::list<std::string> split_numtasks = split(str_numtasks, ',');
+    std::list<std::string>::iterator it = split_numtasks.begin();
+    int rank = cham_t_get_rank_info()->comm_rank;
+
     if (program_num_iters != NULL){
         max_num_iters = atoi(program_num_iters);
     }
     if (program_num_tasks != NULL){
-        max_num_tasks_per_rank = atoi(program_num_tasks);
+        advance(it, rank);
+        max_num_tasks_per_rank = std::atoi((*it).c_str());
+        printf("[CHAMTOOL] check num_tasks per Rank %d: %d\n", rank, max_num_tasks_per_rank);
     }
 
     // resize vectors inside profiled_task_list

@@ -356,15 +356,12 @@ int32_t chameleon_init() {
 
 #if CHAM_PREDICTION_MODE > 0
     // get the config-env variables by one of the omp threads
-    char *max_tasks_per_rank = std::getenv("TASKS_PER_RANK");
     char *max_est_iter_num = std::getenv("EST_NUM_ITERS");
     char *time_to_train = std::getenv("TIME2TRAIN");
-    if (max_tasks_per_rank != NULL && max_est_iter_num != NULL && time_to_train != NULL){
-        MAX_TASKS_PER_RANK = atoi(max_tasks_per_rank);
+    if (max_est_iter_num != NULL && time_to_train != NULL){
         MAX_EST_NUM_ITERS = atoi(max_est_iter_num);
         TIME_TO_TRAIN_MODEL = atoi(time_to_train);
-        RELP("[CHAM_INIT] max_task/rank=%d, max_est_iter=%d, time2train=%d\n",
-                    MAX_TASKS_PER_RANK, MAX_EST_NUM_ITERS, TIME_TO_TRAIN_MODEL);
+        RELP("[CHAM_INIT] max_est_iter=%d, time2train=%d\n", MAX_EST_NUM_ITERS, TIME_TO_TRAIN_MODEL);
     }
 #endif
 
@@ -1525,6 +1522,7 @@ inline int32_t process_replicated_migrated_task() {
         int32_t res = execute_target_task(replicated_task);
         if(res != CHAM_SUCCESS)
             handle_error_en(1, "execute_target_task - remote");
+
 #if CHAM_STATS_RECORD
         cur_time = omp_get_wtime()-cur_time;
         atomic_add_dbl(_time_task_execution_replicated_sum, cur_time);

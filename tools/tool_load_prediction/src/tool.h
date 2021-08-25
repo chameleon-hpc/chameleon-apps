@@ -5,7 +5,6 @@
 #include <inttypes.h>
 #include <assert.h>
 #include <time.h>
-#include <omp.h>
 #include <vector>
 #include <algorithm>
 #include <fstream>
@@ -15,7 +14,10 @@
 #include <iostream>
 #include <cstddef>
 #include <iomanip>
+#include <list>
+#include <bits/stdc++.h>
 #include <mpi.h>
+#include <omp.h>
 
 // for using torch
 #ifndef ENABLE_PYTORCH_CXX
@@ -290,6 +292,25 @@ int pairing_function(int a, int b){
     int result = ((a + b) * (a + b + 1) / 2) + b;
     
     return result;
+}
+
+/**
+ * Parsing the string with delimiter.
+ *
+ * This function parses a string that is splitted by a given delimiter.
+ * @param s, delimiter
+ * @return list of tokens in the string without delimiter
+ */
+std::list<std::string> split(const std::string& s, char delimiter)
+{
+    std::list<std::string> tokens;
+    std::string token;
+    std::istringstream tokenStream(s);
+    while (std::getline(tokenStream, token, delimiter))
+    {
+        tokens.push_back(token);
+    }
+    return tokens;
 }
 
 #pragma endregion Local Helpers

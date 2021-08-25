@@ -10,10 +10,6 @@ module load chamtool_commthread
 module load libffi-3.3
 module load mlpack-3.4.2
 
-# export itac
-# export INCLUDE=/lrz/sys/intel/studio2019_u5/itac/2019.5.041/include:$INCLUDE
-# export CPATH=/lrz/sys/intel/studio2019_u5/itac/2019.5.041/include:$CPATH
-
 # choose the tool for samoa-chameleon
 export SAMOA_EXAMPLE=1
 export C_COMPILER=mpiicc

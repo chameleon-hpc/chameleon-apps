@@ -134,7 +134,6 @@ std::atomic<bool> _flag_model_is_trained(false);
 
 // setting for chameleon tool, default could be follows, but they are updated in
 // the chameleon_init function by getting the environment vars
-int MAX_TASKS_PER_RANK  = 208; // default setting for running on coolmuc
 int MAX_EST_NUM_ITERS   = 100; // num of sim-time steps is 100, 13 threads/rank 
 int TIME_TO_TRAIN_MODEL = 20;  // num secsions = 16, therefore, num tasks per rank = 16 * 13
 
@@ -147,7 +146,9 @@ std::atomic<int> _comm_thread_predload_exchange_happend(0);
 int _flag_create_gather_predload_happened = 0;
 int _flag_handle_gather_predload_happened = 0;
 
-#if CHAM_PRED_MIGRATION==2
+#if CHAM_PRED_MIGRATION==1
+int _flag_predict_iter_by_iter = 0;
+#elif CHAM_PRED_MIGRATION==2
 int _flag_predict_for_the_whole_future = 0;
 #endif
 
@@ -1760,6 +1761,9 @@ void chameleon_comm_thread_session_data_t_init() {
 #if CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE > 0 && CHAM_PRED_MIGRATION > 0
     // for exchanging the predicted load info
     _session_data.buffer_predicted_load_values = (double *) malloc(sizeof(double) * chameleon_comm_size);
+
+    // for proactive offloaded tasks table
+    _session_data.proact_offload_tasks_table.resize(chameleon_comm_size*chameleon_comm_size);
 #endif
 
     for(int tmp_i = 0; tmp_i < chameleon_comm_size; tmp_i++)
@@ -2145,8 +2149,6 @@ inline void action_task_migration() {
                              
                                     // stop when limit reached
                                     if(num_tasks >= MAX_TASKS_PER_RANK_TO_MIGRATE_AT_ONCE) {
-                                        // RELP("num_tasks:%d, MAX_TASKS_PER_RANK_TO_MIGRATE_AT_ONCE:%f\n", num_tasks,
-                                        //                      MAX_TASKS_PER_RANK_TO_MIGRATE_AT_ONCE.load())
                                         break;
                                     }
                                 }
@@ -2964,6 +2966,9 @@ void action_pred_migration() {
 #if CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE > 0 && CHAM_PRED_MIGRATION > 0
     if (_comm_thread_predload_exchange_happend && _flag_is_new_iteration &&
         _session_data.offload_triggered.load() == 0)
+
+        // init the tracking table of proactive offloaded tasks
+        std::fill(_session_data.proact_offload_tasks_table.begin(), _session_data.proact_offload_tasks_table.end(), 0);
 #else
     if (_comm_thread_load_exchange_happend && _flag_is_new_iteration &&
         _session_data.offload_triggered.load() == 0)
@@ -2992,19 +2997,93 @@ void action_pred_migration() {
         num_tasks_local = _local_tasks.dup_size();
 
 #if CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE > 0 && CHAM_PRED_MIGRATION > 0
-        // RELP("[ACT_PRED_MIG] Check Iter%d: _flag_predict_for_the_whole_future=%d\n", current_taskwait_index, _flag_predict_for_the_whole_future);
-        if (_flag_predict_for_the_whole_future == 1){
-            pair_num_tasks_to_offload(_session_data.tasks_to_offload, _load_info_ranks, _predicted_load_info_ranks,
-                                    num_tasks_local, num_tasks_stolen);
-        }
+        #if CHAM_PRED_MIGRATION == 1
+            // RELP("[ACT_PRED_MIG] Check Iter%d: proactive migration action\n", current_taskwait_index);
+            if (_flag_predict_iter_by_iter == 1){
+                pair_num_tasks_to_offload(_session_data.proact_offload_tasks_table, _session_data.tasks_to_offload, _load_info_ranks,
+                                    _predicted_load_info_ranks, num_tasks_local, num_tasks_stolen);
+
+                // checking the proact-mig-tracking table
+                // for (int i = 0; i < chameleon_comm_size; i++){
+                //     for (int j = 0; j < chameleon_comm_size; j++){
+                //         int ntasks_local = _session_data.proact_offload_tasks_table[i*chameleon_comm_size + i];
+                //         if (i == j){
+                //             RELP("[PROACT_MIGRATION] R%d executes %d local tasks\n", i, ntasks_local);
+                //         } else {
+                //             int ntasks_to_proact_migrate = _session_data.proact_offload_tasks_table[i*chameleon_comm_size + j];
+                //             if (ntasks_to_proact_migrate != 0){
+                //                 RELP("[PROACT_MIGRATION] R%d proact-migrates %d tasks to R%d\n", i, ntasks_to_proact_migrate, j);
+                //             }
+                //         }
+                //     }
+                // }
+            }
+            
+        #elif CHAM_PRED_MIGRATION == 2
+            // RELP("[ACT_PRED_MIG] Check Iter%d: _flag_predict_for_the_whole_future=%d\n", current_taskwait_index, _flag_predict_for_the_whole_future);
+            if (_flag_predict_for_the_whole_future == 1){
+                pair_num_tasks_to_offload(_session_data.proact_offload_tasks_table, _session_data.tasks_to_offload, _load_info_ranks,
+                                    _predicted_load_info_ranks, num_tasks_local, num_tasks_stolen);
+            }
+        #endif
 #else
         compute_num_tasks_to_offload(_session_data.tasks_to_offload, _load_info_ranks,
                                     num_tasks_local, num_tasks_stolen);
 #endif
-        // the results are returned to _session_data.tasks_to_offload, arranged by the rank orders
-        //      + ...
-        //      + ...
+        
+#if CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE > 0 && CHAM_PRED_MIGRATION > 0
 
+        // flag to check offloading is done or not
+        bool offload_done = false;
+
+    #if CHAM_PRED_MIGRATION == 1
+        if (_flag_predict_iter_by_iter == 1){
+            int cur_rank = chameleon_comm_rank;
+            for (int v = 0; v < chameleon_comm_size; v++){
+                if (v != cur_rank){
+                    int ntasks_to_migrate = _session_data.proact_offload_tasks_table[cur_rank*chameleon_comm_size + v];
+                    if (ntasks_to_migrate != 0){
+                        RELP("[PROACT_MIGRATION] R%d proact-migrates %d tasks to R%d\n", cur_rank, ntasks_to_migrate, v);
+                        // block until no active offload for rank any more
+                        if(_active_migrations_per_target_rank[v].load() == 0){
+                            // create a list of migrated tasks
+                            int counter = 0;
+                            cham_migratable_task_t **cur_tasks = (cham_migratable_task_t**) malloc(sizeof(cham_migratable_task_t*)*ntasks_to_migrate);
+                            for (int t = 0; t < ntasks_to_migrate; t++){
+                                cham_migratable_task_t *task = _local_tasks.pop_front();
+                                if (task){
+                                    cur_tasks[counter] = task;
+                                    cur_tasks[counter]->is_migrated_task = 1;
+                                    counter++;
+                                }
+                            }
+
+                            // call the migration function
+                            if (counter > 0){
+                                // offload an array of tasks to rank-v (victim)
+                                offload_tasks_to_rank(&cur_tasks[0], counter, v);
+
+                                // set the offload_flag is done, but this is non-blocking,
+                                // so we don't know are they yet arrived or not
+                                offload_done = true;
+                            } else {
+                                free(cur_tasks);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // turn off the flag _flag_predict_iter_by_iter to wait for the next iteration
+            _flag_predict_iter_by_iter = 0;
+        }
+
+    #elif CHAM_PRED_MIGRATION == 2
+        // TODO: do something here
+
+    #endif
+
+#else
         // flag to check offloading is done or not
         bool offload_done = false;
 
@@ -3048,6 +3127,7 @@ void action_pred_migration() {
                 }
             }
         }
+#endif
         
         // if the flag offload_done = 1, get out the condition of migration
         if(offload_done) {
@@ -3057,6 +3137,7 @@ void action_pred_migration() {
             _num_migration_done++;
             #endif
         }
+
 #if CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE > 0 && CHAM_PRED_MIGRATION > 0
         // mark the flag into 0, because just want to perform this action at once
         _comm_thread_predload_exchange_happend = 0;
@@ -3580,23 +3661,28 @@ void* comm_thread_action(void* arg) {
                     }
 
     #elif CHAM_PREDICTION_MODE == 3
-                    // get start_time for calling - inference the model
-                    double time_start_inferencing = omp_get_wtime();
 
-                    // get the curretn tw iteration
-                    int cur_tw_idx = current_taskwait_counter;
-                    std::vector<double> pred_val_vec = cham_t_status.cham_t_callback_load_prediction_model(cur_tw_idx, 3);
-                    double pred_val = std::accumulate(pred_val_vec.begin(), pred_val_vec.end(), 0.0);
-                    _list_predicted_load[cur_tw_idx] = pred_val;
+                    if (_flag_predict_iter_by_iter == 0) {
+                        // get start_time for calling - inference the model
+                        double time_start_inferencing = omp_get_wtime();
 
-                    // get inferencing time - inference the model
-                    double elapsed_inferencing_time = omp_get_wtime() - time_start_inferencing;
-                    atomic_add_dbl(_time_inferenc_model_sum, elapsed_inferencing_time);
-                    _time_inferenc_model_count++;
+                        // get the curretn tw iteration
+                        int cur_tw_idx = current_taskwait_counter;
+                        std::vector<double> pred_val_vec = cham_t_status.cham_t_callback_load_prediction_model(cur_tw_idx, 3);
+                        double pred_val = std::accumulate(pred_val_vec.begin(), pred_val_vec.end(), 0.0);
+                        _list_predicted_load[cur_tw_idx] = pred_val;
 
-                    // update the pred-value for the statistic_info at chameleon-size, this value is updated every cycle
-                    atomic_add_dbl(_time_task_execution_pred_sum, pred_val);
-                    _time_task_execution_pred_count++;
+                        // get inferencing time - inference the model
+                        double elapsed_inferencing_time = omp_get_wtime() - time_start_inferencing;
+                        atomic_add_dbl(_time_inferenc_model_sum, elapsed_inferencing_time);
+                        _time_inferenc_model_count++;
+
+                        // update the pred-value for the statistic_info at chameleon-size, this value is updated every cycle
+                        atomic_add_dbl(_time_task_execution_pred_sum, pred_val);
+                        _time_task_execution_pred_count++;
+
+                        _flag_predict_iter_by_iter = 1;
+                    }
     #endif
                 }
             }

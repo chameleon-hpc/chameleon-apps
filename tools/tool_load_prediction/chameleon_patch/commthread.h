@@ -99,7 +99,6 @@ extern std::atomic<bool> _flag_model_is_trained;
 
 // setting for chameleon tool, default could be follows, but they are updated in
 // the chameleon_init function by getting the environment vars
-extern int MAX_TASKS_PER_RANK;
 extern int MAX_EST_NUM_ITERS;
 extern int TIME_TO_TRAIN_MODEL;
 
@@ -112,7 +111,9 @@ extern std::atomic<int> _comm_thread_predload_exchange_happend;
 extern int _flag_create_gather_predload_happened;
 extern int _flag_handle_gather_predload_happened;
 
-#if CHAM_PRED_MIGRATION==2
+#if CHAM_PRED_MIGRATION==1
+extern int _flag_predict_iter_by_iter;
+#elif CHAM_PRED_MIGRATION==2
 extern int _flag_predict_for_the_whole_future;
 #endif
 
@@ -180,6 +181,9 @@ class chameleon_comm_thread_session_data_t {
 #if CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE > 0 && CHAM_PRED_MIGRATION > 0
     // for storing predicted values over iters
     double *buffer_predicted_load_values;
+
+    // for proactive task migration algorithm
+    std::vector<int32_t> proact_offload_tasks_table;
 
     // =============== Monitoring predicted load info
     // could not need a flag for prediction, temporarily

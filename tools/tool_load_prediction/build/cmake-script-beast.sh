@@ -21,8 +21,6 @@ module load armadillo-10.4.0
 module load ensmallen-2.16.2
 module load chamtool_pred1_mig0
 module load mlpack-3.4.2
-module load libtorch
-
 
 # choose the tool for samoa-chameleon
 export SAMOA_EXAMPLE=1
