@@ -31,6 +31,8 @@ static cham_t_get_thread_data_t cham_t_get_thread_data;
 static cham_t_get_rank_info_t cham_t_get_rank_info;
 static cham_t_get_task_param_info_t cham_t_get_task_param_info;
 static cham_t_get_task_param_info_by_id_t cham_t_get_task_param_info_by_id;
+static cham_t_get_task_meta_info_t cham_t_get_task_meta_info;
+static cham_t_get_task_meta_info_by_id_t cham_t_get_task_meta_info_by_id;
 static cham_t_get_task_data_t cham_t_get_task_data;
 
 // sample struct to save some information for a task
@@ -103,8 +105,9 @@ on_cham_t_callback_task_create(
 
     // access to parameter information from task
     cham_t_task_param_info_t p_info = cham_t_get_task_param_info(task);
+    cham_t_task_meta_info_t m_info  = cham_t_get_task_meta_info(task);
 
-    printf("on_cham_t_callback_task_create ==> task_id=%" PRIu64 ";codeptr_ra=" DPxMOD ";rank_data=%" PRIu64 ";thread_data=%" PRIu64 ";task_data=" DPxMOD ";num_args=%d;arg_sizes=" DPxMOD ";arg_types=" DPxMOD ";arg_pointers=" DPxMOD "\n", internal_task_id, DPxPTR(codeptr_ra), rank_data->value, thread_data->value, DPxPTR(task_data->ptr), p_info.num_args, DPxPTR(p_info.arg_sizes), DPxPTR(p_info.arg_types), DPxPTR(p_info.arg_pointers));
+    printf("on_cham_t_callback_task_create ==> task_id=%" PRIu64 ";codeptr_ra=" DPxMOD ";entry_ptr=%lld;entry_image_offset=%lld;rank_data=%" PRIu64 ";thread_data=%" PRIu64 ";task_data=" DPxMOD ";num_args=%d;arg_sizes=" DPxMOD ";arg_types=" DPxMOD ";arg_pointers=" DPxMOD "\n", internal_task_id, DPxPTR(codeptr_ra), m_info->entry_ptr, m_info->entry_image_offset, rank_data->value, thread_data->value, DPxPTR(task_data->ptr), p_info.num_args, DPxPTR(p_info.arg_sizes), DPxPTR(p_info.arg_types), DPxPTR(p_info.arg_pointers));
 
     // === Example how to access per argument information. Note: Parameter map types are bit representations of types that can be found in chameleon.h
     // for(i = 0; i < p_info.num_args; i++) {
@@ -511,6 +514,8 @@ int cham_t_initialize(
     cham_t_get_rank_info            = (cham_t_get_rank_info_t)              lookup("cham_t_get_rank_info");
     cham_t_get_task_param_info      = (cham_t_get_task_param_info_t)        lookup("cham_t_get_task_param_info");
     cham_t_get_task_param_info_by_id= (cham_t_get_task_param_info_by_id_t)  lookup("cham_t_get_task_param_info_by_id");
+    cham_t_get_task_meta_info       = (cham_t_get_task_meta_info_t)         lookup("cham_t_get_task_meta_info");
+    cham_t_get_task_meta_info_by_id = (cham_t_get_task_meta_info_by_id_t)   lookup("cham_t_get_task_meta_info_by_id");
     cham_t_get_task_data            = (cham_t_get_task_data_t)              lookup("cham_t_get_task_data");
 
     // not sure whether we have such things. I don't believe it
