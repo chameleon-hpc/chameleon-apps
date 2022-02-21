@@ -1,8 +1,24 @@
 ## Chameleon Load Prediction Tool & Proactive Task Offloading Strategy
 The document shows how the online prediction scheme and proactive task offloading work. We design the module as a callback tool outside Chameleon depending on domain-specific applications. The examples are illustrated through a synthetic test case (MxM) and an iterative simulation named Sam(oa)2 (adaptive mesh refinement with solving partial differential equations - PDEs).
+
+## Working Flow
 <p align="left">
-  <img src="./figures/cham-tool-workflow.png" alt="The working flow of the prediction model" width="700">
+  <img src="./figures/react_and_proact_loadbalancing.svg" alt="The working flow" width="700">
 </p>
+
+Figure (A) shows the reactive load balancing approach, where the dedicated thread ($Tcomm$) is used to continuously monitor the execution speed/rank and react migrating tasks when the imbalance happens. In contrast, Figure (B) reveals the proactive approach. $Tcomm$ characterizes task and runtime in several first iterations ($char$, $data\_collect$), then train the prediction model ($trainM$) and load it afterwards ($loadM$). When the model is loaded, the prediction results of load per rank will input to the proactive algorithm (proact\_mig), which can guide task migration/offloading.
+
+## An Example with Proactive Task Offloading Algorithm
+<p align="left">
+  <img src="./figures/proact_task_mig_algorithm.svg" alt="Proactive Alogrithm Illustration" width="650">
+</p>
+
+After the prediction phase, its result is transferred to the algorithm. The first step is sorting the involved ranks by the exchanged values of load prediction (where $load$ accounts for the wall clock execution time of a specific iteration, e.g., $W10_{1}$ means the wall clock execution time of Rank 1 in Iteration 10). We need an array to record the total load of tasks executed at the local rank (\textit{local tasks}), and another one for tasks executed at the remote rank (\textit{remote tasks}). Furthermore, a table is used to track the number of local and remote tasks.
+
+In general, the algorithm consists of two $for$-loops. The first loop will go through the victims ($v_{i}$) which have $L < T_{opt}$. In the second loop, each offloader ($r_{j}$), who has $L > T_{opt}$, will be traversed. $\delta_{overloaded}$ is the load difference between an offloader and $T_{opt}$, while $\delta_{underloaded}$ is the one between a victim and $T_{opt}$. After that, we can compute the number of tasks that should be offloaded to fill the gap of $\delta_{underloaded}$ at the victim side. If the current offloader does not have enough tasks to fill $\delta_{underloaded}$ up, the next one will be processed.
+
+The figure above shows an imbalance case of 8 ranks with uniform tasks. The number of tasks per rank causes the given imbalance. We assume that the prediction information is ready here; the inputs of the proactive algorithm are total load ($W_{p,M}$) and the number of tasks in the queue per rank. As we can see in the first step (\textit{Init step}), $LoadArr(local)$ holds the total load, $TrackingTable(8,8)$ indicates 8 ranks involved, and the diagonal line points to the number of local tasks associated with a corresponding rank. After sorting the predicted load (descending), the order of ranks is $R0, R1, R6, R7, R2, R3, R4, R5$.
+The first loop goes to the victim - $R5$, and the first offloader is $R0$. Next, we estimate that $R0$ should offload 113 tasks to $R5$ based on the values of $T_{opt}$, $\delta_{overloaded}$, $\delta_{underloaded}$. The new load values of $local$ \& $remote$ are updated; the tracking table also needs to update the number of migrated tasks at the current offloader row (0 for $R0$). Finally, the output shows that $R0$ should migrate 64, 96, ... tasks to the corresponding victims ($R1$, $R2$, ...).
 
 ## Dependencies
 At the current status, there're 2 options for machine-learning librabies:
