@@ -57,6 +57,7 @@ void MinMaxAvgStats::print_stats(FILE *cur_file) {
 
 std::atomic<int>     _num_printed_sync_cycles(0);
 
+std::atomic<int>     _num_added_tasks(0);
 std::atomic<int>     _num_executed_tasks_local(0);
 std::atomic<int>     _num_executed_tasks_stolen(0);
 std::atomic<int>     _num_executed_tasks_replicated_local(0);
@@ -129,6 +130,8 @@ extern "C" {
 #endif
 
 void cham_stats_reset_for_sync_cycle() {
+
+    _num_added_tasks = 0;
     _num_executed_tasks_local = 0;
     _num_executed_tasks_stolen = 0;
     _num_executed_tasks_replicated_local = 0;
@@ -228,6 +231,7 @@ void cham_stats_print_stats() {
     #endif
 
     fprintf(cur_file, "Stats R#%d:\t_num_overall_ranks\t%d\n", chameleon_comm_rank, chameleon_comm_size);
+    fprintf(cur_file, "Stats R#%d:\t_num_added_tasks\t%d\n", chameleon_comm_rank, _num_added_tasks.load());
     fprintf(cur_file, "Stats R#%d:\t_num_executed_tasks_local\t%d\n", chameleon_comm_rank, _num_executed_tasks_local.load());
     fprintf(cur_file, "Stats R#%d:\t_num_executed_tasks_stolen\t%d\n", chameleon_comm_rank, _num_executed_tasks_stolen.load());
     fprintf(cur_file, "Stats R#%d:\t_num_executed_tasks_replicated_local\t%d\n", chameleon_comm_rank, _num_executed_tasks_replicated_local.load());

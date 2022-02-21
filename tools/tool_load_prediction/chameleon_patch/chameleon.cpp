@@ -58,9 +58,6 @@ std::atomic<int> _num_threads_finished_dtw(0);
 // lock used to ensure that currently only a single thread is doing communication progression
 std::mutex _mtx_comm_progression;
 
-// total tasks created per rank
-int32_t _total_created_tasks_per_rank = 0;
-
 #pragma endregion Variables
 
 
@@ -428,6 +425,14 @@ int32_t chameleon_init() {
     _ch_is_initialized = true;
     _mtx_ch_is_initialized.unlock();
 
+    // call the tool to get the number of created tasks at setup-time
+#if CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE > 0
+    if(cham_t_status.enabled && cham_t_status.cham_t_callback_get_numtasks_per_rank) {
+        _total_created_tasks_per_rank = cham_t_status.cham_t_callback_get_numtasks_per_rank(0);
+        // RELP("[CHAM_INIT] _total_created_tasks_per_rank = %d\n", _total_created_tasks_per_rank);
+    }
+#endif
+
     return CHAM_SUCCESS;
 }
 
@@ -606,9 +611,9 @@ void dtw_startup() {
         return;
     }
 
-#if CHAM_STATS_RECORD && CHAM_STATS_PER_SYNC_INTERVAL
-    cham_stats_reset_for_sync_cycle();
-#endif
+// #if CHAM_STATS_RECORD && CHAM_STATS_PER_SYNC_INTERVAL
+//     cham_stats_reset_for_sync_cycle();
+// #endif
 
 #if defined(TRACE) && ENABLE_TRACING_FOR_SYNC_CYCLES
     _num_sync_cycle++;
@@ -630,15 +635,15 @@ void dtw_startup() {
     _num_threads_idle                   = 0;
     _num_threads_finished_dtw           = 0;
 
-#if ENABLE_COMM_THREAD || ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE > 0 || CHAM_PREDICTION_MODE > 0
+#if ENABLE_COMM_THREAD || ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE > 0 || CHAM_PREDICTION_MODE > 0 || WORK_STEALING > 0
     // indicating that this has not happend yet for the current sync cycle
     _comm_thread_load_exchange_happend  = 0;
 
     // turn on the _flag_is_new_iteration, to trigger the action_pred_migration
     // it's save to turn it on here, inside dw_startup()
     int current_taskwait_index = _commthread_time_taskwait_count.load();
-    RELP("[DWT_STARTUP] started a new iter: _cur_tw_idx=%d, _pre_tw_idx=%d\n",
-                     current_taskwait_index, _global_flag_prev_taskwait_idx);
+    RELP("[DWT_STARTUP] started a new iter: _cur_tw_idx=%d, _pre_tw_idx=%d, nlocal_tasks=%d\n",
+                     current_taskwait_index, _global_flag_prev_taskwait_idx, _local_tasks.dup_size());
 
     if (current_taskwait_index != _global_flag_prev_taskwait_idx){
         _flag_is_new_iteration = true;
@@ -650,7 +655,7 @@ void dtw_startup() {
     _comm_thread_load_exchange_happend  = 1; 
     _num_ranks_not_completely_idle      = 0;
 
-#endif /* ENABLE_COMM_THREAD || ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE>0 || CHAM_PREDICTION_MODE > 0 */
+#endif /* ENABLE_COMM_THREAD || ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE>0 || CHAM_PREDICTION_MODE > 0 || WORK_STEALING > 0 */
 
     _flag_dtw_active = 1;
     _mtx_taskwait.unlock();
@@ -672,6 +677,14 @@ void dtw_teardown() {
     //                  tmp_num, _num_threads_involved_in_taskwait.load());
     if(tmp_num >= _num_threads_involved_in_taskwait.load()) {
 
+#ifdef TRACE
+        static int event_dtw_teardown = -1;
+        std::string event_teardown_name = "dtw_teardown";
+        if(event_dtw_teardown == -1) 
+            int ierr = VT_funcdef(event_teardown_name.c_str(), VT_NOCLASS, &event_dtw_teardown);
+        VT_BEGIN_CONSTRAINED(event_dtw_teardown);
+#endif
+
         // lock the action to make sure only one thread does this
         _mtx_taskwait.lock();
 
@@ -682,7 +695,6 @@ void dtw_teardown() {
         _num_threads_idle                       = 0;
         _task_id_counter                        = 0;
         _num_ranks_not_completely_idle          = INT_MAX;
-        _total_created_tasks_per_rank           = 0;
 
         // check the load here
         int thread_id = omp_get_thread_num();
@@ -704,6 +716,13 @@ void dtw_teardown() {
 
 #if CHAM_STATS_RECORD && CHAM_STATS_PRINT && CHAM_STATS_PER_SYNC_INTERVAL
         cham_stats_print_stats();
+
+        // reset for the next iteration
+        cham_stats_reset_for_sync_cycle();
+#endif
+
+#ifdef TRACE
+        VT_END_W_CONSTRAINED(event_dtw_teardown);
 #endif
 
 #ifdef CHAM_DEBUG
@@ -832,14 +851,13 @@ int32_t chameleon_distributed_taskwait(int nowait) {
         }
 #endif /* COMMUNICATION_MODE == 1 */
 
-#if ENABLE_TASK_MIGRATION || (CHAM_PREDICTION_MODE > 0 && CHAM_PRED_MIGRATION > 0)
+#if ENABLE_TASK_MIGRATION || (CHAM_PREDICTION_MODE > 0 && CHAM_PROACT_MIGRATION > 0) || WORK_STEALING > 0
         // ========== Prio 1: try to execute stolen tasks to overlap computation and communication
         if(!_stolen_remote_tasks.empty()) {
      
     #if SHOW_WARNING_DEADLOCK
             last_time_doing_sth_useful = omp_get_wtime();
     #endif
-
             if(this_thread_idle) {
                 // decrement counter again
                 my_idle_order = --_num_threads_idle;
@@ -854,7 +872,7 @@ int32_t chameleon_distributed_taskwait(int nowait) {
             if(res == CHAM_REMOTE_TASK_SUCCESS)
                 continue;
         }
-#endif /* ENABLE_TASK_MIGRATION || (CHAM_PREDICTION_MODE > 0 && CHAM_PRED_MIGRATION > 0) */
+#endif /* ENABLE_TASK_MIGRATION || (CHAM_PREDICTION_MODE > 0 && CHAM_PROACT_MIGRATION > 0) || WORK_STEALING > 0*/
 
 #if !FORCE_MIGRATION
         // ========== Prio 2: work on local tasks first
@@ -880,7 +898,7 @@ int32_t chameleon_distributed_taskwait(int nowait) {
         }
 #endif /* !FORCE_MIGRATION */
 
-#if ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE>0 || (CHAM_PREDICTION_MODE > 0 && CHAM_PRED_MIGRATION > 0)
+#if ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE>0 || (CHAM_PREDICTION_MODE > 0 && CHAM_PROACT_MIGRATION > 0) || WORK_STEALING > 0
         // ========== Prio 3: work on replicated local tasks
         if(!_replicated_local_tasks.empty()) {
             
@@ -946,7 +964,7 @@ int32_t chameleon_distributed_taskwait(int nowait) {
         }
     #endif /* CHAM_REPLICATION_MODE < 4 */
 
-#endif /* ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE>0 || (CHAM_PREDICTION_MODE > 0 && CHAM_PRED_MIGRATION > 0) */
+#endif /* ENABLE_TASK_MIGRATION || CHAM_REPLICATION_MODE>0 || (CHAM_PREDICTION_MODE > 0 && CHAM_PROACT_MIGRATION > 0) || WORK_STEALING > 0 */
  
         // ========== Prio 4: work on a regular OpenMP task
         // make sure that we get info about outstanding tasks with dependences
@@ -1116,6 +1134,7 @@ void chameleon_set_callback_task_finish(cham_migratable_task_t *task, chameleon_
 int32_t chameleon_add_task(cham_migratable_task_t *task) {
     DBP("chameleon_add_task (enter) - task_entry (task_id=%ld): " DPxMOD "(idx:%d;offset:%d) with arg_num: %d\n", task->task_id, DPxPTR(task->tgt_entry_ptr), task->idx_image, (int)task->entry_image_offset, task->arg_num);
     verify_initialized();
+
 #ifdef TRACE
     static int event_task_create = -1;
     std::string event_name = "task_create";
@@ -1145,8 +1164,9 @@ int32_t chameleon_add_task(cham_migratable_task_t *task) {
     
     _local_tasks.push_back(task);
 
-    // update value total tasks created per rank
-    _total_created_tasks_per_rank++;
+    // update value total tasks added per rank
+    _num_added_tasks++;
+    // RELP("[CHAM_ADDTASK] increases _num_added_tasks = %d\n", _num_added_tasks.load());
 
     // set id of last task added
     __last_task_id_added = task->task_id;
@@ -1258,7 +1278,7 @@ int32_t execute_target_task(cham_migratable_task_t *task) {
     // Add some noise here when executing the task
 #if CHAMELEON_TOOL_SUPPORT
     if(cham_t_status.enabled && cham_t_status.cham_t_callback_change_freq_for_execution) {
-        int32_t noise_time = cham_t_status.cham_t_callback_change_freq_for_execution(task, _load_info_ranks[chameleon_comm_rank], _total_created_tasks_per_rank);
+        int32_t noise_time = cham_t_status.cham_t_callback_change_freq_for_execution(task, _load_info_ranks[chameleon_comm_rank], _num_added_tasks.load());
         // make the process slower by sleep
         DBP("execute_target_task - noise_time = %d\n", noise_time);
         if (noise_time != 0)

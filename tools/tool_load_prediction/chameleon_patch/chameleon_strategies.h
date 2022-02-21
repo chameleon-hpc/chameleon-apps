@@ -9,12 +9,21 @@
 #include "chameleon_tools.h"
 #include "chameleon_tools_internal.h"
 
+#ifndef DEBUG_PROACTIVE_MIGRATION
+#define DEBUG_PROACTIVE_MIGRATION 0
+#endif
+
 void compute_num_tasks_to_offload(std::vector<int32_t>& tasks_to_offload_per_rank,
                                     std::vector<int32_t>& load_info_ranks,
                                     int32_t num_tasks_local,
                                     int32_t num_tasks_stolen);
 
-void pair_num_tasks_to_offload(std::vector<int32_t>& proact_tasks_to_offload_table,
+void compute_num_tasks_to_steal(std::vector<int32_t>& tasks_to_offload_per_rank,
+                                    std::vector<int32_t>& load_info_ranks,
+                                    int32_t num_tasks_local,
+                                    int32_t num_tasks_stolen);
+
+void compute_num_tasks_to_proact_offload(std::vector<int32_t>& proact_tasks_to_offload_table,
                                     std::vector<int32_t>& tasks_to_offload_per_rank,
                                     std::vector<int32_t>& load_info_ranks,
                                     std::vector<double>& predicted_load_info_ranks,

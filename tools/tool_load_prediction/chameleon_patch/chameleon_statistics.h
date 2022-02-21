@@ -41,6 +41,7 @@ class MinMaxAvgStats {
 
 extern std::atomic<int>     _num_printed_sync_cycles;
 
+extern std::atomic<int>     _num_added_tasks;
 extern std::atomic<int>     _num_executed_tasks_local;
 extern std::atomic<int>     _num_executed_tasks_stolen;
 extern std::atomic<int>     _num_executed_tasks_replicated_remote;

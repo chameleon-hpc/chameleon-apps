@@ -29,6 +29,18 @@ std::vector<size_t> sort_indexes(const std::vector<T> &v) {
 
   return idx;
 }
+
+std::list<std::string> split(const std::string& s, char delimiter)
+{
+    std::list<std::string> tokens;
+    std::string token;
+    std::istringstream tokenStream(s);
+    while (std::getline(tokenStream, token, delimiter))
+    {
+        tokens.push_back(token);
+    }
+    return tokens;
+}
 #pragma endregion Local Helpers
 
 
@@ -171,6 +183,78 @@ void compute_num_tasks_to_offload(std::vector<int32_t>& tasksToOffloadPerRank,
 #endif
 }
 
+void compute_num_tasks_to_steal(std::vector<int32_t>& tasks_to_offload_per_rank,
+                                    std::vector<int32_t>& load_info_ranks,
+                                    int32_t num_tasks_local,
+                                    int32_t num_tasks_stolen)
+{
+    // calculate sum of load
+    int sum_load = 0.0;
+    for (int i = 0; i < load_info_ranks.size(); i++){
+        sum_load += load_info_ranks[i];
+    }
+
+    // find min - max load
+    std::vector<size_t> tmp_sorted_idx = sort_indexes(load_info_ranks);
+    double min_load = (double)load_info_ranks[tmp_sorted_idx[0]];
+    double max_load = (double)load_info_ranks[tmp_sorted_idx[chameleon_comm_size-1]];
+
+    // calculate average load
+    double avg_load = (double) sum_load / chameleon_comm_size;
+
+    // calculate imb ratio
+    double imb_ratio = (max_load / avg_load) - 1;
+    // RELP("R%d: max_load=%.2f, avg_load=%.2f, imb_ratio=%.2f\n", chameleon_comm_rank, max_load, avg_load, imb_ratio);
+    // just use to check for 4 ranks
+    // RELP("R[%d,%d,%d,%d] = [%d,%d,%d,%d], max_load=%.2f, avg_load=%.2f, imb_ratio=%.2f\n",
+    //         0, 1, 2, 3, load_info_ranks[0], load_info_ranks[1], load_info_ranks[2], load_info_ranks[3],
+    //         max_load, avg_load, imb_ratio);
+
+    if (imb_ratio > 0.2 && max_load >= (avg_load+2) && min_load == 0) {
+
+        // init a vector of overloaded ranks
+        std::vector<int> overloaded_ranks;
+        std::vector<int> empty_ranks;
+        for (int i = 0; i < load_info_ranks.size(); i++){
+            if ((double)load_info_ranks[i] > (avg_load+2))
+                overloaded_ranks.push_back(i);
+            else if (load_info_ranks[i] == 0)
+                empty_ranks.push_back(i);
+        }
+
+        // for empty ranks
+        if (num_tasks_local == 0 && overloaded_ranks.size() > 0){
+            // choose victim randomly for stealing tasks
+            int victim_idx = 0;
+            int victim_rank = overloaded_ranks[victim_idx];
+            if (overloaded_ranks.size() > 1){
+                srand(time(NULL));
+                victim_idx = rand() % (overloaded_ranks.size()-1) + 0;
+                victim_rank = overloaded_ranks[victim_idx];
+            }
+            // RELP("R%d(L%d)-RANDVICTIM to steal tasks: R%d(L%d)\n", chameleon_comm_rank, num_tasks_local, victim_rank, load_info_ranks[victim_rank]);
+        } // for overloaded ranks
+        else if ((double)num_tasks_local >= (avg_load+2) && empty_ranks.size() > 0){
+            // choose recv randomly for sending tasks
+            int recv_idx = 0;
+            int recv_rank = empty_ranks[recv_idx];
+            if (empty_ranks.size() > 1){
+                srand(time(NULL));
+                recv_idx = rand() % (empty_ranks.size()-1) + 0;
+                recv_rank = empty_ranks[recv_idx];
+            }
+            // RELP("R%d(L%d)-RANDRECV to send tasks: R%d(L%d)\n", chameleon_comm_rank, num_tasks_local, recv_rank, load_info_ranks[recv_rank]);
+            // RELP("R[%d,%d,%d,%d] = [%d,%d,%d,%d], max_load=%.2f, avg_load=%.2f, imb_ratio=%.2f\n",
+            //             0, 1, 2, 3, load_info_ranks[0], load_info_ranks[1], load_info_ranks[2], load_info_ranks[3],
+            //             max_load, avg_load, imb_ratio);
+
+            // decide num tasks to steal
+            int num_task = 1;
+            tasks_to_offload_per_rank[recv_rank] = 1;
+        }
+    }
+}
+
 
 /**
  * Pairing and computing the number of tasks for offloading, based on the prediction tool
@@ -184,18 +268,46 @@ void compute_num_tasks_to_offload(std::vector<int32_t>& tasksToOffloadPerRank,
  * @param num_tasks_local: the current amount of tasks for the corresponding rank
  * @param num_tasks_stolen: the amount of tasks in the stolen queue (or the remote queue)
  */
-void pair_num_tasks_to_offload(std::vector<int32_t>& proact_tasks_to_offload_table,
+void compute_num_tasks_to_proact_offload(std::vector<int32_t>& proact_tasks_to_offload_table,
                                 std::vector<int32_t>& tasks_to_offload_per_rank,
                                 std::vector<int32_t>& load_info_ranks,
                                 std::vector<double>& predicted_load_info_ranks,
                                 int32_t num_tasks_local,
                                 int32_t num_tasks_stolen) {
 
-#if CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE > 0 && CHAM_PRED_MIGRATION > 0
+#if CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE > 0 && CHAM_PROACT_MIGRATION > 0
 
     // check pred_info list before sorting it
     int num_ranks = predicted_load_info_ranks.size();
     int tw_idx = _commthread_time_taskwait_count.load();
+
+    #if DEBUG_PROACTIVE_MIGRATION == 1
+    // get debug_load per rank
+    std::vector<double> debug_predload_arr1{0.0186,2.9951,7.5228,0.0161,0.0171,13.4808,13.4969,0.0189,0.0226,7.4983,2.9926,0.0168,0.0171,1.5873,1.5882,0.0159};
+    std::vector<double> debug_predload_arr2{0.0554,0.7705,1.7219,0.0538,0.0548,2.8979,2.8976,0.0565,0.0611,1.7169,0.7654,0.0522,0.0559,0.4604,0.4634,0.0587};
+    // char *debug_predload_arr1 = std::getenv("DBG_PRELOAD_ARR1");
+    // char *debug_predload_arr2 = std::getenv("DBG_PRELOAD_ARR2");
+    // if (debug_predload_arr1 != NULL && debug_predload_arr2 != NULL){
+    //     std::string str1_dbg_loads(debug_predload_arr1);
+    //     std::string str2_dbg_loads(debug_predload_arr2);
+    //     std::list<std::string> split_dbgloads1 = split(str1_dbg_loads, ',');
+    //     std::list<std::string> split_dbgloads2 = split(str2_dbg_loads, ',');
+    //     std::list<std::string>::iterator it = split_dbgloads1.begin();
+        // if (tw_idx % 2 != 0)
+        //     it = split_dbgloads2.begin();
+        // for (int i = 0; i < num_ranks; i++){
+        //     advance(it, i);
+        //     double dbg_load = std::atof((*it).c_str());
+        //     predicted_load_info_ranks[i] = dbg_load;
+        // }
+    // }
+    std::vector<double> pred_value = debug_predload_arr1;
+    if (tw_idx % 2 != 0)
+        pred_value = debug_predload_arr2;
+    for (int i = 0; i < num_ranks; i++){
+        predicted_load_info_ranks[i] = pred_value[i];
+    }
+    #endif
 
     // sort ranks by predicted load
     std::vector<size_t> tmp_sorted_idx = sort_indexes(predicted_load_info_ranks);
@@ -210,28 +322,28 @@ void pair_num_tasks_to_offload(std::vector<int32_t>& proact_tasks_to_offload_tab
     double pred_avg_load = pred_sum_load / num_ranks;
 
     // check pred-log info
-    // std::string rank_orders = "[";
-    // std::string pred_load_arr = "[";
-    // for (int i = 0; i < num_ranks; i++){
-    //     int r = tmp_sorted_idx[i];
-    //     rank_orders += "R" + std::to_string(r) + " ";
-    //     pred_load_arr += std::to_string(predicted_load_info_ranks[r]) + " ";
-    // }
-    // rank_orders += "]";
-    // pred_load_arr += "]";
-    // RELP("[PROACT_MIGRATION] Iter%d: %s = %s\n", tw_idx, rank_orders.c_str(), pred_load_arr.c_str());
+    std::string rank_orders = "[";
+    std::string pred_load_arr = "[";
+    for (int i = 0; i < num_ranks; i++){
+        int r = tmp_sorted_idx[i];
+        rank_orders += "R" + std::to_string(r) + " ";
+        pred_load_arr += std::to_string(predicted_load_info_ranks[r]) + " ";
+    }
+    rank_orders += "]";
+    pred_load_arr += "]";
+    RELP("[PROACT_MIGRATION] Iter%d: %s = %s\n", tw_idx, rank_orders.c_str(), pred_load_arr.c_str());
 
     // init and compute the ratio of load-balancing
     double ratio_lb = 0.0;  // 1.0 is high, 0.0 is no imbalance
     double imb_ratio = 0.0;
-    if (pred_max_load > 0){
+    if (pred_max_load > 0) {
         // imb ration by max and min load
         ratio_lb = (pred_max_load - pred_min_load) / pred_max_load;
 
         // imb ration by max and avg load
         imb_ratio = (pred_max_load - pred_avg_load) / pred_avg_load;
     } 
-    RELP("[PROACT_MIGRATION] Iter%d: orig_imb_ratio=%.3f, threshold_avg_load_per_rank=%.3f\n", tw_idx, imb_ratio, pred_avg_load);
+    // RELP("[PROACT_MIGRATION] Iter%d: orig_imb_ratio=%.3f, threshold_avg_load_per_rank=%.3f\n", tw_idx, imb_ratio, pred_avg_load);
 
     
     // refill the tracking table and init load_per_rank vectors
@@ -258,7 +370,6 @@ void pair_num_tasks_to_offload(std::vector<int32_t>& proact_tasks_to_offload_tab
     // }
     // tracking_table_str += "]";
     // RELP("[PROACT_MIGRATION] Check the tracking table: %s\n", tracking_table_str.c_str());
-
 
     /* DIST_GREADY_KNAPSACK ALGORITHM */
     for (int i = 0; i < num_ranks; i++){
@@ -314,88 +425,7 @@ void pair_num_tasks_to_offload(std::vector<int32_t>& proact_tasks_to_offload_tab
     }
     /* END DIST_GREADY_KNAPSACK ALGORITHM */
 
-    /* SIM_GREADY_CUT ALGORITHM */
-    /*
-    double previous_imb_ratio = 0.0;
-    int cut_counter = 0;
-    while( imb_ratio > 0.15 && imb_ratio != previous_imb_ratio ){
-
-        // calculate sum of local and remote load vectors
-        for (int r = 0; r < num_ranks; r++)
-            sum_load_vector[r] = local_load_vector[r] + remote_load_vector[r];
-        
-        // sort the sum_load_vector to find the idx of rank which has max or min load
-        std::vector<size_t> proact_sorted_idx = sort_indexes(sum_load_vector);
-
-        // traverse all ranks and proceed the proactive-cut-algorithm
-        for (int i = 0; i < num_ranks; i++){
-
-            // get the posistion of Rank i
-            int pos_rank_i = std::find(proact_sorted_idx.begin(), proact_sorted_idx.end(), i) - proact_sorted_idx.begin();
-
-            if (pos_rank_i >= num_ranks/2){
-                double load_rank_i = sum_load_vector[i];
-                int pos_victim = num_ranks - pos_rank_i - 1;
-                int rank_victim = proact_sorted_idx[pos_victim];
-                double load_victim = sum_load_vector[rank_victim];
-
-                // calculate the load_diff
-                double load_difference = load_rank_i - load_victim;
-                double local_load_rank_i = local_load_vector[i];
-                int num_local_tasks_rank_i = proact_tasks_to_offload_table[i*num_ranks + i];
-                int ntasks_to_migrate = 0;
-                if (num_local_tasks_rank_i != 0)
-                    ntasks_to_migrate = (int)(load_difference/2 / (local_load_rank_i/num_local_tasks_rank_i));
-                if (ntasks_to_migrate >= num_local_tasks_rank_i)
-                    ntasks_to_migrate = num_local_tasks_rank_i;
-                double migrated_load = 0.0;
-                if (ntasks_to_migrate != 0)
-                    migrated_load = ntasks_to_migrate * (local_load_rank_i/num_local_tasks_rank_i);
-                
-                // calculate and update new load for rank i and the victim
-                local_load_vector[i] = local_load_vector[i] - migrated_load;
-                remote_load_vector[rank_victim] = remote_load_vector[rank_victim] + migrated_load;
-
-                // update new number of tasks for rank i and the victim
-                proact_tasks_to_offload_table[i*num_ranks + i] = proact_tasks_to_offload_table[i*num_ranks + i] - ntasks_to_migrate;
-                proact_tasks_to_offload_table[i*num_ranks + rank_victim] = proact_tasks_to_offload_table[i*num_ranks + rank_victim] + ntasks_to_migrate;
-
-                // RELP("[PROACT_MIGRATION] Rank_victim %d: load_victim=%.3f\n", rank_victim, load_victim);
-                // RELP("[PROACT_MIGRATION] Rank %d: migrated %d to Rank %d\n", i, ntasks_to_migrate, rank_victim);
-            }
-        }
-
-        // record the current imbalance ratio
-        previous_imb_ratio = imb_ratio;
-
-        // update new imbalance ratio
-        double new_max_load = 0.0;
-        double new_sum_load = 0.0;
-        for (int i = 0; i < num_ranks; i++){
-            double tmp_sum = local_load_vector[i] + remote_load_vector[i];
-            new_sum_load += local_load_vector[i] + remote_load_vector[i];
-            if (new_max_load < tmp_sum)
-                new_max_load = tmp_sum;
-        }
-        double new_avg_load = new_sum_load / num_ranks;
-        imb_ratio = (new_max_load - new_avg_load) / new_avg_load;
-
-        // increase cut_counter
-        cut_counter += 1;
-    } */ /* END SIM_GREADY_CUT ALGORITHM */
-
-    // check the tracking table
-    // std::string tracking_table_str = "[";
-    // for (int i = 0; i < num_ranks; i++){
-    //     for (int j = 0; j < num_ranks; j++){
-    //         tracking_table_str += std::to_string(proact_tasks_to_offload_table[i*num_ranks+j]) + " ";
-    //     }
-    // }
-    // tracking_table_str += "]";
-    // RELP("[PROACT_MIGRATION] Check the tracking table: %s\n", tracking_table_str.c_str());
-    // RELP("[PROACT_MIGRATION] Check cut_counter=%d, new_imb_ratio=%f\n", cut_counter, imb_ratio);
-
-#endif /* CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE > 0 && CHAM_PRED_MIGRATION > 0 */
+#endif /* CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE > 0 && CHAM_PROACT_MIGRATION > 0 */
 
 }
 

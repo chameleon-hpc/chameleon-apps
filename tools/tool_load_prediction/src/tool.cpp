@@ -194,6 +194,23 @@ on_cham_t_callback_load_prediction_model(int32_t taskwait_counter, int predictio
     return pred_load_vec;
 }
 
+/**
+ * Callback for getting the number of created tasks at the setup-time.
+ *
+ * This callback is used to send the info of created tasks per rank. In cases, we have
+ * different numbers of created tasks per rank.
+ * @param taskwait_counter: id of the current iteration (cycle), used for debugging.
+ * @return num_created_tasks_per_rank: is needed for the proact-migration algorithm.
+ */
+static int
+on_cham_t_callback_get_numtasks_per_rank(int32_t taskwait_counter)
+{
+    int num_created_tasks_per_rank = 0;
+    num_created_tasks_per_rank = profiled_task_list.ntasks_per_rank;
+
+    return num_created_tasks_per_rank;
+}
+
 //================================================================
 // Start Tool & Register Callbacks
 //================================================================
@@ -231,6 +248,7 @@ int cham_t_initialize(
     register_callback(cham_t_callback_get_task_wallclock_time);
     register_callback(cham_t_callback_train_prediction_model);
     register_callback(cham_t_callback_load_prediction_model);
+    register_callback(cham_t_callback_get_numtasks_per_rank);
     
 
     // get info about the number of iterations

@@ -183,6 +183,9 @@ static cham_t_set_result_t cham_t_set_callback(cham_t_callback_types_t which, ch
         case cham_t_callback_load_prediction_model:
             cham_t_status.cham_t_callback_load_prediction_model = (cham_t_callback_load_prediction_model_t)(callback);
             break;
+        case cham_t_callback_get_numtasks_per_rank:
+            cham_t_status.cham_t_callback_get_numtasks_per_rank = (cham_t_callback_get_numtasks_per_rank_t)(callback);
+            break;
         default:
             fprintf(stderr, "ERROR: Unable to set callback for specifier %d\n", which);
             return cham_t_set_error;

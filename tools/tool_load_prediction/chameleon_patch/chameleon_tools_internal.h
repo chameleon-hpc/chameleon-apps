@@ -24,6 +24,7 @@ typedef struct cham_t_callbacks_active_s {
     cham_t_callback_get_task_wallclock_time_t       cham_t_callback_get_task_wallclock_time     = nullptr;  // get load per task
     cham_t_callback_train_prediction_model_t        cham_t_callback_train_prediction_model      = nullptr;  // train pred_model
     cham_t_callback_load_prediction_model_t         cham_t_callback_load_prediction_model       = nullptr;  // load pred_model
+    cham_t_callback_get_numtasks_per_rank_t         cham_t_callback_get_numtasks_per_rank       = nullptr;
 
 } cham_t_callbacks_active_t;
 

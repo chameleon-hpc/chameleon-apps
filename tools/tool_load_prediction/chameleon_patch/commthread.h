@@ -94,6 +94,9 @@ extern std::atomic<int> _comm_thread_load_exchange_happend;
 extern std::vector<double> _list_predicted_load;    // array of all pred-loads per iteration
 extern std::vector<double> _predicted_load_info_ranks; // just keep the pred-load of the current iteration
 
+// to check the number of created tasks at the setup-time
+extern int _total_created_tasks_per_rank;
+
 // a defined flag for checking the cham-tool prediction model is ready or not
 extern std::atomic<bool> _flag_model_is_trained;
 
@@ -102,7 +105,7 @@ extern std::atomic<bool> _flag_model_is_trained;
 extern int MAX_EST_NUM_ITERS;
 extern int TIME_TO_TRAIN_MODEL;
 
-#if CHAM_PRED_MIGRATION > 0
+#if CHAM_PROACT_MIGRATION > 0
 // ====== Flag to allow the predict-load exchange that could happen ======
 extern std::atomic<int> _comm_thread_predload_exchange_happend;
 
@@ -111,13 +114,17 @@ extern std::atomic<int> _comm_thread_predload_exchange_happend;
 extern int _flag_create_gather_predload_happened;
 extern int _flag_handle_gather_predload_happened;
 
-#if CHAM_PRED_MIGRATION==1
+#if CHAM_PROACT_MIGRATION==1 
 extern int _flag_predict_iter_by_iter;
-#elif CHAM_PRED_MIGRATION==2
-extern int _flag_predict_for_the_whole_future;
+#elif CHAM_PROACT_MIGRATION==2
+extern int _flag_enable_proactmig_by_the_predicted_future;
 #endif
 
-#endif /* CHAM_PRED_MIGRATION > 0 */
+#endif /* CHAM_PROACT_MIGRATION > 0 */
+
+#if CHAM_PREDICTION_MODE==2
+extern int _flag_predict_for_the_whole_future;
+#endif
 
 #endif
 
@@ -138,6 +145,7 @@ extern int event_recv_back;
 extern int event_create_gather_request;
 extern int event_exchange_outstanding;
 extern int event_offload_decision;
+extern int event_workstealing_decision;
 extern int event_send_back;
 extern int event_progress_send;
 extern int event_progress_recv;
@@ -178,7 +186,7 @@ class chameleon_comm_thread_session_data_t {
     int transported_load_values[3];
     int *buffer_load_values;
 
-#if CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE > 0 && CHAM_PRED_MIGRATION > 0
+#if CHAMELEON_TOOL_SUPPORT && CHAM_PREDICTION_MODE > 0 && CHAM_PROACT_MIGRATION > 0
     // for storing predicted values over iters
     double *buffer_predicted_load_values;
 
@@ -190,6 +198,15 @@ class chameleon_comm_thread_session_data_t {
     // get it in the loop with request_gather_created in general
     MPI_Request request_gather_prediction_out;
     MPI_Status  status_gather_prediction_out;
+
+    // for loop-to-loop migrating tasks at the communication thread side
+    bool flag_allows_l2l_task_migration;
+
+    // for separately migrating tasks by round-robin strategy
+    std::vector<int32_t> victim_idx_order_to_proactmig_arr;
+    // for migrating a encoded package of tasks
+    std::vector<int32_t> victims_to_proactmig_arr;
+
 #endif
 
     // =============== Num migrated tasks at once

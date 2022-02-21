@@ -1,5 +1,5 @@
-## Chameleon Prediction Tool
-This is a callback tool for predicting task-runtime with an online/offline trained model. Depending on each kind of application, we select the features for the model. For example, the current use-case is iterative simulation, named Sam(oa)2, the input features could be boundary-sizes per task, or list of boundary-sizes based on execution oders per iteration, or simply the previous points of load as time progress. The working flow of Chameleon and the tool, for example, as follow:
+## Chameleon Load Prediction Tool & Proactive Task Offloading Strategy
+The document shows how the online prediction scheme and proactive task offloading work. We design the module as a callback tool outside Chameleon depending on domain-specific applications. The examples are illustrated through a synthetic test case (MxM) and an iterative simulation named Sam(oa)2 (adaptive mesh refinement with solving partial differential equations - PDEs).
 <p align="left">
   <img src="./figures/cham-tool-workflow.png" alt="The working flow of the prediction model" width="700">
 </p>
@@ -39,10 +39,10 @@ As some changes in the folder - chameleon_patch/, there are 2 ENV-variables (def
 #endif
 
 // specify the strategy of work-stealing with prediction tool
-#ifndef CHAM_PRED_MIGRATION
-#define CHAM_PRED_MIGRATION 0   // predict iter-by-iter, no migration action
-// #define CHAM_PRED_MIGRATION 1    // predict iter-by-iter, then migrate-actions 
-// #define CHAM_PRED_MIGRATION 2    // predict for the whole future, then migrate-actions
+#ifndef CHAM_PROACT_MIGRATION
+#define CHAM_PROACT_MIGRATION 0   // predict iter-by-iter, no migration action
+// #define CHAM_PROACT_MIGRATION 1    // predict iter-by-iter, then migrate-actions 
+// #define CHAM_PROACT_MIGRATION 2    // predict for the whole future, then migrate-actions
 #endif
 ```
 
@@ -58,7 +58,7 @@ There could be a sample script to compile Chameleon with the callback tools (to 
   * CHAMELEON_TOOL_LIBRARIES=/path/to/the-compiled-tool (.so)
 * Regarding the Chameleon-lib internal flags (as migration, replication modes), please set:
   * -DENABLE_COMM_THREAD=1 -DENABLE_TASK_MIGRATION=0 -DCHAM_REPLICATION_MODE=0 -DCHAMELEON_TOOL_SUPPORT
-  * A new variable is CHAM_PRED_MIGRATION (as another mode of migration), it should be turned into 1, e.g., -DCHAM_PRED_MIGRATION=1
+  * A new variable is CHAM_PROACT_MIGRATION (as another mode of migration), it should be turned into 1, e.g., -DCHAM_PROACT_MIGRATION=1
 * If everything is fine, then compile Chameleon.
 
 ## Test the tool & Chameleon

@@ -117,11 +117,18 @@
 // #define CHAM_PREDICTION_MODE 3   // task-characterization, args as the patterns for prediction
 #endif
 
-// specify the strategy of work-stealing with prediction tool
-#ifndef CHAM_PRED_MIGRATION
-#define CHAM_PRED_MIGRATION 0   // predict iter-by-iter, no migration action
-// #define CHAM_PRED_MIGRATION 1    // predict iter-by-iter, then migrate-actions 
-// #define CHAM_PRED_MIGRATION 2    // predict for the whole future, then migrate-actions
+// specify the strategy of work-offloading with prediction tool
+#ifndef CHAM_PROACT_MIGRATION
+#define CHAM_PROACT_MIGRATION 0   // predict iter-by-iter, no migration action
+// #define CHAM_PROACT_MIGRATION 1    // predict iter-by-iter, then migrate-actions 
+// #define CHAM_PROACT_MIGRATION 2    // predict for the whole future, then migrate-actions
+#endif
+
+// specify the strategies of work-stealing
+#ifndef WORK_STEALING
+#define WORK_STEALING 0 // no work-stealing
+// #define WORK_STEALING 1 // traidtional work-stealing
+// #define WORK_STEALING 2 // randomized work-stealing
 #endif
 
 // specify whether tasks should be offloaded aggressively after one performance update
@@ -1122,7 +1129,7 @@ static void print_config_values(int rank) {
         RELP("ENABLE_TASK_MIGRATION=%d\n", ENABLE_TASK_MIGRATION);
         RELP("CHAM_REPLICATION_MODE=%d\n", CHAM_REPLICATION_MODE);
         RELP("CHAM_PREDICTION_MODE=%d\n", CHAM_PREDICTION_MODE);
-        RELP("CHAM_PRED_MIGRATION=%d\n", CHAM_PRED_MIGRATION);
+        RELP("CHAM_PROACT_MIGRATION=%d\n", CHAM_PROACT_MIGRATION);
         RELP("ENABLE_EARLY_IRECVS=%d\n", ENABLE_EARLY_IRECVS);
         RELP("OFFLOAD_DATA_PACKING_TYPE=%d\n", OFFLOAD_DATA_PACKING_TYPE);
         RELP("MPI_BLOCKING=%d\n", MPI_BLOCKING);

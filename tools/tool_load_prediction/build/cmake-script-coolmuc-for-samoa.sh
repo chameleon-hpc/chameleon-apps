@@ -18,7 +18,11 @@ module load hdf5-1.10.4         # built with oneapi/2021
 module load armadillo-10.4.0    # built with oneapi/2021
 module load ensmallen-2.16.2    # built with oneapi/2021
 module load mlpack-3.4.2        # built with oneapi/2021
-module load chamtool_pred1_mig0 # TODO: change mode depending on the experiments
+
+# TODO: change mode depending on the experiments
+# module load chamtool_pred1_mig0
+module load chamtool_pred2_mig2_off1
+# module load chamtool_pred2_mig2_off2
 
 # export itac if we need
 # but, maybe it's already loaded by intel oneapi/2021

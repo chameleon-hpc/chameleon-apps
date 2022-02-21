@@ -18,17 +18,20 @@ module load hdf5-1.10.4         # built with oneapi/2021
 module load armadillo-10.4.0    # built with oneapi/2021
 module load ensmallen-2.16.2    # built with oneapi/2021
 module load mlpack-3.4.2        # built with oneapi/2021
-module load chamtool_pred3_mig1_off1 # TODO: change mode depending on the experiments
-# module load chamtool_pred3_mig1_off2
+module load chamtool_pred3_mig1 # TODO: change mode depending on the experiments
 
 # export itac if we need
 # but, maybe it's already loaded by intel oneapi/2021
+module load itac
+module load itac-oneapi-2021-lrz
 
 # choose the tool for samoa-chameleon
 echo "MXM_EXAMPLE=1"
 
 # run cmake
-cmake   -DCMAKE_C_COMPILER=mpiicc -DCMAKE_CXX_COMPILER=mpiicpc \
+# -DCOMP_TRACE_ITAC=1 # TODO: don't think we need to compile the tool with itac, just compile it as normal
+cmake   -DCOMP_TRACE_ITAC=1 \
+        -DCMAKE_C_COMPILER=mpicc -DCMAKE_CXX_COMPILER=mpicxx \
         -DCMAKE_CXX_FLAGS="-DMXM_EXAMPLE=1" \
         ../src/
 

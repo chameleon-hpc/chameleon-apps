@@ -30,7 +30,8 @@ typedef enum cham_t_callback_types_t {
     cham_t_callback_get_load_stats_per_taskwait = 13,
     cham_t_callback_get_task_wallclock_time     = 14,
     cham_t_callback_train_prediction_model      = 15,
-    cham_t_callback_load_prediction_model       = 16
+    cham_t_callback_load_prediction_model       = 16,
+    cham_t_callback_get_numtasks_per_rank       = 17
 } cham_t_callback_types_t;
 
 typedef enum cham_t_set_result_t {
@@ -313,6 +314,10 @@ typedef bool (*cham_t_callback_train_prediction_model_t)(
 typedef std::vector<double> (*cham_t_callback_load_prediction_model_t)(
     int32_t taskwait_counter,
     int prediction_mode
+);
+
+typedef int (*cham_t_callback_get_numtasks_per_rank_t)(
+    int32_t taskwait_counter
 );
 
 #pragma endregion
