@@ -46,7 +46,7 @@ The tool works as the plugin of Chameleon lib (like the event-based working flow
 
 For example, the figure above shows the main internals that we can interfere with, e.g., `cham_create_tasks()` for getting task's arguments information. Furthermore, we can completely insert external actions like loading the prediction results before a new execution phase of tasks is processed by calling `cham_dist_taskwait()`. Therefore, the dedicated thead can be used to train a prediction model along with the main execution, then adapt the results to our proactive algorithm.
 
-As some changes in the folder - chameleon_patch/, there are 2 ENV-variables (defined in `chameleon_patch/chameleon_common.h`) to define prediction modes and migration modes along with the prediction. There are several modes for training prediction models and load them to the proactive task offloading algorithm as follows.
+There are several modes for training prediction models and loading to the proactive task offloading algorithm as follows (whic are defined in `/chameleon_patch/chameleon_common.h`).
 
 ``` CXX
 #ifndef CHAM_PREDICTION_MODE
