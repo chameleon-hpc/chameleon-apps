@@ -25,7 +25,7 @@ At the current status, there're 2 options for using built-in machine-learning AP
 * Pytorch C++ (https://pytorch.org/cppdocs/installing.html)
   * Do not need to install, but we have to link it when compiling the tool (as the sample compile script in the directory `build/`).
   * Note: might have some overhead and issues with Torch C++.
-* Mlpack C++ (https://www.mlpack.org/getstarted.html)
+* Mlpack C++ (https://www.mlpack.org/getstarted.html) [`recommended`]
   * Need to install with the dependencies (Armadillo, Boost, ensmallen)
   * We can follow here https://www.mlpack.org/doc/mlpack-3.4.2/doxygen/build.html
 
