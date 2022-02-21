@@ -84,10 +84,10 @@ To run Chameleon with the exteral tool, we need to indicate where is the shared 
   * -DENABLE_COMM_THREAD=1 -DENABLE_TASK_MIGRATION=0 -DCHAM_REPLICATION_MODE=0 -DCHAM_PREDICTION_MODE=2 -DCHAM_PROACT_MIGRATION=2 -DOFFLOAD_SEND_TASKS_SEPARATELY=1
   * For different modes of the prediction tool and proactive task offloading, we just need to change the values of these compile variables.
 
-## Test the tool & Chameleon
+## Test The Tool & Chameleon
 Currently, the examples are `MxM` and `Sam(oa)2` with the simulation of oscillating lake.
 
-## Evaluate the prediction tool
+## Evaluate The Online Prediction Tool
 The current usecase is Samoa-ADERDG-OPT (https://gitlab.lrz.de/samoa/samoa/-/tree/ADER-DG-opt) with Oscillating-Lake scenario. The following test was performed on CoolMUC2 (LRZ), 16 nodes, 2 ranks per node, 14 threads per rank. The line charts show the comparison between real and predicted load. Where, the simulation was run with 100 time-steps, i.e., R8 to R11 are shown below, the results of other ranks could find in `/python_utils/figures/`.
 <p align="left">
   <img src="./figures/osc_samoa_pred_load.png" alt="Predicted load with real load" width="700">
