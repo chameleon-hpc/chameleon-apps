@@ -21,67 +21,74 @@ The figure above shows an imbalance case of 8 ranks with uniform tasks. The numb
 The first loop goes to the victim - `R5`, and the first offloader is `R0`. Next, we estimate that `R0` should offload 113 tasks to `R5` based on the values of ![formula](https://render.githubusercontent.com/render/math?math=$T_{opt}$), ![formula](https://render.githubusercontent.com/render/math?math=$\delta_{overloaded}$), ![formula](https://render.githubusercontent.com/render/math?math=$\delta_{underloaded}$). The new load values of `local` & `remote` are updated; the tracking table also needs to update the number of migrated tasks at the current offloader row (0 for `R0`). Finally, the output shows that `R0` should migrate 64, 96, ... tasks to the corresponding victims (`R1`, `R2`, ...).
 
 ## Dependencies
-At the current status, there're 2 options for machine-learning librabies:
+At the current status, there're 2 options for using built-in machine-learning API:
 * Pytorch C++ (https://pytorch.org/cppdocs/installing.html)
-  * Don't need to install, just download and point to where is it at when compiling the tool.
-  * E.g., as the sample compile-script in build/
-  * Temporarily, I prefer mlpack c++ below, and turn this off.
+  * Do not need to install, but we have to link it when compiling the tool (as the sample compile script in the directory `build/`).
+  * Note: might have some overhead and issues with Torch C++.
 * Mlpack C++ (https://www.mlpack.org/getstarted.html)
-  * Need to install it with the dependencies (Armadillo, Boost, ensmallen)
-  * Could follow here https://www.mlpack.org/doc/mlpack-3.4.2/doxygen/build.html
+  * Need to install with the dependencies (Armadillo, Boost, ensmallen)
+  * We can follow here https://www.mlpack.org/doc/mlpack-3.4.2/doxygen/build.html
 
 ## Package organization
-The code is simply organized with its utils as follow:
-* build/: a sample script to link and build the tool with Chameleon. TODO: need to adapt dependencies at your side.
-* chameleon_patch/: simply just the src-code of the Chameleon lib (latest version) with some changes to fit the prediction tool. To avoid hurting the original version of Chameleon, so leave them here temporarily. Note: need to replace them with the original one when we compile.
-* mlpack_utils/: some examples with mlpack library to build the regression models.
-* python_utils/: some examples with scikit-learn/mlpack lib in Python, to build and test the regression models.
-* src/: the src-code of the tool.
+The module is organized as follow:
+* `build/`: a sample script to link and build the tool with Chameleon (`TODO`: need to adapt dependencies at your side).
+* `chameleon_patch/`: the src-code of the Chameleon lib (latest version) with some changes to fit the prediction tool. For compiling, we just need to replace these files in this patch with the original Chameleon.
+* `mlpack_utils/`: some examples with mlpack library to build the regression models.
+* `python_utils/`: some examples with scikit-learn/mlpack lib in Python, to build and test the regression models.
+* `src/`: the src-code of the tool.
 
-## How it works And Configurations
-As the diagram above, the tool works as the plugin of Chameleon lib (sounds like the event-based working flow). When we need a callback event, we need to define it, determine when it's called and what should it return back to the chameleon-lib side or not. Therefore, it could be managed as:
-* Define the callback event associated with its function (action).
-* When it's called, should control who calls it (comm_thread or execution threads).
-* What should it give back to the cham-lib side.
+## Different Configurations with Prediction Tool and Proactive Task Offloading
+The tool works as the plugin of Chameleon lib (like the event-based working flow). There are callback events defined to override the Chameleon internals.
 
-As some changes in the folder - chameleon_patch/, there are 2 ENV-variables (defined in `chameleon_patch/chameleon_common.h`) to define prediction modes and migration modes along with the prediction.
+<p align="left">
+  <img src="./figures/cham-tool-workflow.png" alt="Callback Functions" width="600">
+</p>
+
+For example, the figure above shows the main internals that we can interfere with, e.g., `cham_create_tasks()` for getting task's arguments information. Furthermore, we can completely insert external actions like loading the prediction results before a new execution phase of tasks is processed by calling `cham_dist_taskwait()`. Therefore, the dedicated thead can be used to train a prediction model along with the main execution, then adapt the results to our proactive algorithm.
+
+As some changes in the folder - chameleon_patch/, there are 2 ENV-variables (defined in `chameleon_patch/chameleon_common.h`) to define prediction modes and migration modes along with the prediction. There are several modes for training prediction models and load them to the proactive task offloading algorithm as follows.
+
 ``` CXX
-// specify the method for predicting load by the callback tool
 #ifndef CHAM_PREDICTION_MODE
 #define CHAM_PREDICTION_MODE 0      // no prediction
-// #define CHAM_PREDICTION_MODE 1   // time-series load as the patterns for prediction
-// #define CHAM_PREDICTION_MODE 2   // time-series load as the patterns, use predicted values to predict the whole future
-// #define CHAM_PREDICTION_MODE 3   // task-characterization, args as the patterns for prediction
+// #define CHAM_PREDICTION_MODE 1   // total load prediction per iteration, and predict the next iterations by the current load of previous ones
+// #define CHAM_PREDICTION_MODE 2   // total load prediction per iteration, and use the predicted-values to input the prediction of next iterations
+// #define CHAM_PREDICTION_MODE 3   // load prediction per a single task based on its characteristics, e.g., input arguments
 #endif
 
-// specify the strategy of work-stealing with prediction tool
 #ifndef CHAM_PROACT_MIGRATION
-#define CHAM_PROACT_MIGRATION 0   // predict iter-by-iter, no migration action
-// #define CHAM_PROACT_MIGRATION 1    // predict iter-by-iter, then migrate-actions 
-// #define CHAM_PROACT_MIGRATION 2    // predict for the whole future, then migrate-actions
+#define CHAM_PROACT_MIGRATION 0 // just load the prediction results, do not apply to proactively offload tasks
+// #define CHAM_PROACT_MIGRATION 1 // load the prediction results iter-by-iter, and adapt them to proactively offload tasks
+// #define CHAM_PROACT_MIGRATION 2 // load the prediction results for the whole future, then adapt them to proactively offload tasks
+#endif
+
+// If the offload-task-separately flag is 1, tasks are offloaded by the first strategy (round-robin fashion). Otherwise, tasks are packed into a single package and send at once to the victim.
+#ifndef OFFLOAD_SEND_TASKS_SEPARATELY
+#define OFFLOAD_SEND_TASKS_SEPARATELY 0
+#endif
+
 #endif
 ```
 
-## Compiling the tool
-For example, could follow the sample compile-script in build/ folder, and need to adapt the dependencies that are declared in CMakeLists.txt (at the src/ folder).
+## Compiling The Tool
+There are some sample scripts for compiling the tool in the directory `build/`. But notably, we need to adapt the dependencies installed in our own environment that are declared in CMakeLists.txt.
 
-## Compiling Chameleon & Linking with the tool
-There could be a sample script to compile Chameleon with the callback tools (to be updated). Btw, there're some steps:
-* Copy and replace the original version of Chameleon src-code with the files in chameleon_patch/, could use another separate folder quickly.
+## Compiling Chameleon & Linking with The Tool
+To run Chameleon with the exteral tool, we need to indicate where is the shared library (`.so`) of the tool. In general, there're some steps:
+* Copy and overwrite the original version of Chameleon source with the code files in `chameleon_patch/`.
 * Loading dependencies: libffi, hwloc, and the corresponding compiler (e.g., Intel).
-* Set env-flags for Chameleon tool:
+* Set env-flags for the tool:
   * CHAMELEON_TOOL=1
   * CHAMELEON_TOOL_LIBRARIES=/path/to/the-compiled-tool (.so)
 * Regarding the Chameleon-lib internal flags (as migration, replication modes), please set:
-  * -DENABLE_COMM_THREAD=1 -DENABLE_TASK_MIGRATION=0 -DCHAM_REPLICATION_MODE=0 -DCHAMELEON_TOOL_SUPPORT
-  * A new variable is CHAM_PROACT_MIGRATION (as another mode of migration), it should be turned into 1, e.g., -DCHAM_PROACT_MIGRATION=1
-* If everything is fine, then compile Chameleon.
+  * -DENABLE_COMM_THREAD=1 -DENABLE_TASK_MIGRATION=0 -DCHAM_REPLICATION_MODE=0 -DCHAM_PREDICTION_MODE=2 -DCHAM_PROACT_MIGRATION=2 -DOFFLOAD_SEND_TASKS_SEPARATELY=1
+  * For different modes of the prediction tool and proactive task offloading, we just need to change the values of these compile variables.
 
 ## Test the tool & Chameleon
-Currently, the testcase is samoa-osc (the aderdg-opt version). TODO: merge the example of mxm.
+Currently, the examples are `MxM` and `Sam(oa)2` with the simulation of oscillating lake.
 
 ## Evaluate the prediction tool
-The current usecase is Samoa-ADERDG-OPT (https://gitlab.lrz.de/samoa/samoa/-/tree/ADER-DG-opt) with Oscillating-Lake scenario. The following test was performed on CoolMUC2 (LRZ), 16 nodes, 2 ranks per node, 14 threads per rank. The line charts show the comparison between real-load and predicted-load by the tool. Note: the simulation was running with 100 time-steps, i.e., R8 to R11 are shown below, the results of other ranks could find in /python_utils/figures/.
+The current usecase is Samoa-ADERDG-OPT (https://gitlab.lrz.de/samoa/samoa/-/tree/ADER-DG-opt) with Oscillating-Lake scenario. The following test was performed on CoolMUC2 (LRZ), 16 nodes, 2 ranks per node, 14 threads per rank. The line charts show the comparison between real and predicted load. Where, the simulation was run with 100 time-steps, i.e., R8 to R11 are shown below, the results of other ranks could find in `/python_utils/figures/`.
 <p align="left">
   <img src="./figures/osc_samoa_pred_load.png" alt="Predicted load with real load" width="700">
 </p>
